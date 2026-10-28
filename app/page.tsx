@@ -61,7 +61,7 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap">
           <SectionHead num="01" label="What we do" title="Three things, done carefully." ml="മൂന്ന് കാര്യങ്ങൾ, ശ്രദ്ധയോടെ." />
           <div className="cards">

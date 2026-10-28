@@ -8,7 +8,8 @@
   --gold: #C8A96A;
   --gold-dark: #8a6f36;
   --cream: #F7F2E8;
-  --paper: #FCFAF5;
+  --white: #FFFFFF;
+  --paper: var(--white);
   --ink: #153D33;
   --muted: #4d6a61;
   --rule: rgba(21, 61, 51, .18);
@@ -168,7 +169,8 @@ p:last-child { margin-bottom: 0; }
 .section.dark { background: var(--green); color: var(--cream); border-top: 0; }
 .section.dark .label, .section.dark .num { color: var(--gold); }
 .section.dark .muted, .section.dark .ml-line { color: rgba(247, 242, 232, .72); }
-.section.paper { background: var(--paper); }
+.section.paper { background: var(--paper); border-top: 0; }
+.section.paper + .section { border-top: 0; }
 
 .sec-head { margin-bottom: clamp(40px, 6vw, 72px); }
 

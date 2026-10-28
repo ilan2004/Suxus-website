@@ -30,7 +30,7 @@ export default function Institutional() {
         <p>Uniforms for hospitals, hotels, companies, colleges and madrasas. Your logo on the pocket. Your sizes on file.</p>
       </PageHero>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap">
           <SectionHead num="01" label="Who we stitch for" title="Uniform types." />
           <div className="cards four">

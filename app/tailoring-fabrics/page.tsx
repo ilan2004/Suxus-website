@@ -23,7 +23,7 @@ export default function TailoringFabrics() {
         <p>Choose your fabric in our showroom. Our tailors stitch it in the same building.</p>
       </PageHero>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap grid">
           <div className="c-5">
             <span className="label">01 / Fabrics</span>
@@ -87,7 +87,7 @@ export default function TailoringFabrics() {
         </div>
       </section>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap">
           <SectionHead num="04" label="Gallery" title="From the showroom and the unit." />
           <div className="gallery">

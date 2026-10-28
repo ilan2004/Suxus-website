@@ -29,7 +29,7 @@ export default function SchoolUniforms() {
         </p>
       </PageHero>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap grid">
           <div className="c-5">
             <Photo src="/images/uniforms-hangers.jpg" alt="Finished school uniforms on hangers" caption="Finished uniforms" />

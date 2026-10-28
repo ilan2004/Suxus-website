@@ -24,7 +24,7 @@ export default function Catalogues() {
         <p>PDF catalogues to share with your committee or management. Prices are confirmed on enquiry.</p>
       </PageHero>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap grid">
           <div className="c-8 s-5">
             <ul className="downloads">

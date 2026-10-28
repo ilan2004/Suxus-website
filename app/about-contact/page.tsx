@@ -21,7 +21,7 @@ export default function AboutContact() {
         </p>
       </PageHero>
 
-      <section className="section">
+      <section className="section paper">
         <div className="wrap grid">
           <div className="c-3">
             <span className="label">01 / Story</span>

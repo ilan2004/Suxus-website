@@ -20,15 +20,19 @@ npm run build   # writes the static site to ./out — upload that folder to the 
 
 ## Illustrations and animation
 
-Animation uses [Motion](https://motion.dev) (`motion/react`). The line illustrations are the
-site's own set in `components/illustrations/` — Shirt, Trousers, Coat, Waistcoat, TieShirt,
-Cap, Hanger, FabricBolt, Scissors, NeedleThread, Spool, ChatBubble, Parcel — each draws itself
-in when scrolled into view. Use one anywhere with `<Shirt />` etc.
+- **Rough.js** gives every illustration a hand-drawn look, like a tailor's chalk or pencil sketch
+  (`lib/sketch.ts`). The sketch is generated at build time, so it is in the HTML and identical on every load.
+- **GSAP** (with DrawSVG and ScrollTrigger) animates the lines being drawn as you scroll (`lib/gsap.ts`).
 
-- `StitchingShirt` — home hero: tape measure, chalk outline, a needle sewing the shirt, then
-  collar, pocket, buttons and the SUXUS label. Has a Replay button.
-- `SizeRack` — School Uniforms: sample shirts in sizes 20–46 swing onto a rail.
-- `Seam` (in `components/Motion.tsx`) — a stitch sewn across the page above the closing WhatsApp band.
+The illustration set lives in `components/illustrations/`: Shirt, Trousers, Coat, Waistcoat,
+TieShirt, Cap, Hanger, FabricBolt, Scissors, NeedleThread, Spool, ChatBubble, Parcel.
+Use one anywhere with `<Shirt />` etc. To add a new one, draw it with `<P d="…" i={n} />`
+(lines), `<C>` (circles), `<Dot>` and `<Stitch>` (dashed seams) inside `<Illo>`; `i` is the drawing order.
+
+- `StitchingShirt`: home hero. A tape measure unrolls, chalk sketches the pattern, a needle sews
+  the outline, then the collar, pocket, buttons and SUXUS label are added. Has a Replay button.
+- `SizeRack`: School Uniforms. Sample shirts in sizes 20–46 drop onto a rail and swing.
+- `Seam` and `Reveal` (`components/Motion.tsx`): a stitch sewn across the page on scroll, and headings that fade up.
 
 Visitors who turn on "reduce motion" on their phone see the finished drawings without animation.
 

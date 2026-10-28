@@ -1,7 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Inter_Tight, Noto_Sans_Malayalam } from "next/font/google";
 import { Header } from "@/components/Header";
-import { MotionProvider } from "@/components/Motion";
 import { CtaBand, Footer, OfferBanner, WhatsAppFloat } from "@/components/Site";
 import { business, SITE_URL } from "@/lib/site";
 import "./globals.css";
@@ -52,18 +51,21 @@ const jsonLd = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${interTight.variable} ${inter.variable} ${malayalam.variable}`}>
+      <head>
+        <noscript>
+          <style>{`.sketch, .reveal { visibility: visible !important; }`}</style>
+        </noscript>
+      </head>
       <body>
         <a className="skip" href="#main">
           Skip to content
         </a>
-        <MotionProvider>
         <OfferBanner />
         <Header />
         <main id="main">{children}</main>
         <CtaBand />
         <Footer />
         <WhatsAppFloat />
-        </MotionProvider>
         <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       </body>
     </html>

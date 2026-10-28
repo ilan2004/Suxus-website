@@ -1,32 +1,25 @@
 "use client";
 
-import { motion, type SVGMotionProps, type Variants } from "motion/react";
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
+import { FULL, gsap, REDUCED, useGSAP } from "@/lib/gsap";
+import { sketchCircle, sketchPath, type Sketched } from "@/lib/sketch";
 
-/* Primitives for the SUXUS line-illustration set.
-   <Illo> draws its children in, one stroke after another, when it scrolls into
-   view. Give each <P>/<C> an `i` to set its place in the drawing order. */
+/* Primitives for the SUXUS hand-drawn illustration set.
+   Shapes are sketched with Rough.js; <Illo> then draws them in with GSAP
+   (DrawSVG + ScrollTrigger) when they scroll into view. Each primitive's `i`
+   sets its place in the drawing order. */
 
-export const draw: Variants = {
-  hidden: { pathLength: 0, opacity: 0 },
-  show: (i: number = 0) => ({
-    pathLength: 1,
-    opacity: 1,
-    transition: {
-      pathLength: { delay: i * 0.18, duration: 0.8, ease: "easeInOut" },
-      opacity: { delay: i * 0.18, duration: 0.01 },
-    },
-  }),
-};
+const STEP = 0.18;
 
-export const pop: Variants = {
-  hidden: { scale: 0, opacity: 0 },
-  show: (i: number = 0) => ({
-    scale: 1,
-    opacity: 1,
-    transition: { delay: i * 0.18, type: "spring", stiffness: 420, damping: 18 },
-  }),
-};
+function Strokes({ list, i, kind = "draw" }: { list: Sketched[]; i: number; kind?: string }) {
+  return (
+    <g data-i={i} className={kind}>
+      {list.map((p, k) =>
+        p.fill ? <path key={k} d={p.d} fill="currentColor" stroke="none" /> : <path key={k} d={p.d} />,
+      )}
+    </g>
+  );
+}
 
 type IlloProps = {
   label: string;
@@ -36,58 +29,76 @@ type IlloProps = {
 };
 
 export function Illo({ label, children, className = "illo", viewBox = "0 0 120 120" }: IlloProps) {
+  const ref = useRef<SVGSVGElement>(null);
+
+  useGSAP(
+    () => {
+      const svg = ref.current!;
+      const mm = gsap.matchMedia();
+      mm.add(FULL, () => {
+        const tl = gsap.timeline({ scrollTrigger: { trigger: svg, start: "top 88%", once: true } });
+        svg.querySelectorAll<SVGGElement>("[data-i]").forEach((g) => {
+          const at = Number(g.dataset.i) * STEP;
+          if (g.classList.contains("dot")) {
+            tl.from(g, { scale: 0, transformOrigin: "50% 50%", duration: 0.45, ease: "back.out(3)" }, at);
+          } else {
+            tl.from(g.querySelectorAll("path"), { drawSVG: 0, duration: 0.75, ease: "power1.inOut" }, at);
+          }
+        });
+        gsap.set(svg, { visibility: "visible" });
+      });
+      mm.add(REDUCED, () => {
+        gsap.set(svg, { visibility: "visible" });
+      });
+    },
+    { scope: ref },
+  );
+
   return (
-    <motion.svg
-      className={className}
+    <svg
+      ref={ref}
+      className={`${className} sketch`}
       viewBox={viewBox}
       role="img"
       aria-label={label}
       fill="none"
       stroke="currentColor"
-      strokeWidth={2}
+      strokeWidth={1.6}
       strokeLinecap="round"
       strokeLinejoin="round"
-      initial="hidden"
-      whileInView="show"
-      viewport={{ once: true, amount: 0.6 }}
     >
       {children}
-    </motion.svg>
+    </svg>
   );
 }
 
-type PathProps = SVGMotionProps<SVGPathElement> & { i?: number };
-
-export function P({ i = 0, ...rest }: PathProps) {
-  return <motion.path variants={draw} custom={i} {...rest} />;
+export function P({ d, i = 0 }: { d: string; i?: number }) {
+  return <Strokes list={sketchPath(d)} i={i} />;
 }
 
-export function C({ i = 0, ...rest }: SVGMotionProps<SVGCircleElement> & { i?: number }) {
-  return <motion.circle variants={draw} custom={i} {...rest} />;
+export function C({ cx, cy, r, i = 0 }: { cx: number; cy: number; r: number; i?: number }) {
+  return <Strokes list={sketchCircle(cx, cy, r)} i={i} />;
 }
 
-export function Dot({ i = 0, ...rest }: SVGMotionProps<SVGCircleElement> & { i?: number }) {
-  return (
-    <motion.circle
-      variants={pop}
-      custom={i}
-      fill="currentColor"
-      stroke="none"
-      style={{ transformBox: "fill-box", transformOrigin: "center" }}
-      {...rest}
-    />
-  );
+export function Dot({ cx, cy, r, i = 0 }: { cx: number; cy: number; r: number; i?: number }) {
+  return <Strokes list={sketchCircle(cx, cy, r, { fill: "currentColor", fillStyle: "solid" })} i={i} kind="dot" />;
 }
 
-/* A running stitch: dashed thread revealed along its path, as if sewn. */
+/* A running stitch: a sketched dashed thread, revealed along its path as if sewn. */
 export function Stitch({ d, i = 0, dash = "5 4" }: { d: string; i?: number; dash?: string }) {
   const id = "st" + useId().replace(/[^a-zA-Z0-9]/g, "");
   return (
     <>
-      <mask id={id} maskUnits="userSpaceOnUse" x="0" y="0" width="100%" height="100%">
-        <motion.path d={d} variants={draw} custom={i} stroke="#fff" strokeWidth={8} />
+      <mask id={id} maskUnits="userSpaceOnUse" x="-20" y="-20" width="160" height="160">
+        <g data-i={i} className="draw">
+          <path d={d} stroke="#fff" strokeWidth={8} />
+        </g>
       </mask>
-      <path d={d} strokeDasharray={dash} mask={`url(#${id})`} />
+      <g mask={`url(#${id})`} strokeDasharray={dash}>
+        {sketchPath(d, { roughness: 0.6, disableMultiStroke: true }).map((p, k) => (
+          <path key={k} d={p.d} />
+        ))}
+      </g>
     </>
   );
 }

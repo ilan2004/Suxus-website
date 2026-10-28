@@ -408,6 +408,10 @@ p:last-child { margin-bottom: 0; }
 
 /* ---------- Illustrations & animation ---------- */
 
+/* Hidden until GSAP has set the starting frame (avoids a flash of the finished
+   drawing); a <noscript> rule in the layout shows them without JavaScript. */
+.sketch, .reveal { visibility: hidden; }
+
 .illo { width: 64px; height: 64px; color: var(--green); overflow: visible; }
 .section.dark .illo { color: var(--gold); }
 .card .illo { margin-bottom: 4px; }
@@ -446,6 +450,6 @@ p:last-child { margin-bottom: 0; }
   border-top: 2px dashed var(--gold);
   transform-origin: left center;
 }
-.seam-needle { position: absolute; top: 50%; width: 54px; transform: translate(-6px, -50%); }
+.seam-needle { position: absolute; top: 50%; left: 100%; width: 54px; transform: translate(-6px, -50%); }
 .seam-needle svg { display: block; width: 100%; }
 .cta-band { overflow: hidden; }

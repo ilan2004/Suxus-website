@@ -1,0 +1,11 @@
+{
+  // Cloudflare deploy: serve the static Next.js export in ./out.
+  // Build command: npm run build   Deploy command: npx wrangler deploy
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "suxus-website",
+  "compatibility_date": "2025-10-01",
+  "assets": {
+    "directory": "./out",
+    "not_found_handling": "404-page"
+  }
+}

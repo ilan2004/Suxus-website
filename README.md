@@ -6,8 +6,18 @@ Next.js (App Router) site for suxus.shop. Minimal Swiss layout in the SUXUS pale
 ```bash
 npm install
 npm run dev     # http://localhost:3000
-npm run build   # writes the static site to ./out — upload that folder to the host
+npm run build   # writes the static site to ./out
+npm run deploy  # build + publish to Cloudflare (wrangler.jsonc)
 ```
+
+### Cloudflare
+
+`wrangler.jsonc` serves `./out` as static assets. In Cloudflare's Git build settings use:
+
+- Build command: `npm run build`
+- Deploy command: `npx wrangler deploy`
+
+The `name` in `wrangler.jsonc` must match the Worker's name in the Cloudflare dashboard.
 
 ## Where to edit
 

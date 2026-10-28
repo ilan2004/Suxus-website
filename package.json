@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "npx serve@14 out",
-    "lint": "tsc --noEmit"
+    "lint": "tsc --noEmit",
+    "deploy": "next build && wrangler deploy"
   },
   "dependencies": {
     "@gsap/react": "2.1.2",
@@ -20,6 +21,7 @@
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "4.154.0"
   }
 }

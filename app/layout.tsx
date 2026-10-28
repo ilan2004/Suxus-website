@@ -1,11 +1,11 @@
 import type { Metadata, Viewport } from "next";
-import { Cinzel, Inter, Noto_Sans_Malayalam } from "next/font/google";
+import { Inter, Inter_Tight, Noto_Sans_Malayalam } from "next/font/google";
 import { Header } from "@/components/Header";
 import { CtaBand, Footer, OfferBanner, WhatsAppFloat } from "@/components/Site";
 import { business, SITE_URL } from "@/lib/site";
 import "./globals.css";
 
-const cinzel = Cinzel({ subsets: ["latin"], weight: ["500", "600"], variable: "--font-cinzel" });
+const interTight = Inter_Tight({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-display" });
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const malayalam = Noto_Sans_Malayalam({ subsets: ["malayalam"], weight: ["400", "500"], variable: "--font-ml" });
 
@@ -50,7 +50,7 @@ const jsonLd = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={`${cinzel.variable} ${inter.variable} ${malayalam.variable}`}>
+    <html lang="en" className={`${interTight.variable} ${inter.variable} ${malayalam.variable}`}>
       <body>
         <a className="skip" href="#main">
           Skip to content

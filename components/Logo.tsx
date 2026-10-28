@@ -12,8 +12,8 @@ export function Monogram() {
         y="32"
         textAnchor="middle"
         style={{ fontFamily: "var(--f-display)" }}
-        fontSize="23"
-        fontWeight="600"
+        fontSize="24"
+        fontWeight="700"
         fill="#C8A96A"
       >
         S

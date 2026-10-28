@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { EnquiryForm } from "@/components/EnquiryForm";
+import { Cap, Coat, TieShirt, Waistcoat } from "@/components/illustrations";
 import { Photo } from "@/components/Photo";
 import { PageHero, SectionHead } from "@/components/Site";
 import { priceNote } from "@/lib/site";
@@ -12,10 +13,10 @@ export const metadata: Metadata = {
 };
 
 const types = [
-  { t: "Hospitals", d: "Doctors' coats, scrubs and nursing staff uniforms." },
-  { t: "Hotels", d: "Front office, service and kitchen uniforms." },
-  { t: "Corporate", d: "Office shirts and trousers in your colours." },
-  { t: "Colleges & madrasas", d: "Student and staff uniforms, full supply or your fabric." },
+  { Icon: Coat, t: "Hospitals", d: "Doctors' coats, scrubs and nursing staff uniforms." },
+  { Icon: Waistcoat, t: "Hotels", d: "Front office, service and kitchen uniforms." },
+  { Icon: TieShirt, t: "Corporate", d: "Office shirts and trousers in your colours." },
+  { Icon: Cap, t: "Colleges & madrasas", d: "Student and staff uniforms, full supply or your fabric." },
 ];
 
 export default function Institutional() {
@@ -36,6 +37,7 @@ export default function Institutional() {
           <div className="cards four">
             {types.map((x, i) => (
               <article className="card" key={x.t}>
+                <x.Icon />
                 <span className="num">{String(i + 1).padStart(2, "0")}</span>
                 <h3>{x.t}</h3>
                 <p className="muted">{x.d}</p>

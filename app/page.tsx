@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { FabricBolt, Scissors, Shirt } from "@/components/illustrations";
+import { StitchingShirt } from "@/components/illustrations/StitchingShirt";
 import { Photo } from "@/components/Photo";
 import { MapEmbed, SchoolSteps, SectionHead, WhatsAppButton } from "@/components/Site";
 import { business, fullAddress } from "@/lib/site";
@@ -6,6 +8,7 @@ import { business, fullAddress } from "@/lib/site";
 const services = [
   {
     n: "01",
+    Icon: Shirt,
     t: "Uniforms",
     ml: "യൂണിഫോം",
     d: "School, hospital, hotel, college, madrasa and company uniforms, stitched in bulk in our own unit. Your logo embroidered.",
@@ -14,6 +17,7 @@ const services = [
   },
   {
     n: "02",
+    Icon: FabricBolt,
     t: "Fabrics",
     ml: "തുണിത്തരങ്ങൾ",
     d: "Shirting, linen and suiting fabrics in our new showroom. Choose one shade at a time, in daylight.",
@@ -22,6 +26,7 @@ const services = [
   },
   {
     n: "03",
+    Icon: Scissors,
     t: "Tailoring",
     ml: "തയ്യൽ",
     d: "Gents shirts and trousers, alterations, wedding group dress and festival dress codes. Cut by hand.",
@@ -56,7 +61,7 @@ export default function Home() {
             </div>
           </div>
           <div className="c-5 hero-figure">
-            <Photo src="/images/showroom.jpg" alt="The SUXUS fabric showroom at Kadoor Complex" caption="The showroom" priority />
+            <StitchingShirt />
           </div>
         </div>
       </section>
@@ -67,6 +72,7 @@ export default function Home() {
           <div className="cards">
             {services.map((s) => (
               <article className="card" key={s.t}>
+                <s.Icon />
                 <span className="num">{s.n}</span>
                 <h3>{s.t}</h3>
                 <p className="ml-line" lang="ml">

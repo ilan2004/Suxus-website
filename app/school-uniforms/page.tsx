@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { EnquiryForm } from "@/components/EnquiryForm";
+import { SizeRack } from "@/components/illustrations/SizeRack";
 import { Photo } from "@/components/Photo";
 import { PageHero, SchoolSteps, SectionHead } from "@/components/Site";
 import { priceNote, priceNoteMl } from "@/lib/site";
@@ -55,6 +56,9 @@ export default function SchoolUniforms() {
                 <dd>LKG–+2</dd>
               </div>
             </dl>
+          </div>
+          <div className="rack-wrap">
+            <SizeRack />
           </div>
         </div>
       </section>

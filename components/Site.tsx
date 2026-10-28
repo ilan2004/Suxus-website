@@ -1,8 +1,10 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { business, fullAddress, nav, offer, waLink } from "@/lib/site";
+import { ChatBubble, FabricBolt, Hanger, Parcel } from "./illustrations";
 import { PhoneIcon, WhatsAppIcon } from "./Icons";
 import { Brand } from "./Logo";
+import { Reveal, Seam } from "./Motion";
 
 export function OfferBanner() {
   if (!offer.active) return null;
@@ -45,6 +47,7 @@ export function WhatsAppFloat() {
 export function CtaBand() {
   return (
     <section className="cta-band" aria-labelledby="cta-title">
+      <Seam />
       <div className="wrap grid">
         <div className="c-7">
           <span className="label">Talk to us</span>
@@ -179,7 +182,7 @@ export function PageHero({
 
 export function SectionHead({ num, label, title, ml }: { num: string; label: string; title: ReactNode; ml?: string }) {
   return (
-    <div className="grid sec-head">
+    <Reveal className="grid sec-head">
       <div className="c-3">
         <span className="label">
           {num} / {label}
@@ -193,21 +196,22 @@ export function SectionHead({ num, label, title, ml }: { num: string; label: str
           </p>
         )}
       </div>
-    </div>
+    </Reveal>
   );
 }
 
 export function SchoolSteps() {
   const steps = [
-    { t: "Enquiry", d: "Call or WhatsApp us with your school name and student numbers." },
-    { t: "Free size-fixing camp", d: "We bring sample garments to your school. Children try them on." },
-    { t: "Fabric and price confirmed", d: "You choose the fabric. We confirm the price in writing." },
-    { t: "Stitched and delivered", d: "Uniforms are stitched in our unit and delivered before reopening." },
+    { Icon: ChatBubble, t: "Enquiry", d: "Call or WhatsApp us with your school name and student numbers." },
+    { Icon: Hanger, t: "Free size-fixing camp", d: "We bring sample garments to your school. Children try them on." },
+    { Icon: FabricBolt, t: "Fabric and price confirmed", d: "You choose the fabric. We confirm the price in writing." },
+    { Icon: Parcel, t: "Stitched and delivered", d: "Uniforms are stitched in our unit and delivered before reopening." },
   ];
   return (
     <ol className="steps">
       {steps.map((s) => (
         <li key={s.t}>
+          <s.Icon />
           <h3>{s.t}</h3>
           <p className="muted small">{s.d}</p>
         </li>

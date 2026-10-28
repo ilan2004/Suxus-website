@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Hanger, Scissors, Trousers } from "@/components/illustrations";
 import { Photo } from "@/components/Photo";
 import { PageHero, SectionHead, WhatsAppButton } from "@/components/Site";
 import { priceNote, waLink } from "@/lib/site";
@@ -11,9 +12,9 @@ export const metadata: Metadata = {
 };
 
 const tailoring = [
-  { t: "Shirts & trousers", d: "Gents shirts and trousers, cut by our cutting master." },
-  { t: "Alterations", d: "Length, fit and small repairs on garments you already own." },
-  { t: "Wedding group dress", d: "Matching outfits for the wedding party, in one shade." },
+  { Icon: Trousers, t: "Shirts & trousers", d: "Gents shirts and trousers, cut by our cutting master." },
+  { Icon: Scissors, t: "Alterations", d: "Length, fit and small repairs on garments you already own." },
+  { Icon: Hanger, t: "Wedding group dress", d: "Matching outfits for the wedding party, in one shade." },
 ];
 
 export default function TailoringFabrics() {
@@ -46,6 +47,7 @@ export default function TailoringFabrics() {
           <div className="cards">
             {tailoring.map((x, i) => (
               <article className="card" key={x.t}>
+                <x.Icon />
                 <span className="num">{String(i + 1).padStart(2, "0")}</span>
                 <h3>{x.t}</h3>
                 <p className="muted">{x.d}</p>

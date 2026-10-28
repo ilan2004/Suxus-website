@@ -18,6 +18,20 @@ npm run build   # writes the static site to ./out — upload that folder to the 
 | Pages | `app/<page>/page.tsx` |
 | Styles | `app/globals.css` |
 
+## Illustrations and animation
+
+Animation uses [Motion](https://motion.dev) (`motion/react`). The line illustrations are the
+site's own set in `components/illustrations/` — Shirt, Trousers, Coat, Waistcoat, TieShirt,
+Cap, Hanger, FabricBolt, Scissors, NeedleThread, Spool, ChatBubble, Parcel — each draws itself
+in when scrolled into view. Use one anywhere with `<Shirt />` etc.
+
+- `StitchingShirt` — home hero: tape measure, chalk outline, a needle sewing the shirt, then
+  collar, pocket, buttons and the SUXUS label. Has a Replay button.
+- `SizeRack` — School Uniforms: sample shirts in sizes 20–46 swing onto a rail.
+- `Seam` (in `components/Motion.tsx`) — a stitch sewn across the page above the closing WhatsApp band.
+
+Visitors who turn on "reduce motion" on their phone see the finished drawings without animation.
+
 ## Photos and catalogues
 
 Pages show labelled placeholders until the real files exist:

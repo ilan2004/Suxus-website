@@ -56,7 +56,7 @@ The first visit opens **/setup** to create the first partner login. Then go to *
    | `ERP_SECRET` | long random string (e.g. `openssl rand -hex 32`, or 40+ random letters/numbers) |
    | `ERP_SETUP_CODE` | any code you choose — asked once on the first-run screen |
 3. Deploy. `vercel.json` runs the migrations (creates all tables, blocks Supabase's public Data API with RLS)
-   and pins the server to Mumbai (`bom1`) next to the database.
+   and pins the server to Singapore (`sin1`), next to the Supabase database (ap-southeast-1). If the database region changes, change `regions` in `erp/vercel.json` to match.
 4. Open the site → enter the setup code → create your partner login → Settings → Import / Backup → upload the Excel.
 5. Vercel → Project → Settings → Domains → add `erp.suxus.shop`. In Cloudflare DNS (suxus.shop) add the
    **CNAME `erp`** record Vercel shows, with **Proxy status: DNS only** (grey cloud).

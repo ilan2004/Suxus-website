@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/setup"];
+const PUBLIC = ["/login", "/setup", "/api/health"];
 
 /** Cheap gate: no session cookie → login. Signature is verified server-side in requireUser(). */
 export function proxy(req: NextRequest) {

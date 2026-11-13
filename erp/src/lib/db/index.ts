@@ -24,6 +24,10 @@ async function create(): Promise<DB> {
     return db;
   }
 
+  if (process.env.VERCEL || process.env.NODE_ENV === "production" && process.env.ERP_ALLOW_PGLITE !== "1") {
+    throw new Error("DATABASE_URL is not set. Add it in Vercel → Project → Settings → Environment Variables, then redeploy.");
+  }
+
   // Local development: embedded Postgres (PGlite) persisted in ./.data
   const { PGlite } = await import("@electric-sql/pglite");
   const { drizzle } = await import("drizzle-orm/pglite");

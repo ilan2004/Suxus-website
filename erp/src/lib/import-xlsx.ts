@@ -255,7 +255,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
 
   /* ── Payments on account (money paid later for goods taken on credit) ── */
   {
-    const sheet = wb.worksheets.find((w) => /payments?\s*on\s*account/i.test(w.name));
+    const sheet = wb.worksheets.find((w) => /payments?\s*(on|to)?\s*(account|a\s*\/\s*c)/i.test(w.name));
     const [existing] = await db.select({ c: sql<number>`count(*)`.mapWith(Number) }).from(schema.supplierPayments);
     if (sheet && existing.c === 0) {
       let added = 0;
@@ -285,7 +285,8 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
         added++;
       }
       report["Payments on Account"] = `${added} imported`;
-    } else if (sheet) report["Payments on Account"] = "skipped (already has payments)";
+    } else if (sheet) report["Payments on Account"] = "skipped (supplier payments already exist)";
+    else report["Payments on Account"] = "sheet not found in this file — add the supplier payments with Suppliers → Pay supplier";
   }
 
   /* ── Setup expenses ── */

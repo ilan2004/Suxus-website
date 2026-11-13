@@ -1,0 +1,239 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, CircleDollarSign, Copy, Landmark, Pencil, Phone, Trash2 } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { StatCard } from "@/components/app/stat-card";
+import { PayDialog } from "@/components/forms/pay-dialog";
+import { SupplierDialog } from "@/components/forms/supplier-dialog";
+import { deleteSupplier, deleteSupplierPayment, paySupplier } from "@/lib/actions/purchases";
+import type { PurchaseRow, SupplierRow } from "@/lib/queries";
+import { fmtDate, rupees } from "@/lib/utils";
+
+type Pay = { id: number; date: string; amount: number; mode: string; note: string | null };
+type Setup = { id: number; date: string; category: string; description: string | null; paidBy: string; amount: number; mode: string | null; billNo: string | null };
+
+export function SupplierView({
+  supplier: s,
+  purchases,
+  payments,
+  setup,
+  modes,
+  isPartner,
+}: {
+  supplier: SupplierRow;
+  purchases: PurchaseRow[];
+  payments: Pay[];
+  setup: Setup[];
+  modes: string[];
+  isPartner: boolean;
+}) {
+  const router = useRouter();
+  const [pay, setPay] = React.useState(false);
+  const [edit, setEdit] = React.useState(false);
+  const copy = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success("Copied"));
+
+  return (
+    <div className="grid gap-5">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button variant="ghost" size="icon" asChild>
+          <Link href="/suppliers" aria-label="Back">
+            <ArrowLeft />
+          </Link>
+        </Button>
+        <h1 className="font-display text-2xl font-semibold">{s.name}</h1>
+        {s.type && <Badge variant="secondary">{s.type}</Badge>}
+        <div className="ml-auto flex gap-2">
+          <Button onClick={() => setPay(true)}>
+            <CircleDollarSign /> Pay supplier
+          </Button>
+          <Button variant="outline" onClick={() => setEdit(true)}>
+            <Pencil /> Edit
+          </Button>
+          {isPartner && (
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label="Delete"
+              onClick={async () => {
+                if (!confirm(`Delete ${s.name}?`)) return;
+                const r = await deleteSupplier(s.id);
+                if (!r.ok) return void toast.error(r.error);
+                router.push("/suppliers");
+              }}
+            >
+              <Trash2 className="text-destructive" />
+            </Button>
+          )}
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-xl border bg-card p-5 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <Detail label="Phone" icon={Phone} value={s.phone} onCopy={copy} />
+        <Detail label="UPI ID" value={s.upi} onCopy={copy} />
+        <Detail label="Bank A/c & IFSC" icon={Landmark} value={s.bank} onCopy={copy} />
+        <Detail label="GST no." value={s.gstNo} onCopy={copy} />
+        <Detail label="Place" value={s.place} />
+        <Detail label="Supplies" value={s.supplies} />
+        {s.notes && (
+          <div className="sm:col-span-2">
+            <p className="text-xs text-muted-foreground">Notes</p>
+            <p className="mt-0.5 whitespace-pre-line">{s.notes}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label="Purchases" ml="വാങ്ങിയത്" value={rupees(s.billed)} />
+        <StatCard label="Paid" ml="കൊടുത്തത്" value={rupees(s.paid)} tone="success" />
+        <StatCard label="Balance due" ml="കൊടുക്കാനുള്ളത്" value={rupees(s.balance)} tone={s.balance > 0 ? "destructive" : "success"} />
+        <StatCard label="Setup expenses paid" ml="ഒരുക്കൽ" value={rupees(s.setupPaid)} sub={`${setup.length} entries`} tone="gold" />
+      </div>
+
+      <Tabs defaultValue={purchases.length ? "purchases" : "setup"}>
+        <TabsList>
+          <TabsTrigger value="purchases">Purchases ({purchases.length})</TabsTrigger>
+          <TabsTrigger value="payments">Payments ({payments.length})</TabsTrigger>
+          <TabsTrigger value="setup">Setup expenses ({setup.length})</TabsTrigger>
+        </TabsList>
+        <TabsContent value="purchases">
+          <SimpleTable
+            head={["Date", "Bill no.", "Description", "Total", "Paid then"]}
+            rows={purchases.map((p) => [fmtDate(p.date), p.invoiceNo, p.description, rupees(p.total, true), rupees(p.paid)])}
+            align={[3, 4]}
+          />
+        </TabsContent>
+        <TabsContent value="payments">
+          <div className="overflow-hidden rounded-xl border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Mode</TableHead>
+                  <TableHead>Note</TableHead>
+                  <TableHead className="text-right">Amount</TableHead>
+                  <TableHead />
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
+                      No payments yet
+                    </TableCell>
+                  </TableRow>
+                )}
+                {payments.map((p) => (
+                  <TableRow key={p.id}>
+                    <TableCell>{fmtDate(p.date)}</TableCell>
+                    <TableCell>{p.mode}</TableCell>
+                    <TableCell>{p.note}</TableCell>
+                    <TableCell className="text-right font-medium tabular-nums">{rupees(p.amount, true)}</TableCell>
+                    <TableCell className="text-right">
+                      {isPartner && (
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          aria-label="Delete"
+                          onClick={async () => {
+                            if (!confirm("Delete this payment?")) return;
+                            await deleteSupplierPayment(p.id);
+                            router.refresh();
+                          }}
+                        >
+                          <Trash2 className="text-muted-foreground" />
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+        <TabsContent value="setup">
+          <SimpleTable
+            head={["Date", "Category", "Description", "Paid by", "Mode", "Amount"]}
+            rows={setup.map((x) => [fmtDate(x.date), x.category, x.description, x.paidBy, x.mode, rupees(x.amount, true)])}
+            align={[5]}
+          />
+        </TabsContent>
+      </Tabs>
+
+      <PayDialog
+        open={pay}
+        onOpenChange={setPay}
+        title={`Pay ${s.name}`}
+        description="Recorded in the cash book as Fabric Purchase"
+        suggested={s.balance}
+        modes={modes}
+        onSubmit={(v) => paySupplier({ supplierId: s.id, ...v })}
+        onDone={() => router.refresh()}
+      />
+      <SupplierDialog
+        value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, notes: s.notes } : null}
+        onClose={() => setEdit(false)}
+        onSaved={() => router.refresh()}
+      />
+    </div>
+  );
+}
+
+function Detail({ label, value, icon: Icon, onCopy }: { label: string; value: string | null; icon?: React.ComponentType<{ className?: string }>; onCopy?: (t: string) => void }) {
+  return (
+    <div className="min-w-0">
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <div className="mt-0.5 flex items-center gap-1.5">
+        {Icon && value && <Icon className="size-3.5 shrink-0 text-muted-foreground" />}
+        <span className="truncate font-medium">{value || "—"}</span>
+        {value && onCopy && (
+          <button onClick={() => onCopy(value)} className="text-muted-foreground hover:text-foreground" aria-label={`Copy ${label}`}>
+            <Copy className="size-3.5" />
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SimpleTable({ head, rows, align = [] }: { head: string[]; rows: React.ReactNode[][]; align?: number[] }) {
+  return (
+    <div className="overflow-hidden rounded-xl border bg-card">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            {head.map((h, i) => (
+              <TableHead key={h} className={align.includes(i) ? "text-right" : ""}>
+                {h}
+              </TableHead>
+            ))}
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {rows.length === 0 && (
+            <TableRow>
+              <TableCell colSpan={head.length} className="h-20 text-center text-muted-foreground">
+                Nothing yet
+              </TableCell>
+            </TableRow>
+          )}
+          {rows.map((r, i) => (
+            <TableRow key={i}>
+              {r.map((c, j) => (
+                <TableCell key={j} className={align.includes(j) ? "text-right tabular-nums" : "max-w-72 truncate"}>
+                  {c}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}

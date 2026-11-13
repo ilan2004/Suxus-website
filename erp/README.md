@@ -3,7 +3,7 @@
 The SUXUS Daily Operations Book (Excel), rebuilt as a web app for **erp.suxus.shop**.
 Next.js 16 · shadcn/ui (Radix + Tailwind 4) · Drizzle ORM · PostgreSQL (Supabase).
 
-## What works now (Phase 1 + 2)
+## What works now (Phases 1–3)
 
 | Area | What you get |
 |---|---|
@@ -16,10 +16,13 @@ Next.js 16 · shadcn/ui (Radix + Tailwind 4) · Drizzle ORM · PostgreSQL (Supab
 | **Fabric Stock** | Auto codes (LIN-001, PV-002 …), sold & balance metres live from bills, stock value, **barcode labels** (50×25 mm). |
 | **Staff** | Roles, pay type, piece rate, incentive %, app login + PIN. |
 | **Settings** | Shop details on bills, every dropdown list, piece rates, fabric code prefixes, **Import Excel**. |
-| **Automatic Cash Book** | Every fabric bill and order payment is posted to the cash book (the Cash Book screen comes in Phase 3). |
+| **Bulk / Institution orders** | Schools, hospitals, companies. One line per size with a **size grid** helper (22, 24, 26 … in one go), advance + payments, discount, GST %, **A4 invoice** with amount in words, WhatsApp. |
+| **Cash Book** | Every bill, order/bulk payment, purchase, supplier payment and wage payout is posted automatically. Add rent, electricity, capital introduced, owner withdrawal by hand. Running balance, opening/closing for any period, cash-in-hand, filters by category and mode. |
+| **Purchases** | Supplier bills with qty × rate, GST 0/5/12/18 %, amount paid at purchase. |
+| **Suppliers** | Phone / UPI / bank / GST with copy buttons, purchases, payments, setup-expense history, balance due, **Pay supplier**. |
+| **Tailor Wages** | Pieces × piece rate (Settings → Piece rates, else the tailor's own rate). Finished orders without a wage entry are listed for one-click entry. Balance per tailor, **Pay tailor**. |
 
-Coming next: Bulk/Institution orders + A4 invoice, Cash Book, Purchases & Suppliers, Tailor Wages, Incentive,
-Setup Expenses, Opening Stock, Capital Account, Summary report, Excel export.
+Coming next (Phase 4): Incentive, Setup Expenses, Opening Stock, Capital Account, Summary report, Excel export.
 
 ## Run it on a computer
 

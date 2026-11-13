@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus } from "lucide-react";
+import { BookOpen, Building2, LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus } from "lucide-react";
 import { NAV, type NavItem } from "@/lib/nav";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
@@ -126,6 +126,9 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
               <CommandItem onSelect={() => go("/orders/new")}>
                 <Scissors /> New stitching order <span className="ml">പുതിയ ഓർഡർ</span>
               </CommandItem>
+              <CommandItem onSelect={() => go("/bulk/new")}>
+                <Building2 /> New bulk / institution order
+              </CommandItem>
               <CommandItem onSelect={() => go("/customers?new=1")}>
                 <UserPlus /> New customer
               </CommandItem>
@@ -208,8 +211,18 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
+                  <Link href="/bulk/new">
+                    <Building2 /> Bulk order
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
                   <Link href="/customers?new=1">
                     <UserPlus /> Customer
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/cash-book">
+                    <BookOpen /> Cash entry
                   </Link>
                 </DropdownMenuItem>
               </DropdownMenuContent>

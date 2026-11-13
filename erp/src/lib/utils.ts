@@ -9,8 +9,10 @@ const inr = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2, minimumFr
 const inr0 = new Intl.NumberFormat("en-IN", { maximumFractionDigits: 0 });
 
 /** ₹1,23,456 */
-export const rupees = (n: number | null | undefined, decimals = false) =>
-  "₹" + (decimals ? inr : inr0).format(Number(n ?? 0));
+export const rupees = (n: number | null | undefined, decimals = false) => {
+  const v = Number(n ?? 0);
+  return (v < 0 ? "−₹" : "₹") + (decimals ? inr : inr0).format(Math.abs(v));
+};
 export const num = (n: number | null | undefined) => inr.format(Number(n ?? 0));
 
 /** Today in India as YYYY-MM-DD. */

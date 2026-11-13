@@ -175,3 +175,117 @@ export async function getOrderFull(id: number) {
   };
 }
 export type OrderFull = NonNullable<Awaited<ReturnType<typeof getOrderFull>>>;
+
+/* ───────────── Phase 3 ───────────── */
+
+export async function bulkList() {
+  const db = await getDb();
+  const { bulkOrders, bulkOrderItems } = schema;
+  const paid = sql<number>`coalesce((select sum(${c(payments.amount)}) from ${payments} where ${c(payments.bulkOrderId)} = ${c(bulkOrders.id)}),0)`.mapWith(Number);
+  const pieces = sql<number>`coalesce((select sum(${c(bulkOrderItems.qty)}) from ${bulkOrderItems} where ${c(bulkOrderItems.bulkOrderId)} = ${c(bulkOrders.id)}),0)`.mapWith(Number);
+  const items = sql<string>`coalesce((select string_agg(distinct ${c(bulkOrderItems.item)}, ', ') from ${bulkOrderItems} where ${c(bulkOrderItems.bulkOrderId)} = ${c(bulkOrders.id)}),'')`;
+  const brought = sql<string | null>`(select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(bulkOrders.broughtById)})`;
+  const rows = await db
+    .select({
+      id: bulkOrders.id,
+      orderNo: bulkOrders.orderNo,
+      date: bulkOrders.date,
+      institution: bulkOrders.institution,
+      contactPerson: bulkOrders.contactPerson,
+      phone: bulkOrders.phone,
+      deliveryDate: bulkOrders.deliveryDate,
+      status: bulkOrders.status,
+      total: bulkOrders.total,
+      paid,
+      pieces,
+      items,
+      broughtBy: brought,
+    })
+    .from(bulkOrders)
+    .orderBy(desc(bulkOrders.id));
+  return rows.map((r) => ({ ...r, balance: Math.round((r.total - r.paid) * 100) / 100 }));
+}
+export type BulkRow = Awaited<ReturnType<typeof bulkList>>[number];
+
+export async function getBulkFull(id: number) {
+  const db = await getDb();
+  const [o] = await db.select().from(schema.bulkOrders).where(eq(schema.bulkOrders.id, id));
+  if (!o) return null;
+  const items = await db.select().from(schema.bulkOrderItems).where(eq(schema.bulkOrderItems.bulkOrderId, id)).orderBy(asc(schema.bulkOrderItems.id));
+  const pays = await db.select().from(payments).where(eq(payments.bulkOrderId, id)).orderBy(asc(payments.id));
+  const [b] = o.broughtById ? await db.select({ name: staff.name }).from(staff).where(eq(staff.id, o.broughtById)) : [];
+  const paid = pays.reduce((s, p) => s + p.amount, 0);
+  return { ...o, items, payments: pays, broughtByName: b?.name ?? null, paid, balance: Math.round((o.total - paid) * 100) / 100 };
+}
+export type BulkFull = NonNullable<Awaited<ReturnType<typeof getBulkFull>>>;
+
+export async function suppliersWithBalance() {
+  const db = await getDb();
+  const { suppliers, purchases, supplierPayments, setupExpenses } = schema;
+  const billed = sql<number>`coalesce((select sum(${c(purchases.total)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)}),0)`.mapWith(Number);
+  const paidAtBill = sql<number>`coalesce((select sum(${c(purchases.paid)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)}),0)`.mapWith(Number);
+  const paidLater = sql<number>`coalesce((select sum(${c(supplierPayments.amount)}) from ${supplierPayments} where ${c(supplierPayments.supplierId)} = ${c(suppliers.id)}),0)`.mapWith(Number);
+  const setupPaid = sql<number>`coalesce((select sum(${c(setupExpenses.amount)}) from ${setupExpenses} where ${c(setupExpenses.supplierId)} = ${c(suppliers.id)} or (${c(setupExpenses.supplierId)} is null and ${c(setupExpenses.paidTo)} ilike '%' || ${c(suppliers.name)} || '%')),0)`.mapWith(Number);
+  const lastPaid = sql<string | null>`greatest(
+    (select max(${c(supplierPayments.date)}) from ${supplierPayments} where ${c(supplierPayments.supplierId)} = ${c(suppliers.id)}),
+    (select max(${c(purchases.date)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)} and ${c(purchases.paid)} > 0)
+  )`;
+  const rows = await db
+    .select({
+      id: suppliers.id,
+      name: suppliers.name,
+      type: suppliers.type,
+      place: suppliers.place,
+      phone: suppliers.phone,
+      upi: suppliers.upi,
+      bank: suppliers.bank,
+      gstNo: suppliers.gstNo,
+      supplies: suppliers.supplies,
+      notes: suppliers.notes,
+      billed,
+      paidAtBill,
+      paidLater,
+      setupPaid,
+      lastPaid,
+    })
+    .from(suppliers)
+    .orderBy(asc(suppliers.name));
+  return rows.map((r) => ({
+    ...r,
+    paid: Math.round((r.paidAtBill + r.paidLater) * 100) / 100,
+    balance: Math.round((r.billed - r.paidAtBill - r.paidLater) * 100) / 100,
+  }));
+}
+export type SupplierRow = Awaited<ReturnType<typeof suppliersWithBalance>>[number];
+
+export async function purchasesList() {
+  const db = await getDb();
+  const { purchases, suppliers } = schema;
+  return db
+    .select({
+      id: purchases.id,
+      date: purchases.date,
+      supplierId: purchases.supplierId,
+      supplierName: suppliers.name,
+      invoiceNo: purchases.invoiceNo,
+      description: purchases.description,
+      qty: purchases.qty,
+      rate: purchases.rate,
+      taxable: purchases.taxable,
+      gstPct: purchases.gstPct,
+      gstAmount: purchases.gstAmount,
+      total: purchases.total,
+      paid: purchases.paid,
+      remarks: purchases.remarks,
+    })
+    .from(purchases)
+    .leftJoin(suppliers, eq(suppliers.id, purchases.supplierId))
+    .orderBy(desc(purchases.date), desc(purchases.id));
+}
+export type PurchaseRow = Awaited<ReturnType<typeof purchasesList>>[number];
+
+export async function cashBookRows() {
+  const db = await getDb();
+  return db.select().from(schema.cashBook).orderBy(asc(schema.cashBook.date), asc(schema.cashBook.id));
+}
+export type CashRow = Awaited<ReturnType<typeof cashBookRows>>[number];

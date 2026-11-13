@@ -52,6 +52,10 @@ function rows(ws: ExcelJS.Worksheet | undefined, keyCols: number[]) {
   if (!ws) return out;
   ws.eachRow({ includeEmpty: false }, (row, i) => {
     if (i < 3) return;
+    // Notes / headings typed across merged cells (e.g. "2. Two figures in red…") are not data
+    const a = row.getCell(1);
+    const b = row.getCell(2);
+    if (b.isMerged && b.master?.address === a.address) return;
     if (keyCols.every((c) => str(row.getCell(c).value) != null)) out.push(row);
   });
   return out;

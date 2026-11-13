@@ -402,3 +402,37 @@ export const cashBook = pgTable(
   },
   (t) => [index("cash_book_date_idx").on(t.date), uniqueIndex("cash_book_source_idx").on(t.source, t.sourceId)],
 );
+
+/** Payments made to a supplier after the purchase (balance settlement). */
+export const supplierPayments = pgTable(
+  "supplier_payments",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    supplierId: integer("supplier_id")
+      .notNull()
+      .references(() => suppliers.id, { onDelete: "cascade" }),
+    amount: money("amount").notNull(),
+    mode: text("mode").notNull().default("Cash"),
+    note: text("note"),
+    createdAt: created(),
+  },
+  (t) => [index("supplier_payments_supplier_idx").on(t.supplierId)],
+);
+
+/** Wage payouts to tailors (settles their piece-rate balance). */
+export const wagePayments = pgTable(
+  "wage_payments",
+  {
+    id: serial("id").primaryKey(),
+    date: date("date").notNull(),
+    tailorId: integer("tailor_id")
+      .notNull()
+      .references(() => staff.id),
+    amount: money("amount").notNull(),
+    mode: text("mode").notNull().default("Cash"),
+    note: text("note"),
+    createdAt: created(),
+  },
+  (t) => [index("wage_payments_tailor_idx").on(t.tailorId)],
+);

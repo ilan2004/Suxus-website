@@ -5,7 +5,7 @@ import { AlertTriangle, CalendarClock, CircleDollarSign, Layers, PackageCheck, P
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
-import { fabricsWithStock, ordersWithBalance } from "@/lib/queries";
+import { bulkList, fabricsWithStock, ordersWithBalance } from "@/lib/queries";
 import { StatCard } from "@/components/app/stat-card";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +22,7 @@ export default async function Dashboard() {
   const from30 = addDays(t, -29);
   const { sales, payments, saleItems } = schema;
 
-  const [orders, fabrics, shop, todaySales, dailySales, dailyPays, todayPays, pendingSales] = await Promise.all([
+  const [orders, fabrics, shop, todaySales, dailySales, dailyPays, todayPays, pendingSales, bulk] = await Promise.all([
     ordersWithBalance(),
     fabricsWithStock(),
     getSetting("shop"),
@@ -52,13 +52,16 @@ export default async function Dashboard() {
       .select({ id: sales.id, billNo: sales.billNo, customerName: sales.customerName })
       .from(sales)
       .where(and(eq(sales.stitchingHere, true), isNull(sales.orderId), eq(sales.cancelled, false))),
+    bulkList(),
   ]);
 
   const open = orders.filter((o) => !["Delivered", "Cancelled"].includes(o.status));
   const dueToday = open.filter((o) => o.deliveryDate === t);
   const overdue = open.filter((o) => o.deliveryDate && o.deliveryDate < t);
   const ready = open.filter((o) => o.status === "Ready");
-  const pending = orders.filter((o) => o.status !== "Cancelled").reduce((s, o) => s + Math.max(0, o.balance), 0);
+  const pending =
+    orders.filter((o) => o.status !== "Cancelled").reduce((s, o) => s + Math.max(0, o.balance), 0) +
+    bulk.filter((b) => b.status !== "Cancelled").reduce((s, b) => s + Math.max(0, b.balance), 0);
   const low = fabrics.filter((f) => f.active && f.balanceMtr <= shop.lowStockMtr).sort((a, b) => a.balanceMtr - b.balanceMtr);
 
   const series = Array.from({ length: 30 }, (_, i) => {
@@ -114,7 +117,7 @@ export default async function Dashboard() {
         <StatCard label="Collected today" ml="ഇന്നത്തെ വരവ്" value={rupees(collectedToday)} sub="Fabric bills + order payments" icon={Wallet} tone="success" />
         <StatCard label="Fabric sold today" ml="ഇന്ന് വിറ്റത്" value={`${num(todaySales[0]?.metres ?? 0)} m`} sub={`${todaySales[0]?.count ?? 0} bills · ${rupees(todaySales[0]?.net ?? 0)}`} icon={ShoppingBag} />
         <StatCard label="Open orders" ml="നടക്കുന്ന ഓർഡർ" value={open.length} sub={`${dueToday.length} due today · ${overdue.length} overdue`} icon={Scissors} tone={overdue.length ? "destructive" : "gold"} />
-        <StatCard label="Balance to collect" ml="കിട്ടാനുള്ളത്" value={rupees(pending)} sub={`${ready.length} ready to deliver`} icon={CircleDollarSign} tone="warning" />
+        <StatCard label="Balance to collect" ml="കിട്ടാനുള്ളത്" value={rupees(pending)} sub={`Orders + bulk · ${ready.length} ready to deliver`} icon={CircleDollarSign} tone="warning" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
@@ -123,7 +126,7 @@ export default async function Dashboard() {
             <CardTitle>
               Daily income · last 30 days <span className="ml">വരവ്</span>
             </CardTitle>
-            <p className="text-sm text-muted-foreground">Fabric bills (not for stitching) + payments received on orders</p>
+            <p className="text-sm text-muted-foreground">Fabric bills (not for stitching) + payments received on stitching & bulk orders</p>
           </CardHeader>
           <CardContent>
             <IncomeChart data={series} />

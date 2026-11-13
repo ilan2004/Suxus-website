@@ -1,0 +1,222 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { eq } from "drizzle-orm";
+import { z } from "zod";
+import { getDb, schema } from "@/lib/db";
+import { requireUser } from "@/lib/auth";
+import { audit } from "@/lib/audit";
+import { nextDocNo } from "@/lib/numbering";
+import { postCash, removeCash } from "@/lib/cashbook";
+import { round2, today } from "@/lib/utils";
+import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
+import { recalcOrder } from "@/lib/order-calc";
+
+const OrderInput = z.object({
+  id: z.number().int().optional(),
+  date: reqDate,
+  customerId: optId,
+  customerName: optText,
+  phone: optText,
+  workType: z.string().min(1, "Choose the work type"),
+  urgency: z.string().default("Normal"),
+  trialDate: optDate,
+  deliveryDate: optDate,
+  status: z.string().default("Booked"),
+  tailorId: optId,
+  broughtById: optId,
+  saleId: optId,
+  discount: money,
+  remarks: optText,
+  items: z
+    .array(z.object({ item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0) }))
+    .min(1, "Add at least one item"),
+  advance: money,
+  advanceMode: z.string().default("Cash"),
+});
+export type OrderInput = z.input<typeof OrderInput>;
+
+export async function saveOrder(input: OrderInput): Promise<Result<{ id: number; orderNo: string }>> {
+  const user = await requireUser();
+  const parsed = OrderInput.safeParse(input);
+  if (!parsed.success) return fail(zodError(parsed.error));
+  const d = parsed.data;
+  if (!d.customerId && !d.customerName) return fail("Choose a customer or type a name");
+  const db = await getDb();
+
+  try {
+    const res = await db.transaction(async (tx) => {
+      let customerName = d.customerName;
+      let phone = d.phone;
+      if (d.customerId) {
+        const [c] = await tx.select().from(schema.customers).where(eq(schema.customers.id, d.customerId));
+        customerName = c?.name ?? customerName;
+        phone = c?.phone ?? phone;
+      }
+      const values = {
+        date: d.date,
+        customerId: d.customerId ?? null,
+        customerName,
+        phone,
+        workType: d.workType,
+        urgency: d.urgency,
+        trialDate: d.trialDate,
+        deliveryDate: d.deliveryDate,
+        status: d.status,
+        tailorId: d.tailorId ?? null,
+        broughtById: d.broughtById ?? null,
+        saleId: d.saleId ?? null,
+        discount: d.discount,
+        remarks: d.remarks,
+        deliveredOn: d.status === "Delivered" ? today() : null,
+      };
+
+      let order;
+      if (d.id) {
+        const [prev] = await tx.select({ saleId: schema.orders.saleId }).from(schema.orders).where(eq(schema.orders.id, d.id));
+        [order] = await tx.update(schema.orders).set(values).where(eq(schema.orders.id, d.id)).returning();
+        if (prev?.saleId && prev.saleId !== d.saleId) {
+          await tx.update(schema.sales).set({ orderId: null }).where(eq(schema.sales.id, prev.saleId));
+        }
+        await tx.delete(schema.orderItems).where(eq(schema.orderItems.orderId, order.id));
+      } else {
+        const orderNo = await nextDocNo(tx, "SO");
+        [order] = await tx.insert(schema.orders).values({ ...values, orderNo }).returning();
+      }
+
+      await tx.insert(schema.orderItems).values(
+        d.items.map((i) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate) })),
+      );
+
+      if (d.saleId) {
+        // Fabric is now billed through this order: link it and drop its separate cash entry.
+        await tx.update(schema.sales).set({ orderId: order.id, stitchingHere: true }).where(eq(schema.sales.id, d.saleId));
+        await removeCash(tx, "sale", d.saleId);
+      }
+      await recalcOrder(tx, order.id);
+
+      if (!d.id && d.advance > 0) {
+        const [p] = await tx
+          .insert(schema.payments)
+          .values({ date: d.date, kind: "order", orderId: order.id, amount: d.advance, mode: d.advanceMode, note: "Advance", receivedById: user.id })
+          .returning();
+        await postCash(tx, {
+          source: "payment",
+          sourceId: p.id,
+          date: d.date,
+          particulars: `${order.orderNo} advance · ${customerName ?? ""}`,
+          category: "Advance Received",
+          amountIn: d.advance,
+          mode: d.advanceMode,
+        });
+      }
+      await audit(tx, user, d.id ? "update" : "create", "order", order.id, order.orderNo);
+      return { id: order.id, orderNo: order.orderNo };
+    });
+    revalidatePath("/orders");
+    revalidatePath("/");
+    return ok(res);
+  } catch (e) {
+    return fail((e as Error).message);
+  }
+}
+
+export async function setOrderStatus(id: number, status: string): Promise<Result<null>> {
+  const user = await requireUser();
+  const db = await getDb();
+  await db
+    .update(schema.orders)
+    .set({ status, deliveredOn: status === "Delivered" ? today() : null })
+    .where(eq(schema.orders.id, id));
+  await audit(db, user, "update", "order", id, `status → ${status}`);
+  revalidatePath("/orders");
+  revalidatePath(`/orders/${id}`);
+  revalidatePath("/");
+  return ok(null);
+}
+
+const PaymentInput = z.object({
+  orderId: z.number().int().positive(),
+  date: reqDate,
+  amount: z.coerce.number<number>().positive("Amount must be more than 0"),
+  mode: z.string().min(1),
+  note: optText,
+  markDelivered: z.boolean().default(false),
+});
+
+export async function addOrderPayment(input: z.input<typeof PaymentInput>): Promise<Result<null>> {
+  const user = await requireUser();
+  const parsed = PaymentInput.safeParse(input);
+  if (!parsed.success) return fail(zodError(parsed.error));
+  const d = parsed.data;
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    const [o] = await tx.select().from(schema.orders).where(eq(schema.orders.id, d.orderId));
+    if (!o) throw new Error("Order not found");
+    const [p] = await tx
+      .insert(schema.payments)
+      .values({ date: d.date, kind: "order", orderId: o.id, amount: d.amount, mode: d.mode, note: d.note, receivedById: user.id })
+      .returning();
+    const category = o.workType === "Alteration" ? "Alteration Income" : "Stitching Income";
+    await postCash(tx, {
+      source: "payment",
+      sourceId: p.id,
+      date: d.date,
+      particulars: `${o.orderNo} payment · ${o.customerName ?? ""}`,
+      category,
+      amountIn: d.amount,
+      mode: d.mode,
+    });
+    if (d.markDelivered) {
+      await tx.update(schema.orders).set({ status: "Delivered", deliveredOn: d.date }).where(eq(schema.orders.id, o.id));
+    }
+    await audit(tx, user, "create", "payment", p.id, `${o.orderNo} ₹${d.amount}`);
+  });
+  revalidatePath(`/orders/${d.orderId}`);
+  revalidatePath("/orders");
+  revalidatePath("/");
+  return ok(null);
+}
+
+export async function deletePayment(id: number): Promise<Result<null>> {
+  const user = await requireUser({ partner: true });
+  const db = await getDb();
+  const [p] = await db.delete(schema.payments).where(eq(schema.payments.id, id)).returning();
+  if (p) {
+    await removeCash(db, "payment", id);
+    await audit(db, user, "delete", "payment", id, `₹${p.amount}`);
+    if (p.orderId) revalidatePath(`/orders/${p.orderId}`);
+  }
+  revalidatePath("/orders");
+  return ok(null);
+}
+
+export async function deleteOrder(id: number): Promise<Result<null>> {
+  const user = await requireUser({ partner: true });
+  const db = await getDb();
+  await db.transaction(async (tx) => {
+    const pays = await tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.orderId, id));
+    for (const p of pays) await removeCash(tx, "payment", p.id);
+    const linked = await tx
+      .update(schema.sales)
+      .set({ orderId: null, stitchingHere: false })
+      .where(eq(schema.sales.orderId, id))
+      .returning();
+    for (const s of linked) {
+      if (s.cancelled) continue;
+      await postCash(tx, {
+        source: "sale",
+        sourceId: s.id,
+        date: s.date,
+        particulars: `${s.billNo} · ${s.customerName ?? "Walk-in"}`,
+        category: "Fabric Sale",
+        amountIn: s.net,
+        mode: s.paymentMode,
+      });
+    }
+    const [o] = await tx.delete(schema.orders).where(eq(schema.orders.id, id)).returning();
+    await audit(tx, user, "delete", "order", id, o?.orderNo);
+  });
+  revalidatePath("/orders");
+  return ok(null);
+}

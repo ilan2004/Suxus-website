@@ -1,0 +1,207 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { KeyRound, Loader2, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { DataTable, type ColumnDef } from "@/components/app/data-table";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Sheet, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Field } from "@/components/app/field";
+import { ListSelect } from "@/components/app/search-select";
+import { saveStaff, type StaffInput } from "@/lib/actions/staff";
+import { cn, rupees } from "@/lib/utils";
+
+type Row = {
+  id: number;
+  code: string;
+  name: string;
+  role: string | null;
+  phone: string | null;
+  joinDate: string | null;
+  payType: string | null;
+  monthlySalary: number | null;
+  pieceRate: number | null;
+  incentive: boolean;
+  ownIncentivePct: number | null;
+  status: string;
+  remarks: string | null;
+  access: string;
+  hasPin: boolean;
+};
+
+export function StaffView({ rows, lists }: { rows: Row[]; lists: { staffRole: string[]; payType: string[] } }) {
+  const router = useRouter();
+  const [edit, setEdit] = React.useState<(StaffInput & { hasPin?: boolean; code?: string }) | null>(null);
+
+  const columns: ColumnDef<Row>[] = [
+    { accessorKey: "code", header: "ID", cell: ({ row }) => <span className="font-mono text-xs">{row.original.code}</span> },
+    {
+      accessorKey: "name",
+      header: "Name",
+      cell: ({ row }) => (
+        <div>
+          <div className={cn("font-medium", row.original.status === "Left" && "text-muted-foreground line-through")}>{row.original.name}</div>
+          <div className="text-xs text-muted-foreground">{row.original.phone}</div>
+        </div>
+      ),
+    },
+    { accessorKey: "role", header: "Role" },
+    { accessorKey: "payType", header: "Pay type", cell: ({ row }) => <span className="text-xs">{row.original.payType}</span> },
+    {
+      id: "pay",
+      header: "Pay",
+      meta: { align: "right" },
+      cell: ({ row }) =>
+        row.original.monthlySalary ? `${rupees(row.original.monthlySalary)}/mo` : row.original.pieceRate ? `${rupees(row.original.pieceRate)}/pc` : "—",
+    },
+    {
+      accessorKey: "access",
+      header: "Login",
+      cell: ({ row }) =>
+        row.original.access === "none" ? (
+          <span className="text-xs text-muted-foreground">No login</span>
+        ) : (
+          <Badge variant={row.original.access === "partner" ? "gold" : "secondary"}>
+            <KeyRound /> {row.original.access}
+          </Badge>
+        ),
+    },
+    { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge variant={row.original.status === "Active" ? "success" : "outline"}>{row.original.status}</Badge> },
+  ];
+
+  return (
+    <>
+      <DataTable
+        columns={columns}
+        data={rows}
+        onRowClick={(r) => setEdit({ ...r, status: r.status === "Left" ? "Left" : "Active", access: r.access as "partner" | "staff" | "none" })}
+        toolbar={
+          <Button onClick={() => setEdit({ name: "", status: "Active", access: "none", incentive: false })}>
+            <Plus /> Add staff
+          </Button>
+        }
+      />
+      <StaffSheet value={edit} onClose={() => setEdit(null)} lists={lists} onSaved={() => router.refresh()} />
+    </>
+  );
+}
+
+function StaffSheet({
+  value,
+  onClose,
+  lists,
+  onSaved,
+}: {
+  value: (StaffInput & { hasPin?: boolean; code?: string }) | null;
+  onClose: () => void;
+  lists: { staffRole: string[]; payType: string[] };
+  onSaved: () => void;
+}) {
+  const [v, setV] = React.useState(value);
+  const [pending, start] = React.useTransition();
+  React.useEffect(() => setV(value ? { ...value, pin: "" } : null), [value]);
+  if (!v) return <Sheet open={false} />;
+  const set = <K extends keyof StaffInput>(k: K, val: StaffInput[K]) => setV((s) => (s ? { ...s, [k]: val } : s));
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    start(async () => {
+      const r = await saveStaff(v);
+      if (!r.ok) return void toast.error(r.error);
+      toast.success("Saved");
+      onSaved();
+      onClose();
+    });
+  };
+
+  return (
+    <Sheet open={!!value} onOpenChange={(o) => !o && onClose()}>
+      <SheetContent>
+        <form onSubmit={submit} className="flex h-full flex-col">
+          <SheetHeader>
+            <SheetTitle>{v.id ? `${v.code} · ${v.name}` : "Add staff"}</SheetTitle>
+            <SheetDescription>ജീവനക്കാരുടെ വിവരം</SheetDescription>
+          </SheetHeader>
+          <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <Field label="Name" ml="പേര്" required className="sm:col-span-2">
+              <Input value={v.name} onChange={(e) => set("name", e.target.value)} required autoFocus />
+            </Field>
+            <Field label="Role" ml="ജോലി">
+              <ListSelect items={lists.staffRole} value={v.role} onChange={(x) => set("role", x)} />
+            </Field>
+            <Field label="Phone" ml="ഫോൺ">
+              <Input value={v.phone ?? ""} onChange={(e) => set("phone", e.target.value)} inputMode="tel" />
+            </Field>
+            <Field label="Join date" ml="ചേർന്ന തീയതി">
+              <Input type="date" value={v.joinDate ?? ""} onChange={(e) => set("joinDate", e.target.value)} />
+            </Field>
+            <Field label="Pay type" ml="ശമ്പള രീതി">
+              <ListSelect items={lists.payType} value={v.payType} onChange={(x) => set("payType", x)} />
+            </Field>
+            <Field label="Monthly salary" ml="മാസ ശമ്പളം">
+              <Input type="number" min={0} value={v.monthlySalary ?? ""} onChange={(e) => set("monthlySalary", e.target.value === "" ? null : Number(e.target.value))} />
+            </Field>
+            <Field label="Piece rate (₹)" ml="പീസ് റേറ്റ്">
+              <Input type="number" min={0} value={v.pieceRate ?? ""} onChange={(e) => set("pieceRate", e.target.value === "" ? null : Number(e.target.value))} />
+            </Field>
+            <Label className="sm:col-span-1">
+              <Switch checked={!!v.incentive} onCheckedChange={(c) => set("incentive", c)} /> Gets incentive
+            </Label>
+            <Field label="Own incentive %" ml="സ്വന്തം %" hint="Overrides the slab (e.g. 4 for commission-only)">
+              <Input type="number" min={0} max={100} step="0.1" value={v.ownIncentivePct ?? ""} onChange={(e) => set("ownIncentivePct", e.target.value === "" ? null : Number(e.target.value))} />
+            </Field>
+            <Field label="Status" ml="സ്ഥിതി">
+              <ListSelect items={["Active", "Left"]} value={v.status} onChange={(x) => set("status", (x as "Active" | "Left") ?? "Active")} />
+            </Field>
+            <Field label="Remarks" ml="കുറിപ്പ്" className="sm:col-span-2">
+              <Textarea value={v.remarks ?? ""} onChange={(e) => set("remarks", e.target.value)} rows={2} />
+            </Field>
+
+            <div className="grid gap-3 rounded-xl border bg-muted/30 p-4 sm:col-span-2">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <KeyRound className="size-4" /> App login
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {(
+                  [
+                    ["none", "No login"],
+                    ["staff", "Staff (daily entry)"],
+                    ["partner", "Partner (everything)"],
+                  ] as const
+                ).map(([k, l]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => set("access", k)}
+                    className={cn("h-8 rounded-md border px-3 text-sm", v.access === k ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
+                  >
+                    {l}
+                  </button>
+                ))}
+              </div>
+              {v.access !== "none" && (
+                <Field label={v.hasPin ? "New PIN (leave empty to keep)" : "PIN (4–6 digits)"} ml="പിൻ">
+                  <Input type="password" inputMode="numeric" pattern="\d{4,6}" value={v.pin ?? ""} onChange={(e) => set("pin", e.target.value)} className="w-40" />
+                </Field>
+              )}
+            </div>
+          </div>
+          <SheetFooter className="flex-row justify-end border-t">
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 className="animate-spin" />} Save
+            </Button>
+          </SheetFooter>
+        </form>
+      </SheetContent>
+    </Sheet>
+  );
+}

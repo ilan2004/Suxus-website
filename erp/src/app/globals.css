@@ -1,0 +1,155 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* SUXUS palette — deep green #153D33, gold #C8A96A, cream */
+:root {
+  --radius: 0.625rem;
+  --background: #fbfaf6;
+  --foreground: #14211d;
+  --card: #ffffff;
+  --card-foreground: #14211d;
+  --popover: #ffffff;
+  --popover-foreground: #14211d;
+  --primary: #153d33;
+  --primary-foreground: #f7f3e8;
+  --secondary: #f1ede2;
+  --secondary-foreground: #153d33;
+  --muted: #f3f1ea;
+  --muted-foreground: #66706b;
+  --accent: #efe6d2;
+  --accent-foreground: #3d3220;
+  --gold: #c8a96a;
+  --gold-foreground: #2b2210;
+  --destructive: #c0392b;
+  --success: #1f7a4d;
+  --warning: #b7791f;
+  --border: #e5e1d6;
+  --input: #ddd8ca;
+  --ring: #2d6b5b;
+  --sidebar: #153d33;
+  --sidebar-foreground: #e6efe9;
+  --sidebar-muted: #8fb2a6;
+  --sidebar-accent: #1e4d41;
+  --sidebar-border: #24564a;
+  --chart-1: #153d33;
+  --chart-2: #c8a96a;
+  --chart-3: #4f8a78;
+  --chart-4: #9c7a3c;
+  --chart-5: #8fb2a6;
+}
+
+.dark {
+  --background: #0d1714;
+  --foreground: #e8eee9;
+  --card: #13201c;
+  --card-foreground: #e8eee9;
+  --popover: #13201c;
+  --popover-foreground: #e8eee9;
+  --primary: #c8a96a;
+  --primary-foreground: #1a1406;
+  --secondary: #1b2b26;
+  --secondary-foreground: #e8eee9;
+  --muted: #18261f;
+  --muted-foreground: #93a39c;
+  --accent: #223630;
+  --accent-foreground: #f1e6cc;
+  --gold: #c8a96a;
+  --gold-foreground: #1a1406;
+  --destructive: #e05a4b;
+  --success: #3fbf80;
+  --warning: #e0a743;
+  --border: #23342e;
+  --input: #2a3d36;
+  --ring: #c8a96a;
+  --sidebar: #0a1210;
+  --sidebar-foreground: #dfe9e4;
+  --sidebar-muted: #7f978e;
+  --sidebar-accent: #172722;
+  --sidebar-border: #1c2c27;
+  --chart-1: #c8a96a;
+  --chart-2: #4f8a78;
+  --chart-3: #8fb2a6;
+  --chart-4: #e0c893;
+  --chart-5: #2d6b5b;
+}
+
+@theme inline {
+  --font-sans: var(--font-inter), var(--font-ml), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-display-face), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-ml: var(--font-ml-face), ui-sans-serif, sans-serif;
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-gold: var(--gold);
+  --color-gold-foreground: var(--gold-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "tnum" 1;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+}
+
+/* Malayalam sub-label used across forms and tables */
+.ml {
+  font-family: var(--font-ml);
+  @apply text-[0.72em] font-normal text-muted-foreground;
+}
+
+/* ───── Printing ───── */
+@media print {
+  @page {
+    margin: 0;
+  }
+  body {
+    background: white !important;
+  }
+  .no-print {
+    display: none !important;
+  }
+}

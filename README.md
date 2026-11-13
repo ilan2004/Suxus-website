@@ -63,3 +63,7 @@ Pages show labelled placeholders until the real files exist:
 
 Site rules from the brief: no fixed prices, no individual measuring for school children,
 no supplier names, no branded garments for sale.
+
+### ERP (erp.suxus.shop)
+
+The shop's daily-operations ERP lives in [`erp/`](erp/README.md) — a separate Next.js app with its own `package.json`. It is not part of the static website build.

@@ -1,0 +1,349 @@
+"use client";
+
+import * as React from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { Loader2, Plus, ShoppingBag, Trash2, X, Zap } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Field } from "@/components/app/field";
+import { ListSelect, SearchSelect } from "@/components/app/search-select";
+import { CustomerPicker } from "./customer-picker";
+import type { CustomerLite } from "./customer-dialog";
+import { saveOrder, type OrderInput } from "@/lib/actions/orders";
+import { addDays, cn, fmtDate, num, round2, rupees, today } from "@/lib/utils";
+
+type Item = { key: string; item: string; qty: string; rate: string };
+export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null };
+export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { item: string; qty: number; rate: number }[] };
+
+export function OrderForm({
+  initial,
+  customers,
+  staff,
+  lists,
+  sale,
+  unlinkedSales,
+  rates,
+  days,
+}: {
+  initial?: OrderInitial;
+  customers: CustomerLite[];
+  staff: { id: number; name: string; role: string | null }[];
+  lists: { workType: string[]; item: string[]; status: string[]; paymentMode: string[]; customerType: string[] };
+  sale?: LinkedSale | null;
+  unlinkedSales: LinkedSale[];
+  rates: Record<string, number>;
+  days: { normal: number; express: number };
+}) {
+  const router = useRouter();
+  const editing = !!initial?.id;
+  const [customer, setCustomer] = React.useState<CustomerLite | null>(
+    customers.find((c) => c.id === (initial?.customerId ?? sale?.customerId)) ?? null,
+  );
+  const [walkIn, setWalkIn] = React.useState({ name: initial?.customerName ?? sale?.customerName ?? "", phone: initial?.phone ?? sale?.phone ?? "" });
+  const [date, setDate] = React.useState(initial?.date ?? today());
+  const [workType, setWorkType] = React.useState(initial?.workType ?? (sale ? "Shop Fabric Stitching" : lists.workType[0]));
+  const [urgency, setUrgency] = React.useState(initial?.urgency ?? "Normal");
+  const [deliveryDate, setDeliveryDate] = React.useState(initial?.deliveryDate ?? addDays(today(), days.normal));
+  const [deliveryTouched, setDeliveryTouched] = React.useState(editing);
+  const [trialDate, setTrialDate] = React.useState(initial?.trialDate ?? "");
+  const [status, setStatus] = React.useState(initial?.status ?? "Booked");
+  const [tailorId, setTailorId] = React.useState<number | null>(initial?.tailorId ?? null);
+  const [broughtById, setBroughtById] = React.useState<number | null>(initial?.broughtById ?? null);
+  const [linked, setLinked] = React.useState<LinkedSale | null>(sale ?? null);
+  const [discount, setDiscount] = React.useState(initial?.discount ? String(initial.discount) : "");
+  const [advance, setAdvance] = React.useState("");
+  const [advanceMode, setAdvanceMode] = React.useState(lists.paymentMode[0] ?? "Cash");
+  const [remarks, setRemarks] = React.useState(initial?.remarks ?? "");
+  const [items, setItems] = React.useState<Item[]>(
+    initial?.items?.length
+      ? initial.items.map((i) => ({ key: crypto.randomUUID(), item: i.item, qty: String(i.qty), rate: String(i.rate) }))
+      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "" }],
+  );
+  const [pending, start] = React.useTransition();
+
+  // Expected delivery = order date + 2 days (Normal) or + 1 day (Express), unless typed by hand.
+  React.useEffect(() => {
+    if (!deliveryTouched) setDeliveryDate(addDays(date, urgency === "Express" ? days.express : days.normal));
+  }, [date, urgency, deliveryTouched, days]);
+
+  const stitching = round2(items.reduce((s, i) => s + (Number(i.qty) || 0) * (Number(i.rate) || 0), 0));
+  const fabric = linked?.net ?? 0;
+  const total = round2(stitching + fabric - (Number(discount) || 0));
+  const adv = Number(advance) || 0;
+
+  const updateItem = (key: string, patch: Partial<Item>) => setItems((is) => is.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  const tailors = staff;
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (items.some((i) => !i.item || !(Number(i.qty) > 0))) return void toast.error("Every item needs a name and quantity");
+    start(async () => {
+      const r = await saveOrder({
+        id: initial?.id,
+        date,
+        customerId: customer?.id ?? null,
+        customerName: customer ? null : walkIn.name || null,
+        phone: customer ? null : walkIn.phone || null,
+        workType,
+        urgency,
+        trialDate: trialDate || null,
+        deliveryDate: deliveryDate || null,
+        status,
+        tailorId,
+        broughtById,
+        saleId: linked?.id ?? null,
+        discount: Number(discount) || 0,
+        remarks: remarks || null,
+        items: items.map((i) => ({ item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0 })),
+        advance: editing ? 0 : adv,
+        advanceMode,
+      });
+      if (!r.ok) return void toast.error(r.error);
+      toast.success(editing ? "Order updated" : `Order ${r.data.orderNo} booked`);
+      router.push(`/orders/${r.data.id}${editing ? "" : "?print=1"}`);
+    });
+  };
+
+  const candidateSales = unlinkedSales.filter((s) => !customer || s.customerId === customer.id || !s.customerId);
+
+  return (
+    <form onSubmit={submit} className="grid gap-5 lg:grid-cols-[1fr_360px]">
+      <div className="grid content-start gap-5">
+        <section className="grid gap-4 rounded-xl border bg-card p-5 shadow-xs">
+          <h2 className="font-display font-semibold">Customer & work <span className="ml">കസ്റ്റമർ / വർക്ക്</span></h2>
+          <Field label="Customer" ml="കസ്റ്റമർ" required>
+            <CustomerPicker customers={customers} types={lists.customerType} value={customer?.id} onChange={setCustomer} />
+          </Field>
+          {!customer && (
+            <div className="grid grid-cols-2 gap-2">
+              <Input placeholder="or type name" value={walkIn.name} onChange={(e) => setWalkIn((w) => ({ ...w, name: e.target.value }))} />
+              <Input placeholder="phone" inputMode="tel" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} />
+            </div>
+          )}
+          <Field label="Work type" ml="വർക്ക് തരം" required>
+            <div className="flex flex-wrap gap-1.5">
+              {lists.workType
+                .filter((w) => !["Bulk / Institution", "Readymade Sale"].includes(w))
+                .map((w) => (
+                  <button
+                    key={w}
+                    type="button"
+                    onClick={() => setWorkType(w)}
+                    className={cn("h-9 rounded-md border px-3 text-sm", workType === w ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}
+                  >
+                    {w}
+                  </button>
+                ))}
+            </div>
+          </Field>
+          <div className="grid gap-4 sm:grid-cols-4">
+            <Field label="Order date" ml="തീയതി">
+              <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </Field>
+            <Field label="Urgency" ml="അടിയന്തരം">
+              <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted p-0.5">
+                {["Normal", "Express"].map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => {
+                      setUrgency(u);
+                      setDeliveryTouched(false);
+                    }}
+                    className={cn("h-8 rounded text-sm", urgency === u ? "bg-card font-medium shadow-sm" : "text-muted-foreground")}
+                  >
+                    {u === "Express" && <Zap className="mr-1 inline size-3.5 text-warning" />}
+                    {u}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <Field label="Trial date" ml="ട്രയൽ">
+              <Input type="date" value={trialDate ?? ""} onChange={(e) => setTrialDate(e.target.value)} />
+            </Field>
+            <Field label="Delivery date" ml="ഡെലിവറി" hint={!deliveryTouched ? "Auto · ഓട്ടോ" : undefined}>
+              <Input
+                type="date"
+                value={deliveryDate ?? ""}
+                onChange={(e) => {
+                  setDeliveryDate(e.target.value);
+                  setDeliveryTouched(true);
+                }}
+              />
+            </Field>
+          </div>
+        </section>
+
+        <section className="grid gap-3 rounded-xl border bg-card p-5 shadow-xs">
+          <div className="flex items-center justify-between">
+            <h2 className="font-display font-semibold">Items <span className="ml">ഐറ്റം</span></h2>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "" }])}
+            >
+              <Plus /> Add item
+            </Button>
+          </div>
+          <div className="hidden grid-cols-[1fr_80px_110px_110px_36px] gap-2 px-1 text-xs text-muted-foreground sm:grid">
+            <span>Item</span>
+            <span className="text-right">Qty</span>
+            <span className="text-right">Rate (₹)</span>
+            <span className="text-right">Amount</span>
+            <span />
+          </div>
+          {items.map((i) => (
+            <div key={i.key} className="grid grid-cols-[1fr_70px_90px] gap-2 sm:grid-cols-[1fr_80px_110px_110px_36px] sm:items-center">
+              <ListSelect items={lists.item} value={i.item} onChange={(v) => updateItem(i.key, { item: v ?? "" })} className="col-span-3 sm:col-span-1" />
+              <Input type="number" min={1} step={1} value={i.qty} onChange={(e) => updateItem(i.key, { qty: e.target.value })} className="text-right" />
+              <Input type="number" min={0} step={10} value={i.rate} onChange={(e) => updateItem(i.key, { rate: e.target.value })} className="text-right" placeholder="0" />
+              <span className="self-center text-right font-medium tabular-nums">{rupees((Number(i.qty) || 0) * (Number(i.rate) || 0))}</span>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                disabled={items.length === 1}
+                onClick={() => setItems((is) => is.filter((x) => x.key !== i.key))}
+                aria-label="Remove item"
+              >
+                <Trash2 className="text-muted-foreground" />
+              </Button>
+            </div>
+          ))}
+        </section>
+
+        {(workType === "Shop Fabric Stitching" || linked) && (
+        <section className="grid gap-3 rounded-xl border bg-card p-5 shadow-xs">
+          <h2 className="font-display font-semibold">
+            Shop fabric <span className="ml">ഷോപ്പ് തുണി (Fabric Sale ബിൽ)</span>
+          </h2>
+          {linked ? (
+            <div className="flex items-center gap-3 rounded-lg border border-gold/50 bg-gold/10 p-3">
+              <ShoppingBag className="size-5 text-[#8a6a2a] dark:text-gold" />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {linked.billNo} · {fmtDate(linked.date)}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">{linked.items}</p>
+              </div>
+              <span className="font-semibold tabular-nums">{rupees(linked.net, true)}</span>
+              <Button type="button" variant="ghost" size="icon-sm" onClick={() => setLinked(null)} aria-label="Unlink">
+                <X />
+              </Button>
+            </div>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+              <SearchSelect
+                options={candidateSales.map((s) => ({ value: String(s.id), label: `${s.billNo} · ${s.customerName ?? "Walk-in"}`, sub: `${rupees(s.net)} · ${s.items}` }))}
+                value={null}
+                onChange={(v) => setLinked(candidateSales.find((s) => String(s.id) === v) ?? null)}
+                placeholder="Link an existing fabric bill (FS-…)"
+              />
+              {editing && initial?.id ? (
+                <Button type="button" variant="outline" asChild>
+                  <Link href={`/sales/new?order=${initial.id}${customer ? `&customer=${customer.id}` : ""}`}>
+                    <Plus /> Sell fabric for this order
+                  </Link>
+                </Button>
+              ) : null}
+            </div>
+          )}
+          <p className="text-xs text-muted-foreground">
+            The fabric amount is added to this order&apos;s total and removed from separate fabric income — counted once.
+          </p>
+        </section>
+        )}
+
+        <section className="grid gap-4 rounded-xl border bg-card p-5 shadow-xs sm:grid-cols-3">
+          <Field label="Tailor" ml="തയ്യൽക്കാരൻ">
+            <SearchSelect
+              options={tailors.map((s) => ({ value: String(s.id), label: s.name, sub: s.role ?? "" }))}
+              value={tailorId ? String(tailorId) : null}
+              onChange={(v) => setTailorId(v ? Number(v) : null)}
+              allowClear
+              placeholder="Assign later"
+            />
+          </Field>
+          <Field label="Brought by" ml="ആര് കൊണ്ടുവന്നു" hint="Used for incentive">
+            <SearchSelect
+              options={staff.map((s) => ({ value: String(s.id), label: s.name }))}
+              value={broughtById ? String(broughtById) : null}
+              onChange={(v) => setBroughtById(v ? Number(v) : null)}
+              allowClear
+              placeholder="Optional"
+            />
+          </Field>
+          {editing && (
+            <Field label="Status" ml="സ്റ്റാറ്റസ്">
+              <ListSelect items={lists.status} value={status} onChange={(v) => setStatus(v ?? "Booked")} />
+            </Field>
+          )}
+          <Field label="Remarks" ml="കുറിപ്പ്" className="sm:col-span-3">
+            <Textarea value={remarks} onChange={(e) => setRemarks(e.target.value)} rows={2} placeholder="Style, collar, pocket, special instructions…" />
+          </Field>
+        </section>
+      </div>
+
+      <aside className="grid content-start gap-4 lg:sticky lg:top-20">
+        <div className="grid gap-2 rounded-xl border bg-card p-5 shadow-xs">
+          <h2 className="mb-1 font-display font-semibold">{editing ? initial?.orderNo : "Summary"}</h2>
+          <Sum label="Stitching" value={rupees(stitching, true)} />
+          <Sum label="Fabric (linked bill)" value={rupees(fabric, true)} />
+          <div className="flex items-center justify-between text-sm">
+            <span className="text-muted-foreground">Discount · കിഴിവ്</span>
+            <Input type="number" min={0} value={discount} onChange={(e) => setDiscount(e.target.value)} className="h-8 w-28 text-right" placeholder="0" />
+          </div>
+          <div className="flex items-baseline justify-between border-t pt-3">
+            <span className="font-medium">Total · തുക</span>
+            <span className="font-display text-2xl font-semibold tabular-nums">{rupees(total, true)}</span>
+          </div>
+          {!editing && (
+            <>
+              <div className="mt-2 grid gap-2 rounded-lg bg-muted/50 p-3">
+                <Field label="Advance received" ml="അഡ്വാൻസ്">
+                  <Input type="number" min={0} value={advance} onChange={(e) => setAdvance(e.target.value)} className="text-right text-base font-semibold" placeholder="0" />
+                </Field>
+                <div className="flex flex-wrap gap-1">
+                  {lists.paymentMode
+                    .filter((m) => m !== "Credit (Due)")
+                    .map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => setAdvanceMode(m)}
+                        className={cn("h-7 rounded border px-2 text-xs", advanceMode === m ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
+                      >
+                        {m}
+                      </button>
+                    ))}
+                </div>
+              </div>
+              <div className="flex items-baseline justify-between">
+                <span className="text-sm text-muted-foreground">Balance · ബാക്കി</span>
+                <span className={cn("font-display text-lg font-semibold tabular-nums", total - adv > 0 && "text-destructive")}>{rupees(round2(total - adv), true)}</span>
+              </div>
+            </>
+          )}
+          <p className="text-xs text-muted-foreground">Delivery {fmtDate(deliveryDate)} · {num(items.reduce((s, i) => s + (Number(i.qty) || 0), 0))} pcs</p>
+          <Button type="submit" size="lg" className="mt-2 h-12 text-base" disabled={pending}>
+            {pending && <Loader2 className="animate-spin" />} {editing ? "Save changes" : "Book order & print"}
+          </Button>
+        </div>
+      </aside>
+    </form>
+  );
+}
+
+function Sum({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex justify-between text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      <span className="tabular-nums">{value}</span>
+    </div>
+  );
+}

@@ -48,6 +48,9 @@ export function SupplierDialog({ value, onClose, onSaved }: { value: SupplierInp
           {f("bank", "Bank A/c & IFSC", "ബാങ്ക്", "sm:col-span-2")}
           {f("gstNo", "GST no.", "ജി.എസ്.ടി")}
           {f("supplies", "Supplies", "എന്ത് സാധനം")}
+          <Field label="Other names (GPay name, nickname)" ml="മറ്റ് പേരുകൾ" hint="Comma separated, e.g. SEENATH, LED World — used to find this supplier's payments" className="sm:col-span-2">
+            <Input value={v.aliases ?? ""} onChange={(e) => setV({ ...v, aliases: e.target.value })} placeholder="e.g. SEENATH" />
+          </Field>
           <Field label="Notes" ml="കുറിപ്പ്" className="sm:col-span-2">
             <Textarea value={v.notes ?? ""} onChange={(e) => setV({ ...v, notes: e.target.value })} rows={3} />
           </Field>

@@ -84,6 +84,7 @@ export function SupplierView({
         <Detail label="GST no." value={s.gstNo} onCopy={copy} />
         <Detail label="Place" value={s.place} />
         <Detail label="Supplies" value={s.supplies} />
+        <Detail label="Other names (GPay / nickname)" value={s.aliases} />
         {s.notes && (
           <div className="sm:col-span-2">
             <p className="text-xs text-muted-foreground">Notes</p>
@@ -185,7 +186,7 @@ export function SupplierView({
         onDone={() => router.refresh()}
       />
       <SupplierDialog
-        value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, notes: s.notes } : null}
+        value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, aliases: s.aliases, notes: s.notes } : null}
         onClose={() => setEdit(false)}
         onSaved={() => router.refresh()}
       />

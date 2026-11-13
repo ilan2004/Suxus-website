@@ -244,6 +244,7 @@ export async function suppliersWithBalance() {
       bank: suppliers.bank,
       gstNo: suppliers.gstNo,
       supplies: suppliers.supplies,
+      aliases: suppliers.aliases,
       notes: suppliers.notes,
       billed,
       paidAtBill,

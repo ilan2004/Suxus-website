@@ -2,7 +2,9 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Phone, Plus } from "lucide-react";
+import { Link2, Loader2, Phone, Plus } from "lucide-react";
+import { toast } from "sonner";
+import { relinkSuppliers } from "@/lib/actions/purchases";
 import { DataTable, type ColumnDef } from "@/components/app/data-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +16,7 @@ import { fmtDate, rupees } from "@/lib/utils";
 export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
   const router = useRouter();
   const [edit, setEdit] = React.useState<SupplierInput | null>(null);
+  const [linking, startLink] = React.useTransition();
   const columns: ColumnDef<SupplierRow>[] = [
     {
       accessorKey: "name",
@@ -21,7 +24,9 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
       cell: ({ row }) => (
         <div className="max-w-72">
           <div className="truncate font-medium">{row.original.name}</div>
-          <div className="truncate text-xs text-muted-foreground">{[row.original.supplies, row.original.place].filter(Boolean).join(" · ")}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            {[row.original.aliases && `aka ${row.original.aliases}`, row.original.supplies, row.original.place].filter(Boolean).join(" · ")}
+          </div>
         </div>
       ),
     },
@@ -56,9 +61,26 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
         rowHref={(r) => `/suppliers/${r.id}`}
         searchPlaceholder="Search name, supplies, place…"
         toolbar={
-          <Button onClick={() => setEdit({ name: "" })}>
-            <Plus /> New supplier
-          </Button>
+          <>
+            <Button
+              variant="outline"
+              disabled={linking}
+              title="Match setup expenses to suppliers by 'Paid to' and other names"
+              onClick={() =>
+                startLink(async () => {
+                  const r = await relinkSuppliers();
+                  if (!r.ok) return void toast.error(r.error);
+                  toast.success(`${r.data.linked} setup expenses linked${r.data.tidied ? ` · ${r.data.tidied} names tidied` : ""}`);
+                  router.refresh();
+                })
+              }
+            >
+              {linking ? <Loader2 className="animate-spin" /> : <Link2 />} Link payments
+            </Button>
+            <Button onClick={() => setEdit({ name: "" })}>
+              <Plus /> New supplier
+            </Button>
+          </>
         }
         empty="No suppliers yet."
       />

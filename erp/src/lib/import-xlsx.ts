@@ -5,6 +5,7 @@ import { getDb, schema, type DB } from "./db";
 import { counters } from "./db/schema";
 import { getSettings, saveSetting } from "./settings";
 import type { Lists } from "./defaults";
+import { linkSetupExpenses, splitSupplierName, tidySupplierNames } from "./supplier-link";
 
 type Cell = ExcelJS.CellValue;
 
@@ -224,10 +225,12 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
   {
     let added = 0;
     for (const r of rows(ws("Suppliers"), [1])) {
-      const name = str(r.getCell(1).value)!;
+      const fullName = str(r.getCell(1).value)!;
       const rest = [2, 3, 4, 5, 6, 7, 8].map((c) => str(r.getCell(c).value));
       if (rest.every((x) => x == null)) continue; // notes rows
-      const [exists] = await db.select({ id: schema.suppliers.id }).from(schema.suppliers).where(eq(schema.suppliers.name, name));
+      // "SMART ELECTRICALS & PLUMBING (Bavutt / Babu)" → name + other names
+      const { base: name, extra } = splitSupplierName(fullName);
+      const [exists] = await db.select({ id: schema.suppliers.id }).from(schema.suppliers).where(sql`lower(${schema.suppliers.name}) in (lower(${name}), lower(${fullName}))`);
       if (exists) continue;
       const paidCell = r.getCell(9).value;
       const dueCell = r.getCell(10).value;
@@ -242,6 +245,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
         bank: rest[4],
         gstNo: rest[5],
         supplies: rest[6],
+        aliases: extra.length ? extra.join(", ") : null,
         notes: (manual + (str(r.getCell(12).value) ?? "")).trim() || null,
       });
       added++;
@@ -256,7 +260,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
     if (sheet && existing.c === 0) {
       let added = 0;
       const all = await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers);
-      const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+      const norm = (x: string) => x.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
       for (const r of rows(sheet, [2, 3])) {
         const name = str(r.getCell(2).value)!;
         const amount = n(r.getCell(3).value);
@@ -423,6 +427,11 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
     if (list.length) await db.insert(schema.purchases).values(list);
     report.Purchases = `${list.length} imported`;
   } else report.Purchases = "skipped (already has data)";
+
+  /* ── Link setup expenses to suppliers by "Paid to" (and tidy old bracket names) ── */
+  const tidied = await tidySupplierNames(db);
+  const { linked, unlinked } = await linkSetupExpenses(db);
+  report["Supplier links"] = `${linked} setup expenses linked to suppliers${unlinked ? `, ${unlinked} without a matching supplier` : ""}${tidied ? `, ${tidied} names tidied` : ""}`;
 
   return report;
 }

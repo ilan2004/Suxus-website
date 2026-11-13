@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { incentiveFor } from "@/lib/reports";
+import { linkSetupExpenses } from "@/lib/supplier-link";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 
 /* ───── Setup & renovation expenses ───── */
@@ -50,10 +51,12 @@ export async function saveSetupExpense(input: SetupInput): Promise<Result<null>>
         mode: d.mode ?? "Cash",
       });
     } else await removeCash(tx, "setup", row.id);
+    if (!d.supplierId && d.paidTo) await linkSetupExpenses(tx, [row.id]);
     await audit(tx, user, id ? "update" : "create", "setup_expense", row.id, `${d.category} ₹${d.amount}`);
   });
   revalidatePath("/setup-expenses");
   revalidatePath("/capital");
+  revalidatePath("/suppliers");
   return ok(null);
 }
 

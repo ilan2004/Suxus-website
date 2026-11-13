@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
+import { linkSetupExpenses, tidySupplierNames } from "@/lib/supplier-link";
 import { fail, money, ok, optId, optText, reqDate, zodError, type Result } from "./util";
 
 /* ───── Purchases (supplier bills) ───── */
@@ -91,6 +92,7 @@ const SupplierInput = z.object({
   bank: optText,
   gstNo: optText,
   supplies: optText,
+  aliases: optText,
   notes: optText,
 });
 export type SupplierInput = z.input<typeof SupplierInput>;
@@ -104,6 +106,7 @@ export async function saveSupplier(input: SupplierInput): Promise<Result<{ id: n
   let row;
   if (id) [row] = await db.update(schema.suppliers).set(d).where(eq(schema.suppliers.id, id)).returning();
   else [row] = await db.insert(schema.suppliers).values(d).returning();
+  await linkSetupExpenses(db); // a new name / other name may match setup expenses that had no supplier
   await audit(db, user, id ? "update" : "create", "supplier", row.id, row.name);
   revalidatePath("/suppliers");
   return ok({ id: row.id });
@@ -171,4 +174,15 @@ export async function deleteSupplierPayment(id: number): Promise<Result<null>> {
   if (p) revalidatePath(`/suppliers/${p.supplierId}`);
   revalidatePath("/suppliers");
   return ok(null);
+}
+
+/** Tidies "(…)" notes out of supplier names and links setup expenses to suppliers by "Paid to". */
+export async function relinkSuppliers(): Promise<Result<{ linked: number; unlinked: number; tidied: number }>> {
+  const user = await requireUser({ partner: true });
+  const db = await getDb();
+  const tidied = await tidySupplierNames(db);
+  const r = await linkSetupExpenses(db);
+  await audit(db, user, "update", "supplier", null, `relink: ${r.linked} linked, ${tidied} tidied`);
+  revalidatePath("/suppliers");
+  return ok({ ...r, tidied });
 }

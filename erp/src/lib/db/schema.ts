@@ -102,6 +102,8 @@ export const suppliers = pgTable("suppliers", {
   bank: text("bank"),
   gstNo: text("gst_no"),
   supplies: text("supplies"),
+  /** Other names this supplier appears under — GPay name, nickname, shop sign (comma separated). */
+  aliases: text("aliases"),
   notes: text("notes"),
   createdAt: created(),
   updatedAt: updated(),

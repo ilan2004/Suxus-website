@@ -21,6 +21,8 @@ export async function GET() {
     ERP_SECRET: process.env.ERP_SECRET ? `set (${process.env.ERP_SECRET.length} chars)` : "missing",
     ERP_SETUP_CODE: process.env.ERP_SETUP_CODE ? "set" : "missing",
     region: process.env.VERCEL_REGION ?? "local",
+    version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
+    versionNote: process.env.VERCEL_GIT_COMMIT_MESSAGE?.split("\n")[0] ?? null,
   };
   if (url) {
     try {

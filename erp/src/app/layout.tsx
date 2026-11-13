@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { Inter, Inter_Tight, Noto_Sans_Malayalam } from "next/font/google";
+import Script from "next/script";
 import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
@@ -20,10 +21,10 @@ const themeScript = `try{var t=localStorage.getItem('theme');if(t==='dark'||(!t&
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning className={`${inter.variable} ${interTight.variable} ${malayalam.variable}`}>
-      <head>
-        <script dangerouslySetInnerHTML={{ __html: themeScript }} />
-      </head>
       <body>
+        <Script id="theme" strategy="beforeInteractive">
+          {themeScript}
+        </Script>
         {children}
         <Toaster />
       </body>

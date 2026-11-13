@@ -47,3 +47,15 @@ export function waLink(phone: string | null | undefined, text?: string) {
 }
 
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+export function monthEnd(iso = today()) {
+  const [y, m] = iso.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+}
+
+/** ?from=&to= from the URL, defaulting to the current month. */
+export function resolvePeriod(sp: { from?: string; to?: string }) {
+  const ok = (s?: string) => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
+  const t = today();
+  return { from: ok(sp.from) ? sp.from! : monthStart(t), to: ok(sp.to) ? sp.to! : monthEnd(t) };
+}

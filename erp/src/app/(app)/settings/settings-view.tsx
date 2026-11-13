@@ -34,7 +34,8 @@ export function SettingsView({ settings }: { settings: AppSettings }) {
         <TabsTrigger value="lists">Dropdown lists</TabsTrigger>
         <TabsTrigger value="rates">Piece rates</TabsTrigger>
         <TabsTrigger value="codes">Fabric codes</TabsTrigger>
-        <TabsTrigger value="import">Import Excel</TabsTrigger>
+        <TabsTrigger value="slabs">Incentive slabs</TabsTrigger>
+        <TabsTrigger value="import">Import / Backup</TabsTrigger>
       </TabsList>
       <TabsContent value="shop">
         <ShopForm shop={settings.shop} />
@@ -48,8 +49,24 @@ export function SettingsView({ settings }: { settings: AppSettings }) {
       <TabsContent value="codes">
         <CodesForm comps={settings.compositions} />
       </TabsContent>
+      <TabsContent value="slabs">
+        <SlabsForm slabs={settings.slabs} />
+      </TabsContent>
       <TabsContent value="import">
-        <ImportForm />
+        <div className="grid gap-4">
+          <ImportForm />
+          <div className="flex max-w-2xl flex-wrap items-center justify-between gap-3 rounded-xl border bg-card p-5">
+            <div className="text-sm">
+              <p className="font-medium">Backup — download everything as Excel</p>
+              <p className="text-muted-foreground">Every table as a sheet, like the Daily Operations Book. Keep a copy on Google Drive weekly.</p>
+            </div>
+            <Button asChild variant="gold">
+              <a href="/api/export">
+                <FileSpreadsheet /> Download .xlsx
+              </a>
+            </Button>
+          </div>
+        </div>
       </TabsContent>
     </Tabs>
   );
@@ -267,6 +284,50 @@ function ImportForm() {
           ))}
         </ul>
       )}
+    </div>
+  );
+}
+
+function SlabsForm({ slabs }: { slabs: AppSettings["slabs"] }) {
+  const [v, setV] = React.useState(slabs.map((s) => ({ from: String(s.from), to: String(s.to), rate: String(Math.round(s.rate * 10000) / 100) })));
+  const { pending, save } = useSave();
+  return (
+    <div className="grid max-w-xl gap-4 rounded-xl border bg-card p-5">
+      <p className="text-sm text-muted-foreground">
+        Rate on the money collected in a month. A person with “Own incentive %” on the Staff page uses that instead. <span className="ml">സ്ലാബ് ശതമാനം</span>
+      </p>
+      <div className="grid grid-cols-[1fr_1fr_90px_32px] gap-2 text-xs text-muted-foreground">
+        <span>From ₹</span>
+        <span>To ₹</span>
+        <span>Rate %</span>
+        <span />
+      </div>
+      {v.map((s, i) => (
+        <div key={i} className="grid grid-cols-[1fr_1fr_90px_32px] gap-2">
+          <Input type="number" value={s.from} onChange={(e) => setV((x) => x.map((y, j) => (j === i ? { ...y, from: e.target.value } : y)))} />
+          <Input type="number" value={s.to} onChange={(e) => setV((x) => x.map((y, j) => (j === i ? { ...y, to: e.target.value } : y)))} />
+          <Input type="number" step="0.1" value={s.rate} onChange={(e) => setV((x) => x.map((y, j) => (j === i ? { ...y, rate: e.target.value } : y)))} />
+          <Button variant="ghost" size="icon-sm" onClick={() => setV((x) => x.filter((_, j) => j !== i))} aria-label="Remove">
+            <X />
+          </Button>
+        </div>
+      ))}
+      <div className="flex gap-2">
+        <Button variant="outline" onClick={() => setV((x) => [...x, { from: "", to: "", rate: "" }])}>
+          <Plus /> Slab
+        </Button>
+        <Button
+          disabled={pending}
+          onClick={() =>
+            save(
+              "slabs",
+              v.filter((s) => s.from !== "" && s.to !== "" && s.rate !== "").map((s) => ({ from: Number(s.from), to: Number(s.to), rate: Number(s.rate) / 100 })),
+            )
+          }
+        >
+          {pending ? <Loader2 className="animate-spin" /> : <Save />} Save slabs
+        </Button>
+      </div>
     </div>
   );
 }

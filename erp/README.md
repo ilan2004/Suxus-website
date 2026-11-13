@@ -3,7 +3,7 @@
 The SUXUS Daily Operations Book (Excel), rebuilt as a web app for **erp.suxus.shop**.
 Next.js 16 · shadcn/ui (Radix + Tailwind 4) · Drizzle ORM · PostgreSQL (Supabase).
 
-## What works now (Phases 1–3)
+## What works now (all 4 phases)
 
 | Area | What you get |
 |---|---|
@@ -22,7 +22,12 @@ Next.js 16 · shadcn/ui (Radix + Tailwind 4) · Drizzle ORM · PostgreSQL (Supab
 | **Suppliers** | Phone / UPI / bank / GST with copy buttons, purchases, payments, setup-expense history, balance due, **Pay supplier**. |
 | **Tailor Wages** | Pieces × piece rate (Settings → Piece rates, else the tailor's own rate). Finished orders without a wage entry are listed for one-click entry. Balance per tailor, **Pay tailor**. |
 
-Coming next (Phase 4): Incentive, Setup Expenses, Opening Stock, Capital Account, Summary report, Excel export.
+| **Setup Expenses** | Renovation, sign board, catalogues, supplier advances… by category, with “paid by” (partner or Business Account), bill received flag, negative amounts for returns. Business-paid items go to the cash book. |
+| **Opening Stock & Assets** | Machines, tables, shelves and stock each partner brought in, with fair value. |
+| **Capital Account** | Automatic: setup paid + assets brought + capital introduced per partner, share %, withdrawals, net capital. |
+| **Incentive** | Per month: business brought (stitching + bulk + fabric sold) and money **collected**, slab rate or own %, incentive; record & pay (cash book). Slabs editable in Settings. |
+| **Summary** | Any date range: income by type, running expenses, surplus, cash in/out, pending to collect / to pay, stock, setup, partner shares. Printable. |
+| **Excel export / backup** | One click downloads every table as a sheet (same layout as the Daily Operations Book) — Summary page or Settings → Import / Backup. |
 
 ## Run it on a computer
 

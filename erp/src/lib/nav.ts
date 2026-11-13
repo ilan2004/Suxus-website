@@ -49,16 +49,16 @@ export const NAV: NavGroup[] = [
     items: [
       { href: "/staff", en: "Staff", ml: "ജീവനക്കാർ", icon: UserCog, partner: true },
       { href: "/wages", en: "Tailor Wages", ml: "തയ്യൽ കൂലി", icon: HandCoins },
-      { href: "/incentive", en: "Incentive", ml: "ഇൻസെന്റീവ്", icon: BadgePercent, partner: true, soon: true },
+      { href: "/incentive", en: "Incentive", ml: "ഇൻസെന്റീവ്", icon: BadgePercent, partner: true },
     ],
   },
   {
     label: "Business",
     items: [
-      { href: "/setup-expenses", en: "Setup Expenses", ml: "ഒരുക്കൽ ചെലവ്", icon: Hammer, partner: true, soon: true },
-      { href: "/opening-stock", en: "Opening Stock", ml: "ആസ്തി", icon: Package, partner: true, soon: true },
-      { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, partner: true, soon: true },
-      { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, partner: true, soon: true },
+      { href: "/setup-expenses", en: "Setup Expenses", ml: "ഒരുക്കൽ ചെലവ്", icon: Hammer, partner: true },
+      { href: "/opening-stock", en: "Opening Stock", ml: "ആസ്തി", icon: Package, partner: true },
+      { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, partner: true },
+      { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, partner: true },
       { href: "/settings", en: "Settings", ml: "സെറ്റിംഗ്സ്", icon: Settings, partner: true },
     ],
   },

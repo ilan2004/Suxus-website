@@ -7,12 +7,17 @@ import { Field } from "@/components/app/field";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export function SetupForm() {
+export function SetupForm({ needsCode }: { needsCode: boolean }) {
   const [state, action, pending] = useActionState(setupAction, {});
   return (
     <form action={action} className="mt-6 grid gap-4">
+      {needsCode && (
+        <Field label="Setup code" ml="സെറ്റപ്പ് കോഡ്" htmlFor="code" hint="The ERP_SETUP_CODE you saved in Vercel">
+          <Input id="code" name="code" type="password" required autoFocus />
+        </Field>
+      )}
       <Field label="Your name" ml="പേര്" htmlFor="name">
-        <Input id="name" name="name" placeholder="e.g. Sahim KT" required autoFocus />
+        <Input id="name" name="name" placeholder="e.g. Sahim KT" required autoFocus={!needsCode} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
         <Field label="PIN (4–6 digits)" ml="പിൻ" htmlFor="pin">

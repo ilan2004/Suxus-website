@@ -36,6 +36,9 @@ export async function logoutAction() {
 /** First run only: creates the first partner login. */
 export async function setupAction(_: unknown, form: FormData): Promise<{ error?: string }> {
   if (await hasAnyLoginUser()) return { error: "Setup is already complete. Please sign in." };
+  const required = process.env.ERP_SETUP_CODE;
+  if (required && String(form.get("code") ?? "").trim() !== required) return { error: "Wrong setup code (it is in Vercel → Environment Variables → ERP_SETUP_CODE)." };
+  if (!required && process.env.NODE_ENV === "production") return { error: "Set ERP_SETUP_CODE in the hosting environment first." };
   const name = String(form.get("name") ?? "").trim();
   const pin = String(form.get("pin") ?? "");
   const pin2 = String(form.get("pin2") ?? "");

@@ -19,7 +19,7 @@ export default async function SetupPage() {
           Create the first partner login. You can add staff logins later from the Staff page.
           <span className="ml block">ആദ്യത്തെ പാർട്ണർ ലോഗിൻ ഉണ്ടാക്കുക.</span>
         </p>
-        <SetupForm />
+        <SetupForm needsCode={!!process.env.ERP_SETUP_CODE} />
       </div>
     </div>
   );

@@ -43,17 +43,27 @@ The first visit opens **/setup** to create the first partner login. Then go to *
 
 ## Go live on erp.suxus.shop (Supabase + Vercel)
 
-1. **Supabase** → New project (region *Mumbai*). Project Settings → Database → *Connection string* → copy the
-   **Transaction pooler** URI (port 6543) and the **Session pooler / direct** URI (port 5432).
-2. **Vercel** → Add New Project → import this GitHub repo → **Root Directory: `erp`**.
-   Environment variables:
-   - `DATABASE_URL` = transaction pooler URI
-   - `DATABASE_URL_DIRECT` = session / direct URI (used only to create tables on deploy)
-   - `ERP_SECRET` = a long random string (`openssl rand -hex 32`)
-3. Deploy. Tables are created automatically (`vercel-build` runs the migrations, then builds).
-4. Vercel → Settings → Domains → add `erp.suxus.shop`, then add the CNAME record it shows at your DNS provider.
+1. **Supabase** → project (region *Mumbai / ap-south-1*) → **Connect** (top bar) → copy two URIs and put your
+   database password in place of `[YOUR-PASSWORD]` (if the password has `@ # / : ?` etc., reset it to letters+numbers):
+   - **Transaction pooler** (port **6543**) → `DATABASE_URL`
+   - **Session pooler** (port **5432**, host `…pooler.supabase.com`) → `DATABASE_URL_DIRECT`
+     (do not use the “Direct connection” `db.xxx.supabase.co` one — Vercel cannot reach it)
+2. **Vercel** → Add New → Project → import this repo → **Root Directory: `erp`** → Environment Variables:
+   | Name | Value |
+   |---|---|
+   | `DATABASE_URL` | transaction pooler URI (6543) |
+   | `DATABASE_URL_DIRECT` | session pooler URI (5432) |
+   | `ERP_SECRET` | long random string (e.g. `openssl rand -hex 32`, or 40+ random letters/numbers) |
+   | `ERP_SETUP_CODE` | any code you choose — asked once on the first-run screen |
+3. Deploy. `vercel.json` runs the migrations (creates all tables, blocks Supabase's public Data API with RLS)
+   and pins the server to Mumbai (`bom1`) next to the database.
+4. Open the site → enter the setup code → create your partner login → Settings → Import / Backup → upload the Excel.
+5. Vercel → Project → Settings → Domains → add `erp.suxus.shop`. In Cloudflare DNS (suxus.shop) add the
+   **CNAME `erp`** record Vercel shows, with **Proxy status: DNS only** (grey cloud).
 
-Never paste the database password in chat or commit it — only in Vercel's environment variables.
+Never paste passwords or connection strings in chat or commit them — only in Vercel's Environment Variables.
+Supabase free projects pause after 7 days without activity and have no downloadable backups — use
+Settings → Import / Backup → Download .xlsx weekly.
 
 ## Moving to a Hostinger VPS later
 

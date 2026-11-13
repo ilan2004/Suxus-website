@@ -15,6 +15,13 @@
       "when": 1794559963682,
       "tag": "0001_ledgers",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794561966376,
+      "tag": "0002_lock_down_data_api",
+      "breakpoints": true
     }
   ]
 }

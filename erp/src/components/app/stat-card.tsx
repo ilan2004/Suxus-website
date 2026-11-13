@@ -1,4 +1,6 @@
 import * as React from "react";
+import Link from "next/link";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export function StatCard({
@@ -9,6 +11,7 @@ export function StatCard({
   icon: Icon,
   tone = "default",
   className,
+  href,
 }: {
   label: string;
   ml?: string;
@@ -17,6 +20,8 @@ export function StatCard({
   icon?: React.ComponentType<{ className?: string }>;
   tone?: "default" | "gold" | "warning" | "destructive" | "success";
   className?: string;
+  /** Makes the card a link to the records behind the number. */
+  href?: string;
 }) {
   const toneCls = {
     default: "bg-primary/10 text-primary",
@@ -25,8 +30,8 @@ export function StatCard({
     destructive: "bg-destructive/15 text-destructive",
     success: "bg-success/15 text-success",
   }[tone];
-  return (
-    <div className={cn("rounded-xl border bg-card p-4 shadow-xs", className)}>
+  const body = (
+    <div className={cn("group relative h-full rounded-xl border bg-card p-4 shadow-xs", href && "transition-colors hover:border-primary/40", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
@@ -41,6 +46,14 @@ export function StatCard({
           </span>
         )}
       </div>
+      {href && <ChevronRight className="absolute right-3 bottom-3 size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />}
     </div>
+  );
+  return href ? (
+    <Link href={href} className="block">
+      {body}
+    </Link>
+  ) : (
+    body
   );
 }

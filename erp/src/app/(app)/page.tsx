@@ -114,10 +114,10 @@ export default async function Dashboard() {
       )}
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Collected today" ml="ഇന്നത്തെ വരവ്" value={rupees(collectedToday)} sub="Fabric bills + order payments" icon={Wallet} tone="success" />
-        <StatCard label="Fabric sold today" ml="ഇന്ന് വിറ്റത്" value={`${num(todaySales[0]?.metres ?? 0)} m`} sub={`${todaySales[0]?.count ?? 0} bills · ${rupees(todaySales[0]?.net ?? 0)}`} icon={ShoppingBag} />
-        <StatCard label="Open orders" ml="നടക്കുന്ന ഓർഡർ" value={open.length} sub={`${dueToday.length} due today · ${overdue.length} overdue`} icon={Scissors} tone={overdue.length ? "destructive" : "gold"} />
-        <StatCard label="Balance to collect" ml="കിട്ടാനുള്ളത്" value={rupees(pending)} sub={`Orders + bulk · ${ready.length} ready to deliver`} icon={CircleDollarSign} tone="warning" />
+        <StatCard label="Collected today" ml="ഇന്നത്തെ വരവ്" value={rupees(collectedToday)} sub="Fabric bills + order payments" icon={Wallet} tone="success" href={`/cash-book?from=${t}&to=${t}`} />
+        <StatCard label="Fabric sold today" ml="ഇന്ന് വിറ്റത്" value={`${num(todaySales[0]?.metres ?? 0)} m`} sub={`${todaySales[0]?.count ?? 0} bills · ${rupees(todaySales[0]?.net ?? 0)}`} icon={ShoppingBag} href="/sales?range=today" />
+        <StatCard label="Open orders" ml="നടക്കുന്ന ഓർഡർ" value={open.length} sub={`${dueToday.length} due today · ${overdue.length} overdue`} icon={Scissors} tone={overdue.length ? "destructive" : "gold"} href={overdue.length ? "/orders?filter=overdue" : "/orders"} />
+        <StatCard label="Balance to collect" ml="കിട്ടാനുള്ളത്" value={rupees(pending)} sub={`Orders + bulk · ${ready.length} ready to deliver`} icon={CircleDollarSign} tone="warning" href="/orders?view=list&filter=balance" />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[1.4fr_1fr]">
@@ -188,13 +188,13 @@ export default async function Dashboard() {
           </CardHeader>
           <CardContent className="grid gap-1">
             {low.slice(0, 6).map((f) => (
-              <div key={f.id} className="flex items-center gap-3 px-2 py-1.5">
+              <Link key={f.id} href={`/fabrics/${f.id}`} className="flex items-center gap-3 rounded-lg px-2 py-1.5 hover:bg-muted/60">
                 <AlertTriangle className="size-4 text-warning" />
                 <span className="min-w-0 flex-1 truncate text-sm">
                   <span className="font-mono text-xs text-muted-foreground">{f.code}</span> {f.brand} {f.shade}
                 </span>
                 <span className="text-sm font-semibold tabular-nums text-warning">{num(f.balanceMtr)} m</span>
-              </div>
+              </Link>
             ))}
             {!low.length && (
               <p className="flex items-center gap-2 py-6 text-sm text-muted-foreground">

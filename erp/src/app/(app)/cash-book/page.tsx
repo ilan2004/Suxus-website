@@ -8,8 +8,9 @@ import { CashBookView } from "./cash-book-view";
 
 export const metadata = { title: "Cash Book" };
 
-export default async function CashBookPage() {
+export default async function CashBookPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string; category?: string; mode?: string }> }) {
   const session = await requireUser();
+  const sp = await searchParams;
   const db = await getDb();
   const [rows, lists, pays, supPays] = await Promise.all([
     cashBookRows(),
@@ -38,6 +39,10 @@ export default async function CashBookPage() {
       case "wage":
       case "wage_payment":
         return "/wages";
+      case "setup":
+        return "/setup-expenses";
+      case "incentive":
+        return "/incentive";
       default:
         return null;
     }
@@ -55,6 +60,7 @@ export default async function CashBookPage() {
         modes={lists.paymentMode}
         partners={lists.partner}
         canDelete={session.role === "partner"}
+        initial={{ from: sp.from, to: sp.to, category: sp.category, mode: sp.mode }}
       />
     </>
   );

@@ -14,8 +14,8 @@ const RANGES = [
   { key: "all", label: "All" },
 ] as const;
 
-export function SalesTable({ rows }: { rows: SaleRow[] }) {
-  const [range, setRange] = React.useState<(typeof RANGES)[number]["key"]>("month");
+export function SalesTable({ rows, initialRange = "month" }: { rows: SaleRow[]; initialRange?: (typeof RANGES)[number]["key"] }) {
+  const [range, setRange] = React.useState<(typeof RANGES)[number]["key"]>(initialRange);
   const t = today();
   const data = rows.filter((r) => (range === "today" ? r.date === t : range === "month" ? r.date >= monthStart(t) : true));
 

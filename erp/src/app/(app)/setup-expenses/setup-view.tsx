@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { FileCheck2, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -61,7 +62,15 @@ export function SetupView({
       cell: ({ row }) => (
         <div className="max-w-80">
           <div className="truncate">{row.original.description}</div>
-          <div className="truncate text-xs text-muted-foreground">{row.original.paidTo}</div>
+          <div className="truncate text-xs text-muted-foreground">
+            {row.original.supplierId ? (
+              <Link href={`/suppliers/${row.original.supplierId}`} data-no-row-click className="text-primary hover:underline">
+                {row.original.paidTo || suppliers.find((x) => x.id === row.original.supplierId)?.name}
+              </Link>
+            ) : (
+              row.original.paidTo
+            )}
+          </div>
         </div>
       ),
     },

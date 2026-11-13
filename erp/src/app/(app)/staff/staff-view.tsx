@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { KeyRound, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -46,7 +47,9 @@ export function StaffView({ rows, lists }: { rows: Row[]; lists: { staffRole: st
       header: "Name",
       cell: ({ row }) => (
         <div>
-          <div className={cn("font-medium", row.original.status === "Left" && "text-muted-foreground line-through")}>{row.original.name}</div>
+          <Link href={`/staff/${row.original.id}`} data-no-row-click className={cn("font-medium hover:underline", row.original.status === "Left" && "text-muted-foreground line-through")}>
+            {row.original.name}
+          </Link>
           <div className="text-xs text-muted-foreground">{row.original.phone}</div>
         </div>
       ),
@@ -73,6 +76,15 @@ export function StaffView({ rows, lists }: { rows: Row[]; lists: { staffRole: st
         ),
     },
     { accessorKey: "status", header: "Status", cell: ({ row }) => <Badge variant={row.original.status === "Active" ? "success" : "outline"}>{row.original.status}</Badge> },
+    {
+      id: "profile",
+      header: "",
+      cell: ({ row }) => (
+        <Button asChild variant="ghost" size="sm" data-no-row-click>
+          <Link href={`/staff/${row.original.id}`}>Profile →</Link>
+        </Button>
+      ),
+    },
   ];
 
   return (

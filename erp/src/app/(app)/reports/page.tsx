@@ -51,7 +51,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
           icon={Scale}
           tone={s.surplus >= 0 ? "gold" : "destructive"}
         />
-        <StatCard label="Cash book (in − out)" ml="പണം" value={rupees(s.cash.net)} sub={`In ${rupees(s.cash.in)} · Out ${rupees(s.cash.out)}`} icon={Wallet} />
+        <StatCard label="Cash book (in − out)" ml="പണം" value={rupees(s.cash.net)} sub={`In ${rupees(s.cash.in)} · Out ${rupees(s.cash.out)}`} icon={Wallet} href={`/cash-book?from=${from}&to=${to}`} />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-2">
@@ -68,10 +68,10 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
         <Section title="Running expenses" ml="നടത്തിപ്പ് ചെലവ്">
           <Line label="Fabric purchases" ml="തുണി വാങ്ങൽ" value={s.expenses.purchases} href="/purchases" />
           <Line label="Tailor wages" ml="തയ്യൽ കൂലി" value={s.expenses.wages} href="/wages" />
-          <Line label="Incentive" ml="ഇൻസെന്റീവ്" value={s.expenses.incentive} href="/incentive" />
-          <Line label="Other expenses (cash book)" ml="മറ്റ് ചെലവുകൾ" value={s.expenses.other} href="/cash-book" />
+          <Line label="Incentive" ml="ഇൻസെന്റീവ്" value={s.expenses.incentive} href={`/incentive?from=${from}&to=${to}`} />
+          <Line label="Other expenses (cash book)" ml="മറ്റ് ചെലവുകൾ" value={s.expenses.other} href={`/cash-book?from=${from}&to=${to}`} />
           {s.expenses.byCategory.map((c) => (
-            <Line key={c.category} label={`— ${c.category}`} value={c.v} sub />
+            <Line key={c.category} label={`— ${c.category}`} value={c.v} sub href={`/cash-book?from=${from}&to=${to}&category=${encodeURIComponent(c.category)}`} />
           ))}
           <Line label="TOTAL EXPENSES" ml="ആകെ ചെലവ്" value={s.expenses.total} total />
         </Section>

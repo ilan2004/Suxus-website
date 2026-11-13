@@ -61,8 +61,25 @@ export function WagesView({
   const shown = wages.filter((w) => !filter || w.tailorId === filter);
   const columns: ColumnDef<Wage>[] = [
     { accessorKey: "date", header: "Date", cell: ({ row }) => fmtDate(row.original.date) },
-    { accessorKey: "tailorName", header: "Tailor", cell: ({ row }) => <span className="font-medium">{row.original.tailorName}</span> },
-    { accessorKey: "orderNo", header: "Order", cell: ({ row }) => <span className="font-mono text-xs">{row.original.orderNo}</span> },
+    {
+      accessorKey: "tailorName",
+      header: "Tailor",
+      cell: ({ row }) => (
+        <Link href={`/staff/${row.original.tailorId}`} className="font-medium hover:underline">
+          {row.original.tailorName}
+        </Link>
+      ),
+    },
+    {
+      accessorKey: "orderNo",
+      header: "Order",
+      cell: ({ row }) =>
+        row.original.orderNo ? (
+          <Link href={`/go/${row.original.orderNo}`} className="font-mono text-xs hover:underline">
+            {row.original.orderNo}
+          </Link>
+        ) : null,
+    },
     { accessorKey: "item", header: "Item" },
     { accessorKey: "qty", header: "Qty", meta: { align: "right" } },
     { accessorKey: "rate", header: "Rate", meta: { align: "right" }, cell: ({ row }) => rupees(row.original.rate) },
@@ -121,7 +138,10 @@ export function WagesView({
           <div className="flex flex-wrap gap-2">
             {pending.map((o) => (
               <button key={o.id} onClick={() => fromOrder(o)} className="rounded-lg border bg-card px-3 py-2 text-left text-sm hover:border-primary/50">
-                <span className="font-mono text-xs text-muted-foreground">{o.orderNo}</span> · {allStaff.find((s) => s.id === o.tailorId)?.name}
+                <span className="font-mono text-xs text-muted-foreground">{o.orderNo}</span> · {allStaff.find((s) => s.id === o.tailorId)?.name}{" "}
+                <Link href={`/orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary underline">
+                  open
+                </Link>
                 <span className="block text-xs text-muted-foreground">{o.items.map((i) => `${i.qty}×${i.item}`).join(", ")}</span>
               </button>
             ))}

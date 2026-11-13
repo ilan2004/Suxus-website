@@ -77,6 +77,24 @@ export function SaleView({ sale, shop, autoPrint, canCancel }: { sale: Sale; sho
           <Info label="Sold by" value={sale.soldByName || "—"} />
           <Info label="Net amount" value={<span className="font-display text-xl font-semibold">{rupees(sale.net, true)}</span>} />
           <Info label="Remarks" value={sale.remarks || "—"} />
+          <Info
+            label="Fabrics"
+            value={
+              <span className="flex flex-wrap gap-x-3">
+                {sale.items.map((i) =>
+                  i.fabricId ? (
+                    <Link key={i.id} href={`/fabrics/${i.fabricId}`} className="hover:underline">
+                      {i.description} · {num(i.metres)} m
+                    </Link>
+                  ) : (
+                    <span key={i.id}>
+                      {i.description} · {num(i.metres)} m
+                    </span>
+                  ),
+                )}
+              </span>
+            }
+          />
         </div>
 
         <div className="flex flex-wrap gap-2">

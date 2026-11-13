@@ -8,9 +8,10 @@ import { SalesTable } from "./sales-table";
 
 export const metadata = { title: "Fabric Sales" };
 
-export default async function SalesPage() {
+export default async function SalesPage({ searchParams }: { searchParams: Promise<{ range?: string }> }) {
   await requireUser();
   const rows = await salesList();
+  const { range } = await searchParams;
   return (
     <>
       <PageHeader
@@ -24,7 +25,7 @@ export default async function SalesPage() {
           </Button>
         }
       />
-      <SalesTable rows={rows} />
+      <SalesTable rows={rows} initialRange={range === "today" || range === "all" ? range : "month"} />
     </>
   );
 }

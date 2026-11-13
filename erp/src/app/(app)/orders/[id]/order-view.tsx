@@ -156,8 +156,23 @@ export function OrderView({
             <Info label="Order date" value={fmtDate(order.date)} />
             <Info label="Trial" value={fmtDate(order.trialDate) || "—"} />
             <Info label="Delivery" value={<span className={cn(overdue && "text-destructive")}>{fmtDate(order.deliveryDate) || "—"}</span>} />
-            <Info label="Tailor" value={order.tailorName || <span className="text-muted-foreground">Not assigned</span>} />
-            <Info label="Brought by" value={order.broughtByName || "—"} />
+            <Info
+              label="Tailor"
+              value={
+                order.tailorName ? (
+                  isPartner ? (
+                    <Link href={`/staff/${order.tailorId}`} className="hover:underline">
+                      {order.tailorName}
+                    </Link>
+                  ) : (
+                    order.tailorName
+                  )
+                ) : (
+                  <span className="text-muted-foreground">Not assigned</span>
+                )
+              }
+            />
+            <Info label="Brought by" value={order.broughtByName ? (isPartner ? <Link href={`/staff/${order.broughtById}`} className="hover:underline">{order.broughtByName}</Link> : order.broughtByName) : "—"} />
             <Info label="Delivered on" value={fmtDate(order.deliveredOn) || "—"} />
             {order.remarks && <Info label="Remarks" value={order.remarks} className="sm:col-span-3" />}
           </div>

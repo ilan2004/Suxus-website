@@ -124,7 +124,7 @@ export function FabricsView({
         columns={columns}
         data={data}
         searchPlaceholder="Search code, brand, shade, barcode…"
-        onRowClick={(r) => setEditing({ ...r, composition: r.composition ?? "Other" })}
+        rowHref={(r) => `/fabrics/${r.id}`}
         toolbar={
           <>
             <Label className="mr-2 text-xs text-muted-foreground">
@@ -158,7 +158,7 @@ export function FabricsView({
   );
 }
 
-function FabricSheet({
+export function FabricSheet({
   value,
   onClose,
   suppliers,

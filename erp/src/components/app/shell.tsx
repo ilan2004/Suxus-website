@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/login/actions";
+import { globalSearch, type SearchHit } from "@/lib/actions/search";
 
 type User = { name: string; role: "partner" | "staff" };
 
@@ -95,6 +96,24 @@ function useTheme() {
 
 function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; setOpen: (o: boolean) => void }) {
   const router = useRouter();
+  const [q, setQ] = React.useState("");
+  const [hits, setHits] = React.useState<SearchHit[]>([]);
+  React.useEffect(() => {
+    if (!open) setQ("");
+  }, [open]);
+  React.useEffect(() => {
+    if (q.trim().length < 2) return setHits([]);
+    let live = true;
+    const t = setTimeout(async () => {
+      const r = await globalSearch(q);
+      if (live) setHits(r);
+    }, 200);
+    return () => {
+      live = false;
+      clearTimeout(t);
+    };
+  }, [q]);
+  const groups = hits.reduce<Record<string, SearchHit[]>>((a, h) => ((a[h.type] ??= []).push(h), a), {});
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
@@ -115,11 +134,21 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogContent className="overflow-hidden p-0 sm:max-w-lg">
         <DialogTitle className="sr-only">Quick search</DialogTitle>
-        <Command>
-          <CommandInput placeholder="Go to page or action…" />
+        <Command shouldFilter={q.trim().length < 2}>
+          <CommandInput placeholder="Search customer, phone, SO- / FS- / BO- no., fabric, supplier… or a page" value={q} onValueChange={setQ} />
           <CommandList>
-            <CommandEmpty>No results.</CommandEmpty>
-            <CommandGroup heading="Quick actions">
+            <CommandEmpty>{q.trim().length >= 2 ? "Nothing found." : "No results."}</CommandEmpty>
+            {Object.entries(groups).map(([type, items]) => (
+              <CommandGroup key={type} heading={type}>
+                {items.map((h) => (
+                  <CommandItem key={h.href} value={`${h.label} ${h.sub} ${h.href}`} onSelect={() => go(h.href)}>
+                    <span className="truncate font-medium">{h.label}</span>
+                    <span className="ml-auto truncate text-xs text-muted-foreground">{h.sub}</span>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            ))}
+            {q.trim().length < 2 && <CommandGroup heading="Quick actions">
               <CommandItem onSelect={() => go("/sales/new")}>
                 <ShoppingBag /> New fabric sale <span className="ml">പുതിയ ബിൽ</span>
               </CommandItem>
@@ -132,8 +161,8 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
               <CommandItem onSelect={() => go("/customers?new=1")}>
                 <UserPlus /> New customer
               </CommandItem>
-            </CommandGroup>
-            {NAV.map((g) => (
+            </CommandGroup>}
+            {q.trim().length < 2 && NAV.map((g) => (
               <CommandGroup key={g.label} heading={g.label}>
                 {g.items
                   .filter((i) => !i.soon && (!i.partner || user.role === "partner"))
@@ -189,7 +218,7 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
             className="flex h-9 w-full max-w-sm items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground shadow-xs hover:bg-accent/50"
           >
             <Search className="size-4" />
-            <span className="truncate">Search or jump to…</span>
+            <span className="truncate">Search customer, SO-/FS- no., fabric…</span>
             <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline">Ctrl K</kbd>
           </button>
           <div className="ml-auto flex items-center gap-1.5">

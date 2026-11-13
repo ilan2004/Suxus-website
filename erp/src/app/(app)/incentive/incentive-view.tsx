@@ -83,7 +83,9 @@ export function IncentiveView({
               {shown.map((r) => (
                 <TableRow key={r.staffId}>
                   <TableCell>
-                    <div className="font-medium">{r.name}</div>
+                    <Link href={`/staff/${r.staffId}?from=${from}&to=${to}`} className="font-medium hover:underline">
+                      {r.name}
+                    </Link>
                     <div className="text-xs text-muted-foreground">{r.role}</div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{rupees(r.stitching)}</TableCell>
@@ -190,7 +192,11 @@ export function IncentiveView({
                     {fmtDate(h.fromDate)} → {fmtDate(h.toDate)}
                   </Link>
                 </TableCell>
-                <TableCell className="font-medium">{h.name}</TableCell>
+                <TableCell className="font-medium">
+                  <Link href={`/staff/${h.staffId}?from=${h.fromDate}&to=${h.toDate}`} className="hover:underline">
+                    {h.name}
+                  </Link>
+                </TableCell>
                 <TableCell className="text-right tabular-nums">{rupees(h.collected)}</TableCell>
                 <TableCell className="text-right">{pct(h.ratePct)}</TableCell>
                 <TableCell className="text-right tabular-nums">{rupees(h.incentive, true)}</TableCell>

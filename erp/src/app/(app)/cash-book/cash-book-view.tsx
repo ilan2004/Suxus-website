@@ -39,6 +39,8 @@ const SOURCE_LABEL: Record<string, string> = {
   supplier_payment: "Supplier",
   wage: "Wage",
   wage_payment: "Wages",
+  setup: "Setup",
+  incentive: "Incentive",
 };
 
 function lastMonth() {
@@ -54,7 +56,9 @@ export function CashBookView({
   modes,
   partners,
   canDelete,
+  initial = {},
 }: {
+  initial?: { from?: string; to?: string; category?: string; mode?: string };
   rows: Row[];
   categories: string[];
   modes: string[];
@@ -63,10 +67,11 @@ export function CashBookView({
 }) {
   const router = useRouter();
   const t = today();
-  const [from, setFrom] = React.useState(monthStart(t));
-  const [to, setTo] = React.useState(t);
-  const [category, setCategory] = React.useState<string | null>(null);
-  const [mode, setMode] = React.useState<"all" | "cash" | "bank">("all");
+  const okDate = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : undefined);
+  const [from, setFrom] = React.useState(okDate(initial.from) ?? monthStart(t));
+  const [to, setTo] = React.useState(okDate(initial.to) ?? t);
+  const [category, setCategory] = React.useState<string | null>(initial.category ?? null);
+  const [mode, setMode] = React.useState<"all" | "cash" | "bank">(initial.mode === "cash" || initial.mode === "bank" ? initial.mode : "all");
   const [q, setQ] = React.useState("");
   const [edit, setEdit] = React.useState<CashInput | null>(null);
 

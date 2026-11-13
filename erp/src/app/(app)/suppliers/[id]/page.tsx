@@ -19,9 +19,9 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
     db
       .select()
       .from(schema.setupExpenses)
-      .where(or(eq(schema.setupExpenses.supplierId, id), and(isNull(schema.setupExpenses.supplierId), ilike(schema.setupExpenses.paidTo, `%${s.name}%`))))
+      .where(or(eq(schema.setupExpenses.supplierId, id), and(isNull(schema.setupExpenses.supplierId), ilike(schema.setupExpenses.paidTo, `%${s.name.split("(")[0].trim()}%`))))
       .orderBy(desc(schema.setupExpenses.date)),
     getSetting("lists"),
   ]);
-  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} modes={lists.paymentMode} isPartner={session.role === "partner"} />;
+  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} modes={lists.paymentMode} partners={lists.partner} isPartner={session.role === "partner"} />;
 }

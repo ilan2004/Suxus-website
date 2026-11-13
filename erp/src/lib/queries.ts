@@ -225,7 +225,10 @@ export async function suppliersWithBalance() {
   const billed = sql<number>`coalesce((select sum(${c(purchases.total)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)}),0)`.mapWith(Number);
   const paidAtBill = sql<number>`coalesce((select sum(${c(purchases.paid)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)}),0)`.mapWith(Number);
   const paidLater = sql<number>`coalesce((select sum(${c(supplierPayments.amount)}) from ${supplierPayments} where ${c(supplierPayments.supplierId)} = ${c(suppliers.id)}),0)`.mapWith(Number);
-  const setupPaid = sql<number>`coalesce((select sum(${c(setupExpenses.amount)}) from ${setupExpenses} where ${c(setupExpenses.supplierId)} = ${c(suppliers.id)} or (${c(setupExpenses.supplierId)} is null and ${c(setupExpenses.paidTo)} ilike '%' || ${c(suppliers.name)} || '%')),0)`.mapWith(Number);
+  // Setup expenses belong to a supplier when linked, or when "Paid To" contains the supplier's name
+  const setupMatch = sql`(${c(setupExpenses.supplierId)} = ${c(suppliers.id)} or (${c(setupExpenses.supplierId)} is null and ${c(setupExpenses.paidTo)} ilike '%' || trim(split_part(${c(suppliers.name)}, '(', 1)) || '%'))`;
+  const setupPaid = sql<number>`coalesce((select sum(${c(setupExpenses.amount)}) from ${setupExpenses} where ${setupMatch} and coalesce(${c(setupExpenses.mode)}, '') <> 'Credit (Due)'),0)`.mapWith(Number);
+  const setupCredit = sql<number>`coalesce((select sum(${c(setupExpenses.amount)}) from ${setupExpenses} where ${setupMatch} and ${c(setupExpenses.mode)} = 'Credit (Due)'),0)`.mapWith(Number);
   const lastPaid = sql<string | null>`greatest(
     (select max(${c(supplierPayments.date)}) from ${supplierPayments} where ${c(supplierPayments.supplierId)} = ${c(suppliers.id)}),
     (select max(${c(purchases.date)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)} and ${c(purchases.paid)} > 0)
@@ -246,14 +249,17 @@ export async function suppliersWithBalance() {
       paidAtBill,
       paidLater,
       setupPaid,
+      setupCredit,
       lastPaid,
     })
     .from(suppliers)
     .orderBy(asc(suppliers.name));
+  // Owed = fabric purchases + setup goods taken on credit − (paid at purchase + payments on account)
   return rows.map((r) => ({
     ...r,
+    owed: Math.round((r.billed + r.setupCredit) * 100) / 100,
     paid: Math.round((r.paidAtBill + r.paidLater) * 100) / 100,
-    balance: Math.round((r.billed - r.paidAtBill - r.paidLater) * 100) / 100,
+    balance: Math.round((r.billed + r.setupCredit - r.paidAtBill - r.paidLater) * 100) / 100,
   }));
 }
 export type SupplierRow = Awaited<ReturnType<typeof suppliersWithBalance>>[number];

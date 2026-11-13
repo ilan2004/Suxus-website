@@ -16,7 +16,7 @@ import { deleteSupplier, deleteSupplierPayment, paySupplier } from "@/lib/action
 import type { PurchaseRow, SupplierRow } from "@/lib/queries";
 import { fmtDate, rupees } from "@/lib/utils";
 
-type Pay = { id: number; date: string; amount: number; mode: string; note: string | null };
+type Pay = { id: number; date: string; amount: number; mode: string; ref: string | null; paidBy: string | null; note: string | null };
 type Setup = { id: number; date: string; category: string; description: string | null; paidBy: string; amount: number; mode: string | null; billNo: string | null };
 
 export function SupplierView({
@@ -25,6 +25,7 @@ export function SupplierView({
   payments,
   setup,
   modes,
+  partners,
   isPartner,
 }: {
   supplier: SupplierRow;
@@ -32,9 +33,11 @@ export function SupplierView({
   payments: Pay[];
   setup: Setup[];
   modes: string[];
+  partners: string[];
   isPartner: boolean;
 }) {
   const router = useRouter();
+  const credit = setup.filter((x) => x.mode === "Credit (Due)");
   const [pay, setPay] = React.useState(false);
   const [edit, setEdit] = React.useState(false);
   const copy = (t: string) => navigator.clipboard.writeText(t).then(() => toast.success("Copied"));
@@ -90,17 +93,17 @@ export function SupplierView({
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Purchases" ml="വാങ്ങിയത്" value={rupees(s.billed)} />
-        <StatCard label="Paid" ml="കൊടുത്തത്" value={rupees(s.paid)} tone="success" />
+        <StatCard label="Taken on credit" ml="കടമായി വാങ്ങിയത്" value={rupees(s.owed)} sub={`Purchases ${rupees(s.billed)} · Setup on credit ${rupees(s.setupCredit)}`} />
+        <StatCard label="Paid on account" ml="കൊടുത്തത്" value={rupees(s.paid)} sub={`${payments.length} payment(s)`} tone="success" />
         <StatCard label="Balance due" ml="കൊടുക്കാനുള്ളത്" value={rupees(s.balance)} tone={s.balance > 0 ? "destructive" : "success"} />
-        <StatCard label="Setup expenses paid" ml="ഒരുക്കൽ" value={rupees(s.setupPaid)} sub={`${setup.length} entries`} tone="gold" />
+        <StatCard label="Paid on the spot" ml="ഉടനെ കൊടുത്തത്" value={rupees(s.setupPaid)} sub="Setup items not on credit" tone="gold" />
       </div>
 
-      <Tabs defaultValue={purchases.length ? "purchases" : "setup"}>
+      <Tabs defaultValue={purchases.length ? "purchases" : credit.length ? "payments" : "setup"}>
         <TabsList>
           <TabsTrigger value="purchases">Purchases ({purchases.length})</TabsTrigger>
-          <TabsTrigger value="payments">Payments ({payments.length})</TabsTrigger>
-          <TabsTrigger value="setup">Setup expenses ({setup.length})</TabsTrigger>
+          <TabsTrigger value="payments">Payments on account ({payments.length})</TabsTrigger>
+          <TabsTrigger value="setup">Setup expenses ({setup.length}{credit.length ? ` · ${credit.length} on credit` : ""})</TabsTrigger>
         </TabsList>
         <TabsContent value="purchases">
           <SimpleTable
@@ -116,6 +119,8 @@ export function SupplierView({
                 <TableRow>
                   <TableHead>Date</TableHead>
                   <TableHead>Mode</TableHead>
+                  <TableHead>UPI / Ref</TableHead>
+                  <TableHead>Paid by</TableHead>
                   <TableHead>Note</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
                   <TableHead />
@@ -124,7 +129,7 @@ export function SupplierView({
               <TableBody>
                 {payments.length === 0 && (
                   <TableRow>
-                    <TableCell colSpan={5} className="h-20 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-20 text-center text-muted-foreground">
                       No payments yet
                     </TableCell>
                   </TableRow>
@@ -133,7 +138,9 @@ export function SupplierView({
                   <TableRow key={p.id}>
                     <TableCell>{fmtDate(p.date)}</TableCell>
                     <TableCell>{p.mode}</TableCell>
-                    <TableCell>{p.note}</TableCell>
+                    <TableCell className="font-mono text-xs">{p.ref}</TableCell>
+                    <TableCell>{p.paidBy ?? <span className="text-xs text-muted-foreground">from Excel</span>}</TableCell>
+                    <TableCell className="max-w-72 truncate">{p.note}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{rupees(p.amount, true)}</TableCell>
                     <TableCell className="text-right">
                       {isPartner && (
@@ -170,9 +177,10 @@ export function SupplierView({
         open={pay}
         onOpenChange={setPay}
         title={`Pay ${s.name}`}
-        description="Recorded in the cash book as Fabric Purchase"
+        description="Payment on account — for goods taken on credit"
         suggested={s.balance}
         modes={modes}
+        payers={["Business Account", ...partners.filter((p) => p !== "Business Account")]}
         onSubmit={(v) => paySupplier({ supplierId: s.id, ...v })}
         onDone={() => router.refresh()}
       />

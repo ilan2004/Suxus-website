@@ -181,9 +181,19 @@ export async function GET(req: NextRequest) {
   const sup = await suppliersWithBalance();
   sheet(wb, "Suppliers", "SUPPLIERS & PAYMENT DETAILS", [
     { header: "Supplier", key: "name", width: 30 }, { header: "Type", key: "type" }, { header: "Place", key: "place" }, { header: "Phone", key: "phone", width: 18 }, { header: "UPI ID", key: "upi", width: 22 },
-    { header: "Bank A/c & IFSC", key: "bank", width: 30 }, { header: "GST No", key: "gstNo", width: 18 }, { header: "Supplies", key: "supplies", width: 24 }, { header: "Purchases", key: "billed", money: true },
-    { header: "Paid", key: "paid", money: true }, { header: "Balance due", key: "balance", money: true }, { header: "Setup paid", key: "setupPaid", money: true }, { header: "Notes", key: "notes", width: 40 },
+    { header: "Bank A/c & IFSC", key: "bank", width: 30 }, { header: "GST No", key: "gstNo", width: 18 }, { header: "Supplies", key: "supplies", width: 24 }, { header: "On credit", key: "owed", money: true },
+    { header: "Paid on account", key: "paid", money: true }, { header: "Balance due", key: "balance", money: true }, { header: "Setup paid", key: "setupPaid", money: true }, { header: "Notes", key: "notes", width: 40 },
   ], sup);
+
+  const poa = await db
+    .select({ p: s.supplierPayments, supplier: s.suppliers.name })
+    .from(s.supplierPayments)
+    .innerJoin(s.suppliers, eq(s.suppliers.id, s.supplierPayments.supplierId))
+    .orderBy(asc(s.supplierPayments.date));
+  sheet(wb, "Payments on Account", "PAYMENTS ON ACCOUNT", [
+    { header: "Date", key: "date", date: true }, { header: "Supplier", key: "supplier", width: 30 }, { header: "Amount", key: "amount", money: true },
+    { header: "Mode", key: "mode" }, { header: "UPI / Ref no.", key: "ref", width: 18 }, { header: "Paid by", key: "paidBy" }, { header: "Notes", key: "note", width: 40 },
+  ], poa.map((x) => ({ ...x.p, supplier: x.supplier })));
 
   const assets = await db.select().from(s.openingStock).orderBy(asc(s.openingStock.id));
   sheet(wb, "Opening Stock", "OPENING STOCK & ASSETS", [

@@ -21,6 +21,7 @@ export function PayDialog({
   modes,
   onSubmit,
   onDone,
+  payers,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
@@ -28,26 +29,32 @@ export function PayDialog({
   description?: string;
   suggested?: number;
   modes: string[];
-  onSubmit: (v: { amount: number; mode: string; date: string; note: string | null }) => Promise<R>;
+  onSubmit: (v: { amount: number; mode: string; date: string; note: string | null; ref: string | null; paidBy: string }) => Promise<R>;
   onDone?: () => void;
+  /** When given, asks who paid (Business Account → cash book; a partner → their own money). */
+  payers?: string[];
 }) {
   const [amount, setAmount] = React.useState("");
   const [mode, setMode] = React.useState(modes[0] ?? "Cash");
   const [date, setDate] = React.useState(today());
   const [note, setNote] = React.useState("");
+  const [ref, setRef] = React.useState("");
+  const [paidBy, setPaidBy] = React.useState("Business Account");
   const [pending, start] = React.useTransition();
   React.useEffect(() => {
     if (open) {
       setAmount(suggested && suggested > 0 ? String(suggested) : "");
       setDate(today());
       setNote("");
+      setRef("");
+      setPaidBy("Business Account");
     }
   }, [open, suggested]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const r = await onSubmit({ amount: Number(amount), mode, date, note: note || null });
+      const r = await onSubmit({ amount: Number(amount), mode, date, note: note || null, ref: ref || null, paidBy });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Saved");
       onDone?.();
@@ -83,6 +90,20 @@ export function PayDialog({
               <Input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
             </Field>
           </div>
+          {payers && (
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Paid by" ml="ആര് കൊടുത്തു" hint={paidBy === "Business Account" ? "Goes to the cash book" : "Partner's own money — not in the cash book"}>
+                <select value={paidBy} onChange={(e) => setPaidBy(e.target.value)} className="h-9 rounded-md border border-input bg-card px-2 text-sm">
+                  {payers.map((p) => (
+                    <option key={p}>{p}</option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="UPI / Ref no.">
+                <Input value={ref} onChange={(e) => setRef(e.target.value)} placeholder="Optional" />
+              </Field>
+            </div>
+          )}
           {suggested != null && suggested > 0 && <p className="text-xs text-muted-foreground">Balance: {rupees(suggested, true)}</p>}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

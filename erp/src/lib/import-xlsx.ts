@@ -75,9 +75,44 @@ async function bumpCounter(db: DB, key: string, value: number) {
 
 export type ImportReport = Record<string, string>;
 
-export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport> {
+/** Removes pictures / drawings / comments — the import only needs cell values, and ExcelJS can crash on some drawings. */
+async function stripDrawings(buffer: ArrayBuffer) {
+  const JSZip = (await import("jszip")).default;
+  const zip = await JSZip.loadAsync(buffer);
+  for (const name of Object.keys(zip.files)) {
+    if (/^xl\/(drawings|media|comments|threadedComments|persons)\//.test(name) || /^xl\/comments\d*\.xml$/.test(name)) zip.remove(name);
+  }
+  for (const name of Object.keys(zip.files)) {
+    if (/^xl\/worksheets\/sheet\d+\.xml$/.test(name)) {
+      const xml = await zip.file(name)!.async("string");
+      zip.file(name, xml.replace(/<drawing [^>]*\/>/g, "").replace(/<legacyDrawing [^>]*\/>/g, ""));
+    }
+    if (/^xl\/worksheets\/_rels\/.*\.rels$/.test(name)) {
+      const xml = await zip.file(name)!.async("string");
+      zip.file(name, xml.replace(/<Relationship [^>]*Type="[^"]*\/(drawing|vmlDrawing|comments)"[^>]*\/>/g, ""));
+    }
+    if (name === "[Content_Types].xml") {
+      const xml = await zip.file(name)!.async("string");
+      zip.file(name, xml.replace(/<Override [^>]*PartName="\/xl\/(drawings|comments)[^"]*"[^>]*\/>/g, ""));
+    }
+  }
+  return zip.generateAsync({ type: "arraybuffer" });
+}
+
+async function loadWorkbook(buffer: ArrayBuffer) {
   const wb = new ExcelJS.Workbook();
-  await wb.xlsx.load(buffer);
+  try {
+    await wb.xlsx.load(buffer);
+    return wb;
+  } catch {
+    const clean = new ExcelJS.Workbook();
+    await clean.xlsx.load(await stripDrawings(buffer));
+    return clean;
+  }
+}
+
+export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport> {
+  const wb = await loadWorkbook(buffer);
   const db = await getDb();
   const report: ImportReport = {};
   const ws = (name: string) => wb.getWorksheet(name);
@@ -212,6 +247,41 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
       added++;
     }
     report.Suppliers = `${added} added`;
+  }
+
+  /* ── Payments on account (money paid later for goods taken on credit) ── */
+  {
+    const sheet = wb.worksheets.find((w) => /payments?\s*on\s*account/i.test(w.name));
+    const [existing] = await db.select({ c: sql<number>`count(*)`.mapWith(Number) }).from(schema.supplierPayments);
+    if (sheet && existing.c === 0) {
+      let added = 0;
+      const all = await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers);
+      const norm = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, "");
+      for (const r of rows(sheet, [2, 3])) {
+        const name = str(r.getCell(2).value)!;
+        const amount = n(r.getCell(3).value);
+        if (amount == null || /^total$/i.test(name)) continue;
+        const key = norm(name);
+        let sup = all.find((x) => norm(x.name) === key) ?? all.find((x) => norm(x.name).includes(key) || key.includes(norm(x.name)));
+        if (!sup) {
+          [sup] = await db.insert(schema.suppliers).values({ name }).returning({ id: schema.suppliers.id, name: schema.suppliers.name });
+          all.push(sup);
+        }
+        const date = d(r.getCell(1).value);
+        const note = [str(r.getCell(6).value), date ? null : "(date not filled in Excel — set to import day)"].filter(Boolean).join(" ");
+        await db.insert(schema.supplierPayments).values({
+          supplierId: sup.id,
+          date: date ?? new Date().toISOString().slice(0, 10),
+          amount,
+          mode: str(r.getCell(4).value) ?? "Cash",
+          ref: str(r.getCell(5).value),
+          paidBy: null, // Excel doesn't say who paid — kept out of the cash book, like the workbook
+          note: note || null,
+        });
+        added++;
+      }
+      report["Payments on Account"] = `${added} imported`;
+    } else if (sheet) report["Payments on Account"] = "skipped (already has payments)";
   }
 
   /* ── Setup expenses ── */

@@ -127,6 +127,8 @@ const SupplierPay = z.object({
   date: reqDate,
   amount: z.coerce.number<number>().positive("Amount must be more than 0"),
   mode: z.string().min(1),
+  ref: optText,
+  paidBy: z.string().default("Business Account"),
   note: optText,
 });
 
@@ -139,15 +141,19 @@ export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<R
   await db.transaction(async (tx) => {
     const [s] = await tx.select().from(schema.suppliers).where(eq(schema.suppliers.id, d.supplierId));
     const [p] = await tx.insert(schema.supplierPayments).values(d).returning();
-    await postCash(tx, {
-      source: "supplier_payment",
-      sourceId: p.id,
-      date: d.date,
-      particulars: `Paid ${s?.name ?? "supplier"}${d.note ? ` · ${d.note}` : ""}`,
-      category: "Fabric Purchase",
-      amountOut: d.amount,
-      mode: d.mode,
-    });
+    // Fabric suppliers → "Fabric Purchase"; shops / tradesmen for the setup → "Setup / Renovation"
+    const [hasPurchases] = await tx.select({ id: schema.purchases.id }).from(schema.purchases).where(eq(schema.purchases.supplierId, d.supplierId)).limit(1);
+    if (d.paidBy === "Business Account") {
+      await postCash(tx, {
+        source: "supplier_payment",
+        sourceId: p.id,
+        date: d.date,
+        particulars: `Paid ${s?.name ?? "supplier"}${d.ref ? ` · ${d.ref}` : ""}${d.note ? ` · ${d.note}` : ""}`,
+        category: hasPurchases ? "Fabric Purchase" : "Setup / Renovation",
+        amountOut: d.amount,
+        mode: d.mode,
+      });
+    }
     await audit(tx, user, "create", "supplier_payment", p.id, `${s?.name} ₹${d.amount}`);
   });
   revalidatePath("/suppliers");

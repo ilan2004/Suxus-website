@@ -37,8 +37,9 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
         ) : null,
     },
     { accessorKey: "upi", header: "UPI", cell: ({ row }) => <span className="text-xs">{row.original.upi}</span> },
-    { accessorKey: "billed", header: "Purchases", meta: { align: "right" }, cell: ({ row }) => (row.original.billed ? rupees(row.original.billed) : "—") },
-    { accessorKey: "setupPaid", header: "Setup paid", meta: { align: "right" }, cell: ({ row }) => (row.original.setupPaid ? rupees(row.original.setupPaid) : "—") },
+    { accessorKey: "owed", header: "On credit", meta: { align: "right" }, cell: ({ row }) => (row.original.owed ? rupees(row.original.owed) : "—") },
+    { accessorKey: "paid", header: "Paid on a/c", meta: { align: "right" }, cell: ({ row }) => (row.original.paid ? rupees(row.original.paid) : "—") },
+    { accessorKey: "setupPaid", header: "Paid on spot", meta: { align: "right" }, cell: ({ row }) => (row.original.setupPaid ? rupees(row.original.setupPaid) : "—") },
     {
       accessorKey: "balance",
       header: "Balance due",

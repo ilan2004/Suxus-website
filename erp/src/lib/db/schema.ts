@@ -414,6 +414,10 @@ export const supplierPayments = pgTable(
       .references(() => suppliers.id, { onDelete: "cascade" }),
     amount: money("amount").notNull(),
     mode: text("mode").notNull().default("Cash"),
+    /** UPI / bank reference */
+    ref: text("ref"),
+    /** "Business Account" → posted to the cash book. A partner's name → their own money (not in the cash book). Empty → imported, unknown. */
+    paidBy: text("paid_by"),
     note: text("note"),
     createdAt: created(),
   },

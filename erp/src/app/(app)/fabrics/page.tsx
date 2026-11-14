@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { StatCard } from "@/components/app/stat-card";
 import { FabricsView } from "./fabrics-view";
 import { rupees, num } from "@/lib/utils";
+import { storageMode } from "@/lib/storage";
 import { AlertTriangle, Layers, Ruler, Wallet } from "lucide-react";
 
 export const metadata = { title: "Fabric Stock" };
@@ -39,6 +40,7 @@ export default async function FabricsPage() {
         compositions={settings.compositions}
         lowStock={settings.shop.lowStockMtr}
         showCost={session.role === "partner"}
+        photosEnabled={storageMode() !== "off"}
       />
     </>
   );

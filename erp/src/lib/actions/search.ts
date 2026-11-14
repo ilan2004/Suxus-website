@@ -4,7 +4,7 @@ import { desc, ilike, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
-export type SearchHit = { type: string; label: string; sub: string; href: string };
+export type SearchHit = { type: string; label: string; sub: string; href: string; thumb?: string | null };
 
 /** One search box for everything: customers, bills, orders, bulk orders, fabrics, suppliers, staff. */
 export async function globalSearch(q: string): Promise<SearchHit[]> {
@@ -40,7 +40,7 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
       .orderBy(desc(s.bulkOrders.id))
       .limit(4),
     db
-      .select({ id: s.fabrics.id, code: s.fabrics.code, brand: s.fabrics.brand, shade: s.fabrics.shade })
+      .select({ id: s.fabrics.id, code: s.fabrics.code, brand: s.fabrics.brand, shade: s.fabrics.shade, thumb: s.fabrics.thumbnailUrl })
       .from(s.fabrics)
       .where(or(ilike(s.fabrics.code, like), ilike(s.fabrics.brand, like), ilike(s.fabrics.shade, like), ilike(s.fabrics.barcode, like)))
       .limit(5),
@@ -59,7 +59,7 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
     ...orders.map((o) => ({ type: "Order", label: `${o.orderNo} · ${o.name ?? ""}`, sub: `${o.status} · ${rs(o.total)}`, href: `/orders/${o.id}` })),
     ...sales.map((x) => ({ type: "Bill", label: `${x.billNo} · ${x.name ?? "Walk-in"}`, sub: `${x.date} · ${rs(x.net)}`, href: `/sales/${x.id}` })),
     ...bulk.map((b) => ({ type: "Bulk order", label: `${b.orderNo} · ${b.name}`, sub: b.status, href: `/bulk/${b.id}` })),
-    ...fabrics.map((f) => ({ type: "Fabric", label: `${f.code} · ${f.brand}`, sub: f.shade ?? "", href: `/fabrics/${f.id}` })),
+    ...fabrics.map((f) => ({ type: "Fabric", label: `${f.code} · ${f.brand}`, sub: f.shade ?? "", href: `/fabrics/${f.id}`, thumb: f.thumb })),
     ...suppliers.map((x) => ({ type: "Supplier", label: x.name, sub: [x.aliases && `aka ${x.aliases}`, x.supplies].filter(Boolean).join(" · "), href: `/suppliers/${x.id}` })),
     ...staff.map((x) => ({ type: "Staff", label: x.name, sub: x.role ?? "", href: `/staff/${x.id}` })),
   ];

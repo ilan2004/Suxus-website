@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { fabricsWithStock } from "@/lib/queries";
 import { FabricDetail } from "./fabric-detail";
+import { storageMode } from "@/lib/storage";
 
 export default async function FabricPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireUser();
@@ -47,6 +48,8 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       compositions={settings.compositions}
       lowStock={settings.shop.lowStockMtr}
       showCost={session.role === "partner"}
+      photosEnabled={storageMode() !== "off"}
+      shopName={`${settings.shop.name} ${settings.shop.tagline}`.trim()}
     />
   );
 }

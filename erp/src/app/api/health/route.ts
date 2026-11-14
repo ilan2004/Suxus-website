@@ -20,6 +20,7 @@ export async function GET() {
     DATABASE_URL_DIRECT: info(process.env.DATABASE_URL_DIRECT ?? ""),
     ERP_SECRET: process.env.ERP_SECRET ? `set (${process.env.ERP_SECRET.length} chars)` : "missing",
     ERP_SETUP_CODE: process.env.ERP_SETUP_CODE ? "set" : "missing",
+    PHOTO_STORAGE: process.env.SUPABASE_SERVICE_ROLE_KEY ? "Supabase Storage" : "off — add SUPABASE_SERVICE_ROLE_KEY to enable fabric photos",
     region: process.env.VERCEL_REGION ?? "local",
     version: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? "local",
     versionNote: process.env.VERCEL_GIT_COMMIT_MESSAGE?.split("\n")[0] ?? null,

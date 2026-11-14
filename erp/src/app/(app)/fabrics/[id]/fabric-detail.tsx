@@ -3,7 +3,9 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Pencil, Tag } from "lucide-react";
+import { ArrowLeft, Loader2, MessageCircle, Pencil, Tag } from "lucide-react";
+import { toast } from "sonner";
+import { PhotoGallery } from "@/components/app/photo-gallery";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -24,7 +26,11 @@ export function FabricDetail({
   compositions,
   lowStock,
   showCost,
+  photosEnabled,
+  shopName,
 }: {
+  photosEnabled: boolean;
+  shopName: string;
   fabric: FabricRow;
   lines: Line[];
   supplier: { id: number; name: string } | null;
@@ -36,6 +42,31 @@ export function FabricDetail({
 }) {
   const router = useRouter();
   const [edit, setEdit] = React.useState<FabricInput | null>(null);
+  const [sharing, setSharing] = React.useState(false);
+
+  /** Shares the main photo + name, shade and rate. Uses the phone's share sheet (WhatsApp) when it can send files. */
+  const share = async () => {
+    const text = [`*${f.brand}*${f.shade ? ` — ${f.shade}` : ""}`, `Code ${f.code} · ₹${num(f.saleRate)} per metre`, shopName].join("\n");
+    const main = f.photoUrls?.[0];
+    setSharing(true);
+    try {
+      if (main && navigator.canShare) {
+        const abs = new URL(main, window.location.origin).toString();
+        const blob = await (await fetch(abs)).blob();
+        const file = new File([blob], `${f.code}.${blob.type.includes("webp") ? "webp" : "jpg"}`, { type: blob.type });
+        if (navigator.canShare({ files: [file] })) {
+          await navigator.share({ files: [file], text });
+          return;
+        }
+      }
+      const link = main ? `\n${new URL(main, window.location.origin).toString()}` : "";
+      window.open(`https://wa.me/?text=${encodeURIComponent(text + link)}`, "_blank");
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") toast.error("Could not share — try again");
+    } finally {
+      setSharing(false);
+    }
+  };
   const live = lines.filter((l) => !l.cancelled);
   const revenue = live.reduce((s, l) => s + l.amount, 0);
   const pct = f.purchaseMtr > 0 ? Math.max(0, Math.min(100, (f.balanceMtr / f.purchaseMtr) * 100)) : 0;
@@ -55,7 +86,10 @@ export function FabricDetail({
           </h1>
         </div>
         {!f.active && <Badge variant="outline">Inactive</Badge>}
-        <div className="ml-auto flex gap-2">
+        <div className="ml-auto flex flex-wrap gap-2">
+          <Button variant="outline" onClick={share} disabled={sharing}>
+            {sharing ? <Loader2 className="animate-spin" /> : <MessageCircle className="text-success" />} Share on WhatsApp
+          </Button>
           <Button variant="outline" onClick={() => window.open(`/print/labels?ids=${f.id}`, "_blank")}>
             <Tag /> Label
           </Button>
@@ -72,13 +106,16 @@ export function FabricDetail({
         <StatCard label="Sale rate" ml="റേറ്റ്" value={`${rupees(f.saleRate)}/m`} sub={showCost ? `Cost ${rupees(f.costPerMtr)}/m · stock value ${rupees(f.stockValue)}` : undefined} tone="gold" />
       </div>
 
-      <div className="grid gap-x-8 gap-y-3 rounded-xl border bg-card p-5 text-sm sm:grid-cols-4">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,420px)_1fr]">
+        <PhotoGallery photos={f.photoUrls ?? []} thumbs={f.thumbUrls ?? []} alt={`${f.code} ${f.brand}`} />
+      <div className="grid content-start gap-x-8 gap-y-3 rounded-xl border bg-card p-5 text-sm sm:grid-cols-2">
         <Info label="Composition" value={f.composition} />
         <Info label="Type" value={f.type} />
         <Info label="Colour family" value={f.colourFamily} />
         <Info label="Barcode" value={f.barcode} />
         <Info label="Supplier" value={supplier ? <Link className="hover:underline" href={`/suppliers/${supplier.id}`}>{supplier.name}</Link> : null} />
         <Info label="Remarks" value={f.remarks} />
+      </div>
       </div>
 
       <div className="overflow-hidden rounded-xl border bg-card">
@@ -140,7 +177,7 @@ export function FabricDetail({
         </Table>
       </div>
 
-      <FabricSheet value={edit} onClose={() => setEdit(null)} suppliers={suppliers} lists={lists} compositions={compositions} showCost={showCost} onSaved={() => router.refresh()} row={f} />
+      <FabricSheet value={edit} onClose={() => setEdit(null)} suppliers={suppliers} lists={lists} compositions={compositions} showCost={showCost} photosEnabled={photosEnabled} onSaved={() => router.refresh()} row={f} />
     </div>
   );
 }

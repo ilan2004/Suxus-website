@@ -13,6 +13,7 @@ Next.js 16 · shadcn/ui (Radix + Tailwind 4) · Drizzle ORM · PostgreSQL (Supab
 | **Stitching Orders** | Shop fabric / outside fabric / alteration. Delivery date auto (+2 days, Express +1). Link a fabric bill (FS-…) — counted once. Advance + payments, deliver, **board view** (drag Booked → Cut → Stitching → Ready → Delivered), WhatsApp “ready for pickup”, printed bill. |
 | **Customers** | Search by name / phone / code, profile with orders, bills, measurements, balance due. |
 | **Measurements** | Fields change per garment (shirt, pant, churidar, blouse, frock …), “copy last”. |
+| **Fabric photos** | Up to 4 per fabric (camera or gallery), resized on the phone to ≤1600 px WebP (~300 KB) + 300 px thumbnail, uploaded straight to Supabase Storage with progress and Retry; reorder / set main; thumbnails in lists and search; swipe + zoom viewer; Share on WhatsApp. |
 | **Fabric Stock** | Auto codes (LIN-001, PV-002 …), sold & balance metres live from bills, stock value, **barcode labels** (50×25 mm). |
 | **Staff** | Roles, pay type, piece rate, incentive %, app login + PIN. |
 | **Settings** | Shop details on bills, every dropdown list, piece rates, fabric code prefixes, **Import Excel**. |
@@ -55,6 +56,7 @@ The first visit opens **/setup** to create the first partner login. Then go to *
    | `DATABASE_URL_DIRECT` | session pooler URI (5432) |
    | `ERP_SECRET` | long random string (e.g. `openssl rand -hex 32`, or 40+ random letters/numbers) |
    | `ERP_SETUP_CODE` | any code you choose — asked once on the first-run screen |
+   | `SUPABASE_SERVICE_ROLE_KEY` | for **fabric photos**: Supabase → Project Settings → API Keys → Secret key (`sb_secret_…`) or legacy `service_role`. The photo bucket `fabric-photos` is created automatically. |
 3. Deploy. `vercel.json` runs the migrations (creates all tables, blocks Supabase's public Data API with RLS)
    and pins the server to Singapore (`sin1`), next to the Supabase database (ap-southeast-1). If the database region changes, change `regions` in `erp/vercel.json` to match.
 4. Open the site → enter the setup code → create your partner login → Settings → Import / Backup → upload the Excel.

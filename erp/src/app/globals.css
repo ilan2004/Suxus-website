@@ -125,6 +125,15 @@
     @apply bg-background text-foreground antialiased;
     font-feature-settings: "tnum" 1;
   }
+  /* Grid children may shrink below their content (wide tables scroll inside their card instead of
+     pushing the whole page sideways on phones). */
+  .grid > * {
+    min-width: 0;
+  }
+  html,
+  body {
+    overflow-x: clip;
+  }
   input[type="number"]::-webkit-inner-spin-button,
   input[type="number"]::-webkit-outer-spin-button {
     -webkit-appearance: none;

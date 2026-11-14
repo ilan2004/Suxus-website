@@ -51,6 +51,9 @@ export async function fabricsWithStock() {
       saleRate: fabrics.saleRate,
       remarks: fabrics.remarks,
       active: fabrics.active,
+      photoUrls: fabrics.photoUrls,
+      thumbUrls: fabrics.thumbUrls,
+      thumbnailUrl: fabrics.thumbnailUrl,
       soldMtr: sold,
     })
     .from(fabrics)

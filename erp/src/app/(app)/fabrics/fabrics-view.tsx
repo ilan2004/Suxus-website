@@ -17,6 +17,7 @@ import { ListSelect, SearchSelect } from "@/components/app/search-select";
 import { deleteFabric, saveFabric, type FabricInput } from "@/lib/actions/fabrics";
 import { cn, fmtDate, num, rupees, today } from "@/lib/utils";
 import type { FabricRow } from "@/lib/queries";
+import { PhotoPicker, photosFrom, type PhotoItem } from "@/components/forms/photo-picker";
 
 export function FabricsView({
   rows,
@@ -25,7 +26,9 @@ export function FabricsView({
   compositions,
   lowStock,
   showCost,
+  photosEnabled,
 }: {
+  photosEnabled: boolean;
   rows: FabricRow[];
   suppliers: { id: number; name: string }[];
   lists: { fabricType: string[]; colourFamily: string[] };
@@ -75,9 +78,17 @@ export function FabricsView({
       accessorKey: "code",
       header: "Code",
       cell: ({ row }) => (
-        <span className="font-mono text-xs font-medium">
-          {row.original.code}
-          {!row.original.active && <Badge variant="outline" className="ml-2">Inactive</Badge>}
+        <span className="flex items-center gap-2.5">
+          {row.original.thumbnailUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={row.original.thumbnailUrl} alt="" loading="lazy" className="size-10 shrink-0 rounded-lg object-cover" />
+          ) : (
+            <span className="size-10 shrink-0 rounded-lg bg-muted" />
+          )}
+          <span className="font-mono text-xs font-medium">
+            {row.original.code}
+            {!row.original.active && <Badge variant="outline" className="ml-2">Inactive</Badge>}
+          </span>
         </span>
       ),
     },
@@ -151,6 +162,7 @@ export function FabricsView({
         lists={lists}
         compositions={compositions}
         showCost={showCost}
+        photosEnabled={photosEnabled}
         onSaved={() => router.refresh()}
         row={editing && "id" in editing ? rows.find((r) => r.id === editing.id) : undefined}
       />
@@ -167,7 +179,9 @@ export function FabricSheet({
   showCost,
   onSaved,
   row,
+  photosEnabled,
 }: {
+  photosEnabled: boolean;
   value: FabricInput | null;
   onClose: () => void;
   suppliers: { id: number; name: string }[];
@@ -178,17 +192,25 @@ export function FabricSheet({
   row?: FabricRow;
 }) {
   const [v, setV] = React.useState<FabricInput | null>(value);
+  const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
   const [pending, start] = React.useTransition();
-  React.useEffect(() => setV(value), [value]);
+  React.useEffect(() => {
+    setV(value);
+    setPhotos(value?.id && row ? photosFrom(row.photoUrls ?? [], row.thumbUrls ?? []) : []);
+  }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!v) return <Sheet open={false} />;
+  const busy = photos.some((p) => p.status === "processing" || p.status === "uploading");
+  const failed = photos.some((p) => p.status === "error");
 
   const set = <K extends keyof FabricInput>(k: K, val: FabricInput[K]) => setV((s) => (s ? { ...s, [k]: val } : s));
   const prefix = compositions.find((c) => c.name === v.composition)?.prefix ?? "OTH";
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (busy) return void toast.info("Photos are still uploading — one moment");
+    if (failed) return void toast.error("A photo did not upload. Tap Retry on it, or remove it, then save.");
     start(async () => {
-      const r = await saveFabric(v);
+      const r = await saveFabric({ ...v, photos: photosEnabled ? photos.map((p) => ({ url: p.url!, thumb: p.thumb! })) : undefined });
       if (!r.ok) return void toast.error(r.error);
       toast.success(v.id ? "Fabric updated" : `Fabric ${r.data.code} added`);
       onSaved();
@@ -207,6 +229,15 @@ export function FabricSheet({
             </SheetDescription>
           </SheetHeader>
           <div className="grid gap-4 p-5 sm:grid-cols-2">
+            <Field label="Photos" ml="ഫോട്ടോ" className="sm:col-span-2">
+              {photosEnabled ? (
+                <PhotoPicker value={photos} onChange={setPhotos} disabled={pending} />
+              ) : (
+                <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
+                  Photo storage is not set up yet — add SUPABASE_SERVICE_ROLE_KEY in Vercel to enable photos. Saving works without photos.
+                </p>
+              )}
+            </Field>
             <Field label="Brand / Quality" ml="ബ്രാൻഡ്" required className="sm:col-span-2">
               <Input value={v.brand} onChange={(e) => set("brand", e.target.value)} autoFocus required placeholder="e.g. Raymond Linen 60s" />
             </Field>
@@ -294,8 +325,8 @@ export function FabricSheet({
             <Button type="button" variant="outline" onClick={onClose} className="ml-auto">
               Cancel
             </Button>
-            <Button type="submit" disabled={pending}>
-              {pending && <Loader2 className="animate-spin" />} Save
+            <Button type="submit" size="lg" disabled={pending || busy}>
+              {(pending || busy) && <Loader2 className="animate-spin" />} {busy ? "Uploading…" : "Save"}
             </Button>
           </SheetFooter>
         </form>

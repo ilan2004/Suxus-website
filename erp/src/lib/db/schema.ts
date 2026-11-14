@@ -129,6 +129,12 @@ export const fabrics = pgTable(
     saleRate: money("sale_rate").notNull().default(0),
     remarks: text("remarks"),
     active: boolean("active").notNull().default(true),
+    /** Photo URLs in display order — the first is the main photo (max 4). */
+    photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** 300 px square thumbnails, same order as photoUrls. */
+    thumbUrls: jsonb("thumb_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Thumbnail of the main photo, for list views. */
+    thumbnailUrl: text("thumbnail_url"),
     createdAt: created(),
     updatedAt: updated(),
   },

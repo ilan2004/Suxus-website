@@ -142,6 +142,13 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
               <CommandGroup key={type} heading={type}>
                 {items.map((h) => (
                   <CommandItem key={h.href} value={`${h.label} ${h.sub} ${h.href}`} onSelect={() => go(h.href)}>
+                    {h.type === "Fabric" &&
+                      (h.thumb ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={h.thumb} alt="" className="size-8 shrink-0 rounded object-cover" loading="lazy" />
+                      ) : (
+                        <span className="size-8 shrink-0 rounded bg-muted" />
+                      ))}
                     <span className="truncate font-medium">{h.label}</span>
                     <span className="ml-auto truncate text-xs text-muted-foreground">{h.sub}</span>
                   </CommandItem>
@@ -209,19 +216,19 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
       </Sheet>
 
       <div className="flex min-w-0 flex-col">
-        <header className="no-print sticky top-0 z-30 flex h-16 items-center gap-2 border-b bg-background/85 px-4 backdrop-blur sm:px-6">
+        <header className="no-print sticky top-0 z-30 flex h-16 min-w-0 items-center gap-2 border-b bg-background/85 px-3 backdrop-blur sm:px-6">
           <Button variant="ghost" size="icon" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-label="Open menu">
             <Menu />
           </Button>
           <button
             onClick={() => setCmdOpen(true)}
-            className="flex h-9 w-full max-w-sm items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground shadow-xs hover:bg-accent/50"
+            className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border bg-card px-3 text-sm text-muted-foreground shadow-xs hover:bg-accent/50 sm:max-w-sm"
           >
             <Search className="size-4" />
-            <span className="truncate">Search customer, SO-/FS- no., fabric…</span>
+            <span className="truncate"><span className="sm:hidden">Search…</span><span className="hidden sm:inline">Search customer, SO-/FS- no., fabric…</span></span>
             <kbd className="ml-auto hidden rounded border bg-muted px-1.5 font-mono text-[10px] sm:inline">Ctrl K</kbd>
           </button>
-          <div className="ml-auto flex items-center gap-1.5">
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button size="sm" variant="gold" className="hidden sm:inline-flex">

@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { nextDocNo } from "@/lib/numbering";
+import { nextDocNo, resetCounterToMax } from "@/lib/numbering";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2, today } from "@/lib/utils";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
@@ -191,12 +191,27 @@ export async function deletePayment(id: number): Promise<Result<null>> {
   return ok(null);
 }
 
-export async function deleteOrder(id: number): Promise<Result<null>> {
+/**
+ * Permanently deletes an order (e.g. a trial). Its payments leave the cash book.
+ * withFabricBill: also delete the linked fabric bill (FS-) — otherwise the bill stays as a normal fabric sale.
+ * Numbers are reused when the deleted order / bill was the latest one.
+ */
+export async function deleteOrder(id: number, opts?: { withFabricBill?: boolean }): Promise<Result<null>> {
   const user = await requireUser({ partner: true });
   const db = await getDb();
   await db.transaction(async (tx) => {
     const pays = await tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.orderId, id));
     for (const p of pays) await removeCash(tx, "payment", p.id);
+    if (opts?.withFabricBill) {
+      const bills = await tx.select({ id: schema.sales.id, billNo: schema.sales.billNo }).from(schema.sales).where(eq(schema.sales.orderId, id));
+      await tx.update(schema.orders).set({ saleId: null }).where(eq(schema.orders.id, id));
+      for (const b of bills) {
+        await removeCash(tx, "sale", b.id);
+        await tx.delete(schema.sales).where(eq(schema.sales.id, b.id));
+        await audit(tx, user, "delete", "sale", b.id, `${b.billNo} deleted with its order`);
+      }
+      if (bills.length) await resetCounterToMax(tx, "FS", "sales", "bill_no");
+    }
     const linked = await tx
       .update(schema.sales)
       .set({ orderId: null, stitchingHere: false })
@@ -215,8 +230,12 @@ export async function deleteOrder(id: number): Promise<Result<null>> {
       });
     }
     const [o] = await tx.delete(schema.orders).where(eq(schema.orders.id, id)).returning();
+    await resetCounterToMax(tx, "SO", "orders", "order_no");
     await audit(tx, user, "delete", "order", id, o?.orderNo);
   });
   revalidatePath("/orders");
+  revalidatePath("/sales");
+  revalidatePath("/fabrics");
+  revalidatePath("/");
   return ok(null);
 }

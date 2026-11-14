@@ -6,7 +6,7 @@ import { z } from "zod";
 import { getDb, schema, type Tx } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { nextDocNo } from "@/lib/numbering";
+import { nextDocNo, resetCounterToMax } from "@/lib/numbering";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
@@ -156,6 +156,7 @@ export async function deleteBulkOrder(id: number): Promise<Result<null>> {
     const pays = await tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.bulkOrderId, id));
     for (const p of pays) await removeCash(tx, "payment", p.id);
     const [o] = await tx.delete(schema.bulkOrders).where(eq(schema.bulkOrders.id, id)).returning();
+    await resetCounterToMax(tx, "BO", "bulk_orders", "order_no");
     await audit(tx, user, "delete", "bulk_order", id, o?.orderNo);
   });
   revalidatePath("/bulk");

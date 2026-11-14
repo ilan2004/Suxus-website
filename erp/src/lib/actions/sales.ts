@@ -7,7 +7,7 @@ import { z } from "zod";
 import { getDb, schema, type Tx } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
-import { nextDocNo } from "@/lib/numbering";
+import { nextDocNo, resetCounterToMax } from "@/lib/numbering";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
 import { fail, money, ok, optId, optText, reqDate, zodError, type Result } from "./util";
@@ -174,11 +174,7 @@ export async function deleteCancelledSale(id: number): Promise<Result<null>> {
       await recalcOrder(tx, sale.orderId);
     }
     await tx.delete(schema.sales).where(eq(schema.sales.id, id)); // items cascade
-    // Reuse the number if nothing was billed after it
-    const [maxRow] = await tx
-      .select({ n: sql<number>`coalesce(max(cast(substring(${schema.sales.billNo} from 4) as integer)), 0)`.mapWith(Number) })
-      .from(schema.sales);
-    await tx.update(schema.counters).set({ value: maxRow.n }).where(eq(schema.counters.key, "FS"));
+    await resetCounterToMax(tx, "FS", "sales", "bill_no"); // reuse the number if nothing was billed after it
     await audit(tx, user, "delete", "sale", id, `${sale.billNo} deleted (was cancelled: ${sale.remarks ?? ""})`);
     return null;
   });

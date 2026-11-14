@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CircleDollarSign, Loader2, MessageCircle, Pencil, Plus, Printer, Ruler, ShoppingBag, Trash2, Zap } from "lucide-react";
+import { ArrowLeft, Check, CircleDollarSign, Loader2, MoreHorizontal, Pencil, Plus, Printer, Ruler, ShoppingBag, Trash2, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -16,6 +16,7 @@ import { Field } from "@/components/app/field";
 import { StatusBadge } from "@/components/app/status-badge";
 import { MeasurementCard, MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
 import { WhatsAppButtons } from "@/components/app/whatsapp-buttons";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { addOrderPayment, deleteOrder, deletePayment, setOrderStatus } from "@/lib/actions/orders";
 import type { OrderFull } from "@/lib/queries";
 import type { ShopInfo } from "@/lib/defaults";
@@ -49,6 +50,7 @@ export function OrderView({
   const [mDialog, setMDialog] = React.useState<Partial<MeasurementRow> | null>(null);
   const [pending, start] = React.useTransition();
   const [justBooked] = React.useState(autoPrint);
+  const [deleting, setDeleting] = React.useState(false);
   const printBill = () => window.open(`/print/order/${order.id}`, "_blank", "width=420,height=760");
 
   React.useEffect(() => {
@@ -126,6 +128,20 @@ export function OrderView({
               <Pencil /> Edit
             </Link>
           </Button>
+          {isPartner && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon" aria-label="More actions">
+                  <MoreHorizontal />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem variant="destructive" onSelect={() => setDeleting(true)}>
+                  <Trash2 /> Delete order (trial / wrong entry)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
       </div>
 
@@ -387,13 +403,7 @@ export function OrderView({
                 variant="ghost"
                 size="sm"
                 className="mt-2 w-fit text-destructive"
-                onClick={async () => {
-                  if (!confirm(`Delete ${order.orderNo} permanently? Payments will be removed from the cash book.`)) return;
-                  const r = await deleteOrder(order.id);
-                  if (!r.ok) return void toast.error(r.error);
-                  toast.success("Order deleted");
-                  router.push("/orders");
-                }}
+                onClick={() => setDeleting(true)}
               >
                 <Trash2 /> Delete order
               </Button>
@@ -402,6 +412,15 @@ export function OrderView({
         </aside>
       </div>
 
+      <DeleteOrderDialog
+        open={deleting}
+        onClose={() => setDeleting(false)}
+        orderId={order.id}
+        orderNo={order.orderNo}
+        bill={order.sale ? { billNo: order.sale.billNo, net: order.sale.net } : null}
+        paid={order.paid}
+        onDone={() => router.push("/orders")}
+      />
       <PaymentDialog
         mode={payOpen}
         onClose={() => setPayOpen(false)}
@@ -517,5 +536,73 @@ function Info({ label, value, className }: { label: string; value: React.ReactNo
       <p className="text-xs text-muted-foreground">{label}</p>
       <div className="mt-0.5 text-sm font-medium">{value}</div>
     </div>
+  );
+}
+
+function DeleteOrderDialog({
+  open,
+  onClose,
+  orderId,
+  orderNo,
+  bill,
+  paid,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orderId: number;
+  orderNo: string;
+  bill: { billNo: string; net: number } | null;
+  paid: number;
+  onDone: () => void;
+}) {
+  const [withBill, setWithBill] = React.useState(true);
+  const [pending, start] = React.useTransition();
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Delete {orderNo}?</DialogTitle>
+          <DialogDescription>For trial or wrong entries. This cannot be undone. · ട്രയൽ / തെറ്റായ എൻട്രി മാത്രം</DialogDescription>
+        </DialogHeader>
+        <ul className="grid gap-1.5 text-sm text-muted-foreground">
+          <li>• The order and its items are removed.</li>
+          {paid > 0 && <li>• Payments ({rupees(paid, true)}) are removed from the cash book.</li>}
+          <li>• If it is the latest order, the next one gets this number again.</li>
+        </ul>
+        {bill && (
+          <Label className="items-start gap-3 rounded-lg border p-3">
+            <Switch checked={withBill} onCheckedChange={setWithBill} className="mt-0.5" />
+            <span className="grid gap-0.5">
+              <span>
+                Also delete fabric bill <strong>{bill.billNo}</strong> ({rupees(bill.net, true)})
+              </span>
+              <span className="text-xs font-normal text-muted-foreground">
+                {withBill ? "Fabric goes back to stock. Use this for trials." : "The bill stays as a normal fabric sale (customer took the fabric)."}
+              </span>
+            </span>
+          </Label>
+        )}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="destructive"
+            disabled={pending}
+            onClick={() =>
+              start(async () => {
+                const r = await deleteOrder(orderId, { withFabricBill: !!bill && withBill });
+                if (!r.ok) return void toast.error(r.error);
+                toast.success(`${orderNo} deleted${bill && withBill ? ` with ${bill.billNo}` : ""}`);
+                onDone();
+              })
+            }
+          >
+            {pending ? <Loader2 className="animate-spin" /> : <Trash2 />} Delete permanently
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

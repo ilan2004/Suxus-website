@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { AlertTriangle, Loader2, Minus, Plus, ScanBarcode, Scissors, Trash2, X } from "lucide-react";
+import { AlertTriangle, Camera, Loader2, Minus, Plus, ScanBarcode, Scissors, Trash2, X } from "lucide-react";
+import { BarcodeScanner } from "@/components/app/barcode-scanner";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,6 +55,7 @@ export function PosForm({
   const [stitchingHere, setStitchingHere] = React.useState(!!orderId);
   const [remarks, setRemarks] = React.useState("");
   const [pending, start] = React.useTransition();
+  const [camera, setCamera] = React.useState(false);
 
   const subtotal = round2(lines.reduce((s, l) => s + (Number(l.metres) || 0) * (Number(l.rate) || 0), 0));
   const net = round2(subtotal - (Number(discount) || 0));
@@ -80,6 +82,11 @@ export function PosForm({
       ];
     });
     setTimeout(() => document.querySelector<HTMLInputElement>(`[data-metres="${f.id}"]`)?.focus(), 30);
+  };
+
+  const findFabric = (raw: string) => {
+    const q = raw.trim().toLowerCase();
+    return fabrics.find((x) => x.code.toLowerCase() === q || (x.barcode && x.barcode.toLowerCase() === q));
   };
 
   const onScan = (e: React.FormEvent) => {
@@ -149,17 +156,22 @@ export function PosForm({
       <div className="grid content-start gap-4">
         <div className="rounded-xl border bg-card p-4 shadow-xs">
           <div className="grid gap-3 sm:grid-cols-[1fr_1fr]">
-            <form onSubmit={onScan} className="relative">
-              <ScanBarcode className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                ref={scanRef}
-                autoFocus
-                value={scan}
-                onChange={(e) => setScan(e.target.value)}
-                placeholder="Scan barcode / type code + Enter (F2)"
-                className="h-11 pl-10 text-base"
-              />
-            </form>
+            <div className="flex gap-2">
+              <form onSubmit={onScan} className="relative flex-1">
+                <ScanBarcode className="pointer-events-none absolute top-1/2 left-3 size-5 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={scanRef}
+                  autoFocus
+                  value={scan}
+                  onChange={(e) => setScan(e.target.value)}
+                  placeholder="Scan barcode / type code + Enter (F2)"
+                  className="h-11 pl-10 text-base"
+                />
+              </form>
+              <Button type="button" variant="gold" className="h-11 px-3" onClick={() => setCamera(true)} aria-label="Scan with camera">
+                <Camera className="size-5" /> <span className="hidden sm:inline">Camera</span>
+              </Button>
+            </div>
             <SearchSelect
               className="h-11"
               options={fabrics.map((f) => ({
@@ -264,6 +276,22 @@ export function PosForm({
           )}
         </div>
       </div>
+
+      <BarcodeScanner
+        open={camera}
+        onClose={() => setCamera(false)}
+        title="Scan fabric label"
+        onResult={(code) => {
+          const f = findFabric(code);
+          if (!f) {
+            toast.error(`No fabric with code "${code}"`);
+            return false; // keep the camera open for the next try
+          }
+          addFabric(f);
+          toast.success(`${f.code} added — enter metres`);
+          setCamera(false);
+        }}
+      />
 
       {/* Right: checkout */}
       <div className="grid content-start gap-4 lg:sticky lg:top-20">

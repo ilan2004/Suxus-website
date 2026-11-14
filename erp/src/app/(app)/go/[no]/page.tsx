@@ -1,5 +1,5 @@
 import { notFound, redirect } from "next/navigation";
-import { eq, ilike } from "drizzle-orm";
+import { eq, ilike, or } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
@@ -22,7 +22,7 @@ export default async function Go({ params }: { params: Promise<{ no: string }> }
     const [o] = await db.select({ id: s.customers.id }).from(s.customers).where(eq(s.customers.code, no));
     if (o) redirect(`/customers/${o.id}`);
   } else {
-    const [f] = await db.select({ id: s.fabrics.id }).from(s.fabrics).where(ilike(s.fabrics.code, no));
+    const [f] = await db.select({ id: s.fabrics.id }).from(s.fabrics).where(or(ilike(s.fabrics.code, no), ilike(s.fabrics.barcode, no)));
     if (f) redirect(`/fabrics/${f.id}`);
   }
   notFound();

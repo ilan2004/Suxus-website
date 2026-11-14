@@ -2,7 +2,8 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, Plus, Tag, Trash2 } from "lucide-react";
+import { Camera, Loader2, Plus, ScanBarcode, Tag, Trash2 } from "lucide-react";
+import { BarcodeScanner } from "@/components/app/barcode-scanner";
 import { toast } from "sonner";
 import { DataTable, type ColumnDef } from "@/components/app/data-table";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ export function FabricsView({
   const [editing, setEditing] = React.useState<FabricInput | null>(null);
   const [showInactive, setShowInactive] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
+  const [camera, setCamera] = React.useState(false);
 
   const data = rows.filter((r) => showInactive || r.active);
   const toggle = (id: number) =>
@@ -142,6 +144,9 @@ export function FabricsView({
             <Label className="mr-2 text-xs text-muted-foreground">
               <Switch checked={showInactive} onCheckedChange={setShowInactive} /> Show inactive
             </Label>
+            <Button variant="outline" onClick={() => setCamera(true)}>
+              <ScanBarcode /> Scan
+            </Button>
             <Button
               variant="outline"
               disabled={!selected.size}
@@ -155,6 +160,21 @@ export function FabricsView({
           </>
         }
         empty="No fabric in stock yet — add the first roll."
+      />
+      <BarcodeScanner
+        open={camera}
+        onClose={() => setCamera(false)}
+        title="Scan to find a fabric"
+        onResult={(code) => {
+          const q = code.trim().toLowerCase();
+          const f = rows.find((r) => r.code.toLowerCase() === q || (r.barcode && r.barcode.toLowerCase() === q));
+          setCamera(false);
+          if (f) router.push(`/fabrics/${f.id}`);
+          else {
+            toast.info(`New barcode ${code} — add the fabric`);
+            setEditing({ brand: "", composition: "Linen", barcode: code, purchaseDate: today(), purchaseMtr: 0, costPerMtr: 0, saleRate: 0, active: true });
+          }
+        }}
       />
       <FabricSheet
         value={editing}
@@ -194,6 +214,7 @@ export function FabricSheet({
 }) {
   const [v, setV] = React.useState<FabricInput | null>(value);
   const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
+  const [scanBarcode, setScanBarcode] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<(ColourSuggestion & { applied: string[] }) | null>(null);
   const [pending, start] = React.useTransition();
   /** Fill Colour family / Shade from the photo — only fields that are still empty, so nothing typed is overwritten. */
@@ -307,8 +328,23 @@ export function FabricSheet({
             <Field label="Colour family" ml="കളർ വിഭാഗം">
               <ListSelect items={lists.colourFamily} value={v.colourFamily} onChange={(c) => set("colourFamily", c)} allowClear />
             </Field>
-            <Field label="Barcode no." ml="ബാർകോഡ്">
-              <Input value={v.barcode ?? ""} onChange={(e) => set("barcode", e.target.value)} placeholder="Scan or type" />
+            <Field label="Barcode no." ml="ബാർകോഡ്" hint="Leave empty to use the fabric code on labels">
+              <div className="flex gap-2">
+                <Input value={v.barcode ?? ""} onChange={(e) => set("barcode", e.target.value)} placeholder="Scan or type" className="flex-1" />
+                <Button type="button" variant="outline" size="icon" onClick={() => setScanBarcode(true)} aria-label="Scan barcode with camera">
+                  <Camera />
+                </Button>
+              </div>
+              <BarcodeScanner
+                open={scanBarcode}
+                onClose={() => setScanBarcode(false)}
+                title="Scan the roll's barcode"
+                onResult={(code) => {
+                  set("barcode", code);
+                  setScanBarcode(false);
+                  toast.success(`Barcode ${code} added`);
+                }}
+              />
             </Field>
             <Field label="Supplier" ml="സപ്ലയർ">
               <SearchSelect

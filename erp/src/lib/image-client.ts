@@ -2,6 +2,8 @@
  * Browser-side photo processing: phone photos (3–5 MB, often HEIC) → WebP ≤ 1600 px (~300 KB) + 300 px square thumbnail.
  * Falls back to JPEG where the browser cannot encode WebP (older Safari).
  */
+import { detectColour, type ColourSuggestion } from "./colour-detect";
+
 const MAX_SIDE = 1600;
 const THUMB = 300;
 const TARGET_BYTES = 300 * 1024;
@@ -43,7 +45,7 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not process the photo"))), type, quality));
 }
 
-export async function processPhoto(file: File): Promise<{ photo: Blob; thumb: Blob; ext: "webp" | "jpg" }> {
+export async function processPhoto(file: File): Promise<{ photo: Blob; thumb: Blob; ext: "webp" | "jpg"; colour: ColourSuggestion | null }> {
   if (!/^image\//.test(file.type) && !isHeic(file)) throw new Error("Please choose a photo (JPG, PNG, HEIC or WebP).");
   const img = await decode(file);
   const w = img.width;
@@ -71,8 +73,14 @@ export async function processPhoto(file: File): Promise<{ photo: Blob; thumb: Bl
   tctx.imageSmoothingQuality = "high";
   tctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, THUMB, THUMB);
   const thumb = await toBlob(t, type, 0.75);
+  let colour: ColourSuggestion | null = null;
+  try {
+    colour = detectColour(big);
+  } catch {
+    /* suggestion is optional */
+  }
   if ("close" in img) img.close();
-  return { photo, thumb, ext: webp ? "webp" : "jpg" };
+  return { photo, thumb, ext: webp ? "webp" : "jpg", colour };
 }
 
 /** PUT with upload progress (fetch has no upload progress). */

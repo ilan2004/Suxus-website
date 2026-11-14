@@ -18,6 +18,7 @@ import { deleteFabric, saveFabric, type FabricInput } from "@/lib/actions/fabric
 import { cn, fmtDate, num, rupees, today } from "@/lib/utils";
 import type { FabricRow } from "@/lib/queries";
 import { PhotoPicker, photosFrom, type PhotoItem } from "@/components/forms/photo-picker";
+import type { ColourSuggestion } from "@/lib/colour-detect";
 
 export function FabricsView({
   rows,
@@ -193,10 +194,34 @@ export function FabricSheet({
 }) {
   const [v, setV] = React.useState<FabricInput | null>(value);
   const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
+  const [suggestion, setSuggestion] = React.useState<(ColourSuggestion & { applied: string[] }) | null>(null);
   const [pending, start] = React.useTransition();
+  /** Fill Colour family / Shade from the photo — only fields that are still empty, so nothing typed is overwritten. */
+  const applyColour = React.useCallback(
+    (c: ColourSuggestion) => {
+      setV((cur) => {
+        if (!cur) return cur;
+        const applied: string[] = [];
+        const next = { ...cur };
+        const fam = lists.colourFamily.includes(c.family) ? c.family : lists.colourFamily.includes(c.baseFamily) ? c.baseFamily : null;
+        if (!cur.colourFamily && fam) {
+          next.colourFamily = fam;
+          applied.push("Colour family");
+        }
+        if (!cur.shade) {
+          next.shade = c.shade;
+          applied.push("Shade");
+        }
+        setSuggestion((prev) => (prev ? prev : { ...c, applied }));
+        return next;
+      });
+    },
+    [lists.colourFamily],
+  );
   React.useEffect(() => {
     setV(value);
     setPhotos(value?.id && row ? photosFrom(row.photoUrls ?? [], row.thumbUrls ?? []) : []);
+    setSuggestion(null);
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!v) return <Sheet open={false} />;
   const busy = photos.some((p) => p.status === "processing" || p.status === "uploading");
@@ -231,7 +256,36 @@ export function FabricSheet({
           <div className="grid gap-4 p-5 sm:grid-cols-2">
             <Field label="Photos" ml="ഫോട്ടോ" className="sm:col-span-2">
               {photosEnabled ? (
-                <PhotoPicker value={photos} onChange={setPhotos} disabled={pending} />
+                <>
+                  <PhotoPicker value={photos} onChange={setPhotos} disabled={pending} onColour={applyColour} />
+                  {suggestion && (
+                    <div className="flex items-center gap-2.5 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-xs">
+                      <span className="size-7 shrink-0 rounded-md border" style={{ background: suggestion.hex }} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block font-medium">
+                          From photo: {suggestion.shade} · {suggestion.pattern}
+                        </span>
+                        <span className="text-muted-foreground">
+                          {suggestion.applied.length ? `Filled ${suggestion.applied.join(" & ")} — change if not right` : "Suggestion only — your entries were kept"}
+                          <span className="ml"> · ശരിയല്ലെങ്കിൽ മാറ്റാം</span>
+                        </span>
+                      </span>
+                      {!suggestion.applied.length && (
+                        <button
+                          type="button"
+                          className="shrink-0 rounded-md border bg-card px-2 py-1 font-medium"
+                          onClick={() => {
+                            const fam = lists.colourFamily.includes(suggestion.family) ? suggestion.family : suggestion.baseFamily;
+                            setV((cur) => (cur ? { ...cur, shade: suggestion.shade, colourFamily: lists.colourFamily.includes(fam) ? fam : cur.colourFamily } : cur));
+                            setSuggestion({ ...suggestion, applied: ["Colour family", "Shade"] });
+                          }}
+                        >
+                          Use
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </>
               ) : (
                 <p className="rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
                   Photo storage is not set up yet — add SUPABASE_SERVICE_ROLE_KEY in Vercel to enable photos. Saving works without photos.

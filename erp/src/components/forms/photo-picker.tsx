@@ -5,6 +5,7 @@ import { Camera, ChevronLeft, ChevronRight, ImagePlus, Loader2, RotateCw, Star, 
 import { getPhotoUploadTargets } from "@/lib/actions/fabrics";
 import { processPhoto, putWithProgress } from "@/lib/image-client";
 import { cn } from "@/lib/utils";
+import type { ColourSuggestion } from "@/lib/colour-detect";
 
 export const MAX_PHOTOS = 4;
 
@@ -23,7 +24,18 @@ export const photosFrom = (urls: string[], thumbs: string[]): PhotoItem[] =>
   urls.map((url, i) => ({ key: url, url, thumb: thumbs[i] ?? url, preview: thumbs[i] ?? url, status: "done", progress: 1 }));
 
 /** Up to 4 fabric photos: camera or gallery, resized + uploaded straight away, reorder, set main, remove, retry. */
-export function PhotoPicker({ value, onChange, disabled }: { value: PhotoItem[]; onChange: React.Dispatch<React.SetStateAction<PhotoItem[]>>; disabled?: boolean }) {
+export function PhotoPicker({
+  value,
+  onChange,
+  disabled,
+  onColour,
+}: {
+  value: PhotoItem[];
+  onChange: React.Dispatch<React.SetStateAction<PhotoItem[]>>;
+  disabled?: boolean;
+  /** Called with the colour found in each newly added photo (free, worked out on the phone). */
+  onColour?: (c: ColourSuggestion) => void;
+}) {
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const galleryRef = React.useRef<HTMLInputElement>(null);
   const [drag, setDrag] = React.useState<number | null>(null);
@@ -34,7 +46,8 @@ export function PhotoPicker({ value, onChange, disabled }: { value: PhotoItem[];
       if (!item.file) return;
       try {
         update(item.key, { status: "processing", progress: 0, error: undefined });
-        const { photo, thumb, ext } = await processPhoto(item.file);
+        const { photo, thumb, ext, colour } = await processPhoto(item.file);
+        if (colour) onColour?.(colour);
         update(item.key, { status: "uploading", progress: 0.05 });
         const t = await getPhotoUploadTargets(ext);
         if (!t.ok) throw new Error(t.error);
@@ -45,7 +58,7 @@ export function PhotoPicker({ value, onChange, disabled }: { value: PhotoItem[];
         update(item.key, { status: "error", error: (e as Error).message });
       }
     },
-    [update],
+    [update, onColour],
   );
 
   const add = (files: FileList | null) => {

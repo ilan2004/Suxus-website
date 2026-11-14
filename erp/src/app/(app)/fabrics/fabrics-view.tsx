@@ -33,7 +33,7 @@ export function FabricsView({
   photosEnabled: boolean;
   rows: FabricRow[];
   suppliers: { id: number; name: string }[];
-  lists: { fabricType: string[]; colourFamily: string[] };
+  lists: { fabricType: string[]; colourFamily: string[]; partner: string[] };
   compositions: { name: string; prefix: string }[];
   lowStock: number;
   showCost: boolean;
@@ -91,6 +91,11 @@ export function FabricsView({
           <span className="font-mono text-xs font-medium">
             {row.original.code}
             {!row.original.active && <Badge variant="outline" className="ml-2">Inactive</Badge>}
+            {row.original.broughtInBy && (
+              <Badge variant="gold" className="ml-2 font-sans" title="Opening stock">
+                {row.original.broughtInBy.split(" ")[0]}
+              </Badge>
+            )}
           </span>
         </span>
       ),
@@ -206,7 +211,7 @@ export function FabricSheet({
   value: FabricInput | null;
   onClose: () => void;
   suppliers: { id: number; name: string }[];
-  lists: { fabricType: string[]; colourFamily: string[] };
+  lists: { fabricType: string[]; colourFamily: string[]; partner: string[] };
   compositions: { name: string; prefix: string }[];
   showCost: boolean;
   onSaved: () => void;
@@ -368,6 +373,32 @@ export function FabricSheet({
             )}
             <Field label="Sale rate / metre" ml="വിൽപ്പന റേറ്റ്" required>
               <Input type="number" step="0.01" min={0} value={v.saleRate ?? ""} onChange={(e) => set("saleRate", e.target.value as unknown as number)} />
+            </Field>
+            <Field
+              label="Opening stock — brought in by"
+              ml="ആരുടെ സ്റ്റോക്ക്"
+              className="sm:col-span-2"
+              hint={
+                v.broughtInBy
+                  ? `Counts as ${v.broughtInBy}'s opening stock & capital: ${rupees(Number(v.purchaseMtr || 0) * Number(v.costPerMtr || 0))}${Number(v.costPerMtr || 0) ? "" : " — enter Cost / metre to value it"}`
+                  : "Bought with business money — not opening stock"
+              }
+            >
+              <div className="flex flex-wrap gap-1.5">
+                {[null, ...lists.partner.filter((p) => p !== "Business Account")].map((p) => (
+                  <button
+                    key={p ?? "business"}
+                    type="button"
+                    onClick={() => set("broughtInBy", p)}
+                    className={cn(
+                      "h-9 rounded-md border px-3 text-sm",
+                      (v.broughtInBy ?? null) === p ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent",
+                    )}
+                  >
+                    {p ?? "Business purchase"}
+                  </button>
+                ))}
+              </div>
             </Field>
             <Field label="Remarks" ml="കുറിപ്പ്" className="sm:col-span-2">
               <Textarea value={v.remarks ?? ""} onChange={(e) => set("remarks", e.target.value)} rows={2} />

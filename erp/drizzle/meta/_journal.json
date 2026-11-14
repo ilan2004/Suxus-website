@@ -43,6 +43,13 @@
       "when": 1794636839738,
       "tag": "0005_fabric_photos",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794667837212,
+      "tag": "0006_fabric_brought_in_by",
+      "breakpoints": true
     }
   ]
 }

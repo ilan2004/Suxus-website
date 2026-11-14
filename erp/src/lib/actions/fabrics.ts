@@ -26,6 +26,8 @@ const FabricInput = z.object({
   saleRate: money,
   remarks: optText,
   active: z.boolean().default(true),
+  /** Opening stock: partner who brought this fabric in (null = business purchase). */
+  broughtInBy: optText,
   /** Main photo first. Undefined = leave photos unchanged. */
   photos: z
     .array(z.object({ url: z.string(), thumb: z.string() }))
@@ -62,6 +64,8 @@ export async function saveFabric(input: FabricInput): Promise<Result<{ id: numbe
     await audit(db, user, "create", "fabric", row.id, `${row.code} ${row.brand}`);
   }
   revalidatePath("/fabrics");
+  revalidatePath("/opening-stock");
+  revalidatePath("/capital");
   return ok({ id: row.id, code: row.code });
 }
 

@@ -129,6 +129,8 @@ export const fabrics = pgTable(
     saleRate: money("sale_rate").notNull().default(0),
     remarks: text("remarks"),
     active: boolean("active").notNull().default(true),
+    /** Opening stock: the partner who brought this fabric into the business. Empty = bought by the business. */
+    broughtInBy: text("brought_in_by"),
     /** Photo URLs in display order — the first is the main photo (max 4). */
     photoUrls: jsonb("photo_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     /** 300 px square thumbnails, same order as photoUrls. */

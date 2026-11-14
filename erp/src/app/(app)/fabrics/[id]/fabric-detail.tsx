@@ -35,7 +35,7 @@ export function FabricDetail({
   lines: Line[];
   supplier: { id: number; name: string } | null;
   suppliers: { id: number; name: string }[];
-  lists: { fabricType: string[]; colourFamily: string[] };
+  lists: { fabricType: string[]; colourFamily: string[]; partner: string[] };
   compositions: { name: string; prefix: string }[];
   lowStock: number;
   showCost: boolean;
@@ -114,6 +114,10 @@ export function FabricDetail({
         <Info label="Colour family" value={f.colourFamily} />
         <Info label="Barcode" value={f.barcode} />
         <Info label="Supplier" value={supplier ? <Link className="hover:underline" href={`/suppliers/${supplier.id}`}>{supplier.name}</Link> : null} />
+        <Info
+          label="Opening stock"
+          value={f.broughtInBy ? <Link href="/opening-stock" className="hover:underline">Brought in by {f.broughtInBy} · {rupees(f.purchaseMtr * f.costPerMtr)}</Link> : "Business purchase"}
+        />
         <Info label="Remarks" value={f.remarks} />
       </div>
       </div>

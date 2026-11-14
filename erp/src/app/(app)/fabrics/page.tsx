@@ -36,7 +36,7 @@ export default async function FabricsPage() {
       <FabricsView
         rows={fabrics}
         suppliers={suppliers}
-        lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily }}
+        lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}
         compositions={settings.compositions}
         lowStock={settings.shop.lowStockMtr}
         showCost={session.role === "partner"}

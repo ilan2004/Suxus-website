@@ -199,7 +199,12 @@ export async function GET(req: NextRequest) {
   sheet(wb, "Opening Stock", "OPENING STOCK & ASSETS", [
     { header: "Asset Type", key: "assetType" }, { header: "Description", key: "description", width: 30 }, { header: "Qty / Mtr", key: "qty", money: true }, { header: "Unit Value", key: "unitValue", money: true },
     { header: "Total Value", key: "total", money: true }, { header: "Owned By", key: "ownedBy" }, { header: "Age / Condition", key: "condition" }, { header: "Valuation Date", key: "valuationDate", date: true }, { header: "Remarks", key: "remarks", width: 30 },
-  ], assets.map((a) => ({ ...a, total: a.qty * a.unitValue })));
+  ], [
+    ...assets.map((a) => ({ ...a, total: a.qty * a.unitValue })),
+    ...fabrics
+      .filter((f) => f.broughtInBy)
+      .map((f) => ({ assetType: "Fabric Stock (from Fabric Stock)", description: `${f.code} ${f.brand}${f.shade ? " · " + f.shade : ""}`, qty: f.purchaseMtr, unitValue: f.costPerMtr, total: f.purchaseMtr * f.costPerMtr, ownedBy: f.broughtInBy, valuationDate: f.purchaseDate, remarks: f.remarks })),
+  ]);
 
   const cash = await db.select().from(s.cashBook).orderBy(asc(s.cashBook.date), asc(s.cashBook.id));
   let bal = 0;

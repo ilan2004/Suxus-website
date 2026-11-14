@@ -5,7 +5,7 @@ import { c } from "./db/sql";
 import { getSettings } from "./settings";
 import { fabricsWithStock } from "./queries";
 
-const { sales, saleItems, orders, payments, bulkOrders, purchases, supplierPayments, tailorWages, wagePayments, incentivePayouts, cashBook, setupExpenses, openingStock, staff } = schema;
+const { sales, saleItems, orders, payments, bulkOrders, purchases, supplierPayments, tailorWages, wagePayments, incentivePayouts, cashBook, setupExpenses, openingStock, staff, fabrics } = schema;
 const num = (s: SQL) => sql<number>`coalesce(${s}, 0)`.mapWith(Number);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
@@ -90,10 +90,16 @@ export async function capitalAccount() {
   const rows = [];
   for (const name of names) {
     const [setup] = await db.select({ v: num(sql`sum(${setupExpenses.amount})`) }).from(setupExpenses).where(eq(setupExpenses.paidBy, name));
-    const [stock] = await db
+    const [assets] = await db
       .select({ v: num(sql`sum(${openingStock.qty} * ${openingStock.unitValue})`) })
       .from(openingStock)
       .where(eq(openingStock.ownedBy, name));
+    // fabric rolls marked "brought in by" this partner in Fabric Stock (value at cost when brought in)
+    const [cloth] = await db
+      .select({ v: num(sql`sum(${fabrics.purchaseMtr} * ${fabrics.costPerMtr})`) })
+      .from(fabrics)
+      .where(eq(fabrics.broughtInBy, name));
+    const stock = { v: r2(assets.v + cloth.v) };
     const [capital] = await db
       .select({ v: num(sql`sum(${cashBook.amountIn})`) })
       .from(cashBook)
@@ -185,7 +191,10 @@ export async function summary(from: string, to: string) {
   const incentiveBal = await one(db.select({ v: num(sql`sum(${incentivePayouts.incentive} - ${incentivePayouts.paid})`) }).from(incentivePayouts));
 
   const fabrics = (await fabricsWithStock()).filter((f) => f.active);
-  const openingValue = await one(db.select({ v: num(sql`sum(${openingStock.qty} * ${openingStock.unitValue})`) }).from(openingStock));
+  const openingValue = r2(
+    (await one(db.select({ v: num(sql`sum(${openingStock.qty} * ${openingStock.unitValue})`) }).from(openingStock))) +
+      (await one(db.select({ v: num(sql`sum(${schema.fabrics.purchaseMtr} * ${schema.fabrics.costPerMtr})`) }).from(schema.fabrics).where(sql`${schema.fabrics.broughtInBy} is not null`))),
+  );
   const capital = await capitalAccount();
 
   return {

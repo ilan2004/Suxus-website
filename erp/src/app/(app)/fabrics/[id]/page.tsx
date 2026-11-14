@@ -44,7 +44,7 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       lines={lines}
       supplier={supplier}
       suppliers={suppliers}
-      lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily }}
+      lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}
       compositions={settings.compositions}
       lowStock={settings.shop.lowStockMtr}
       showCost={session.role === "partner"}

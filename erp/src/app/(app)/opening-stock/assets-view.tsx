@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { AlertTriangle, Loader2, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
@@ -19,13 +20,19 @@ import { fmtDate, num, rupees, today } from "@/lib/utils";
 
 type Row = { id: number; assetType: string; description: string; qty: number; unitValue: number; ownedBy: string; condition: string | null; valuationDate: string | null; remarks: string | null };
 
-export function AssetsView({ rows, lists }: { rows: Row[]; lists: { assetType: string[]; partner: string[] } }) {
+type Cloth = { id: number; code: string; brand: string; shade: string | null; purchaseMtr: number; costPerMtr: number; broughtInBy: string; purchaseDate: string | null; thumb: string | null };
+
+export function AssetsView({ rows, lists, cloth }: { rows: Row[]; lists: { assetType: string[]; partner: string[] }; cloth: Cloth[] }) {
   const router = useRouter();
   const [edit, setEdit] = React.useState<AssetInput | null>(null);
   const value = (r: Row) => r.qty * r.unitValue;
-  const total = rows.reduce((s, r) => s + value(r), 0);
-  const unvalued = rows.filter((r) => !r.unitValue).length;
-  const owners = lists.partner.map((p) => ({ p, v: rows.filter((r) => r.ownedBy === p).reduce((s, r) => s + value(r), 0) })).filter((x) => x.v);
+  const clothValue = (c: Cloth) => c.purchaseMtr * c.costPerMtr;
+  const clothTotal = cloth.reduce((s, c) => s + clothValue(c), 0);
+  const total = rows.reduce((s, r) => s + value(r), 0) + clothTotal;
+  const unvalued = rows.filter((r) => !r.unitValue).length + cloth.filter((c) => !c.costPerMtr).length;
+  const owners = lists.partner
+    .map((p) => ({ p, v: rows.filter((r) => r.ownedBy === p).reduce((s, r) => s + value(r), 0) + cloth.filter((c) => c.broughtInBy === p).reduce((s, c) => s + clothValue(c), 0) }))
+    .filter((x) => x.v);
 
   const columns: ColumnDef<Row>[] = [
     { accessorKey: "assetType", header: "Type", cell: ({ row }) => <Badge variant="secondary">{row.original.assetType}</Badge> },
@@ -46,18 +53,64 @@ export function AssetsView({ rows, lists }: { rows: Row[]; lists: { assetType: s
   return (
     <div className="grid gap-5">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Total value" ml="ആകെ മൂല്യം" value={rupees(total)} sub={`${rows.length} items`} />
+        <StatCard label="Total value" ml="ആകെ മൂല്യം" value={rupees(total)} sub={`${rows.length} items · ${cloth.length} fabrics`} />
         {owners.slice(0, 2).map((o) => (
           <StatCard key={o.p} label={o.p} ml="കൊണ്ടുവന്നത്" value={rupees(o.v)} tone="gold" />
         ))}
         <StatCard label="Need a value" ml="വില ചേർക്കുക" value={unvalued} sub="Items with no unit value" tone={unvalued ? "warning" : "success"} />
       </div>
+      <div className="overflow-hidden rounded-xl border bg-card">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b px-4 py-3">
+          <p className="text-sm font-medium">
+            From Fabric Stock <span className="ml">തുണി സ്റ്റോക്കിൽ നിന്ന്</span>{" "}
+            <span className="text-muted-foreground">({cloth.length} · {rupees(clothTotal)})</span>
+          </p>
+          <span className="text-xs text-muted-foreground">Set in Fabric Stock → Edit → “Opening stock — brought in by”</span>
+        </div>
+        {cloth.length === 0 ? (
+          <p className="px-4 py-6 text-center text-sm text-muted-foreground">
+            No fabric marked as brought in by a partner. Open a fabric in{" "}
+            <Link href="/fabrics" className="underline">
+              Fabric Stock
+            </Link>{" "}
+            → Edit → choose who brought it.
+          </p>
+        ) : (
+          <ul className="divide-y">
+            {cloth.map((c) => (
+              <li key={c.id}>
+                <Link href={`/fabrics/${c.id}`} className="flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted/40">
+                  {c.thumb ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={c.thumb} alt="" className="size-10 shrink-0 rounded-lg object-cover" loading="lazy" />
+                  ) : (
+                    <span className="size-10 shrink-0 rounded-lg bg-muted" />
+                  )}
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">
+                      <span className="font-mono text-xs text-muted-foreground">{c.code}</span> {c.brand} {c.shade && `· ${c.shade}`}
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {num(c.purchaseMtr)} m × {c.costPerMtr ? rupees(c.costPerMtr) : <span className="text-warning">add cost / m</span>} · {c.broughtInBy}
+                    </span>
+                  </span>
+                  <span className="font-medium tabular-nums">{rupees(clothValue(c))}</span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <p className="-mb-2 text-sm font-medium">
+        Machines, furniture & other items <span className="ml">മെഷീൻ, ഫർണിച്ചർ, മറ്റുള്ളവ</span>
+      </p>
       <DataTable
         columns={columns}
         data={rows}
         onRowClick={(r) => setEdit({ ...r })}
         toolbar={
-          <Button onClick={() => setEdit({ assetType: lists.assetType[0], description: "", qty: 1, unitValue: 0, ownedBy: lists.partner[0], valuationDate: today() })}>
+          <Button onClick={() => setEdit({ assetType: lists.assetType.find((a) => a !== "Fabric Stock") ?? lists.assetType[0], description: "", qty: 1, unitValue: 0, ownedBy: lists.partner[0], valuationDate: today() })}>
             <Plus /> Add item
           </Button>
         }
@@ -86,7 +139,9 @@ function AssetDialog({ value, onClose, lists, onSaved }: { value: AssetInput | n
       <DialogContent>
         <DialogHeader>
           <DialogTitle>{v.id ? "Edit item" : "Add item"}</DialogTitle>
-          <DialogDescription>Use today&apos;s fair value (considering age) · ഇന്നത്തെ ന്യായമായ വില</DialogDescription>
+          <DialogDescription>
+            Use today&apos;s fair value (considering age) · ഇന്നത്തെ ന്യായമായ വില. For fabric rolls, use Fabric Stock → “Opening stock — brought in by” instead, so it is not entered twice.
+          </DialogDescription>
         </DialogHeader>
         <form
           className="grid gap-4 sm:grid-cols-2"

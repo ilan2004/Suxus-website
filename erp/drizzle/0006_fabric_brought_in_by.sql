@@ -1,0 +1,1 @@
+ALTER TABLE "fabrics" ADD COLUMN "brought_in_by" text;

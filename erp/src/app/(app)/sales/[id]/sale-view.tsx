@@ -3,15 +3,16 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, MessageCircle, Plus, Printer, Scissors, Trash2 } from "lucide-react";
+import { ArrowLeft, Ban, Plus, Printer, Scissors, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThermalBill } from "@/components/print/thermal-bill";
+import { WhatsAppButtons } from "@/components/app/whatsapp-buttons";
 import { cancelSale, deleteCancelledSale } from "@/lib/actions/sales";
 import type { ShopInfo } from "@/lib/defaults";
 import type { getSaleFull } from "@/lib/queries";
-import { fmtDate, num, rupees, waLink } from "@/lib/utils";
+import { fmtDate, num, rupees } from "@/lib/utils";
 
 type Sale = NonNullable<Awaited<ReturnType<typeof getSaleFull>>>;
 
@@ -32,12 +33,14 @@ export function SaleView({ sale, shop, autoPrint, canCancel }: { sale: Sale; sho
     ...sale.items.map((i) => `• ${i.description} — ${num(i.metres)} m × ₹${num(i.rate)} = ₹${num(i.amount)}`),
     sale.discount ? `Discount: ₹${num(sale.discount)}` : "",
     `*Total: ₹${num(sale.net)}* (${sale.paymentMode})`,
+    sale.order ? `\nStitching order *${sale.order.orderNo}*` : "",
+    sale.order?.deliveryDate ? `*Delivery date: ${fmtDate(sale.order.deliveryDate)}*${sale.order.urgency === "Express" ? " (Express)" : ""}` : "",
     "",
     shop.footer,
   ]
     .filter(Boolean)
     .join("\n");
-  const wa = waLink(sale.phone, message);
+  const photos = [...new Set(sale.items.map((i) => i.photos?.[0]).filter((p): p is string => !!p))].slice(0, 5);
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_auto]">
@@ -101,13 +104,7 @@ export function SaleView({ sale, shop, autoPrint, canCancel }: { sale: Sale; sho
           <Button onClick={printBill}>
             <Printer /> Print bill
           </Button>
-          {wa && (
-            <Button variant="outline" asChild>
-              <a href={wa} target="_blank" rel="noreferrer">
-                <MessageCircle className="text-success" /> Send on WhatsApp
-              </a>
-            </Button>
-          )}
+          <WhatsAppButtons phone={sale.phone} name={sale.billNo} messages={[{ label: `Bill ${sale.billNo}`, text: message, photos }]} />
           {!sale.order && !sale.cancelled && (
             <Button variant="outline" asChild>
               <Link href={`/orders/new?sale=${sale.id}`}>

@@ -150,9 +150,20 @@ export async function getSaleFull(id: number) {
   const db = await getDb();
   const [sale] = await db.select().from(sales).where(eq(sales.id, id));
   if (!sale) return null;
-  const items = await db.select().from(saleItems).where(eq(saleItems.saleId, id)).orderBy(asc(saleItems.id));
+  const rows = await db
+    .select({ item: saleItems, photos: fabrics.photoUrls })
+    .from(saleItems)
+    .leftJoin(fabrics, eq(fabrics.id, saleItems.fabricId))
+    .where(eq(saleItems.saleId, id))
+    .orderBy(asc(saleItems.id));
+  const items = rows.map((r) => ({ ...r.item, photos: r.photos ?? [] }));
   const [seller] = sale.soldById ? await db.select({ name: staff.name }).from(staff).where(eq(staff.id, sale.soldById)) : [];
-  const [order] = sale.orderId ? await db.select({ id: orders.id, orderNo: orders.orderNo }).from(orders).where(eq(orders.id, sale.orderId)) : [];
+  const [order] = sale.orderId
+    ? await db
+        .select({ id: orders.id, orderNo: orders.orderNo, deliveryDate: orders.deliveryDate, urgency: orders.urgency, total: orders.total })
+        .from(orders)
+        .where(eq(orders.id, sale.orderId))
+    : [];
   return { ...sale, items, soldByName: seller?.name ?? null, order: order ?? null };
 }
 

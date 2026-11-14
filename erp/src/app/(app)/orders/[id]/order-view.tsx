@@ -15,6 +15,7 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { Field } from "@/components/app/field";
 import { StatusBadge } from "@/components/app/status-badge";
 import { MeasurementCard, MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
+import { WhatsAppButtons } from "@/components/app/whatsapp-buttons";
 import { addOrderPayment, deleteOrder, deletePayment, setOrderStatus } from "@/lib/actions/orders";
 import type { OrderFull } from "@/lib/queries";
 import type { ShopInfo } from "@/lib/defaults";
@@ -47,6 +48,7 @@ export function OrderView({
   const [payOpen, setPayOpen] = React.useState<false | "pay" | "deliver">(false);
   const [mDialog, setMDialog] = React.useState<Partial<MeasurementRow> | null>(null);
   const [pending, start] = React.useTransition();
+  const [justBooked] = React.useState(autoPrint);
   const printBill = () => window.open(`/print/order/${order.id}`, "_blank", "width=420,height=760");
 
   React.useEffect(() => {
@@ -67,7 +69,28 @@ export function OrderView({
 
   const step = FLOW.indexOf(order.status);
   const readyMsg = `Hello ${order.customerName ?? ""}, your order ${order.orderNo} at ${shop.name} is ready for pickup.${order.balance > 0 ? ` Balance: ₹${num(order.balance)}.` : ""} — ${shop.name} ${shop.tagline}, ${shop.address1}`;
-  const wa = waLink(order.phone, readyMsg);
+  const fabricLines = (order.sale?.items ?? []).map((i) => `• ${i.description} — ${num(i.metres)} m`);
+  const orderMsg = [
+    `*${shop.name} — ${shop.tagline}*`,
+    `Order *${order.orderNo}* · ${fmtDate(order.date)}`,
+    order.customerName ? `Customer: ${order.customerName}` : "",
+    fabricLines.length ? `\nFabric${order.sale ? ` (bill ${order.sale.billNo})` : ""}:` : "",
+    ...fabricLines,
+    `\nStitching:`,
+    ...order.items.map((i) => `• ${i.qty} × ${i.item}`),
+    "",
+    `Total: ₹${num(order.total)}`,
+    order.paid > 0 ? `Advance paid: ₹${num(order.paid)}` : "",
+    order.balance > 0 ? `*Balance: ₹${num(order.balance)}*` : "*Fully paid*",
+    order.deliveryDate ? `\n*Delivery date: ${fmtDate(order.deliveryDate)}*${order.urgency === "Express" ? " (Express)" : ""}` : "",
+    order.trialDate ? `Trial: ${fmtDate(order.trialDate)}` : "",
+    "",
+    `Please bring this message or the bill on delivery.`,
+    `${shop.address1} · Ph ${shop.phone}`,
+  ]
+    .filter((l) => l !== "")
+    .join("\n");
+  const orderPhotos = [...new Set((order.sale?.items ?? []).map((i) => i.photos?.[0]).filter((p): p is string => !!p))].slice(0, 5);
   const overdue = order.deliveryDate && order.deliveryDate < today() && !["Delivered", "Cancelled"].includes(order.status);
 
   return (
@@ -90,13 +113,14 @@ export function OrderView({
           <Button variant="outline" onClick={printBill}>
             <Printer /> Print
           </Button>
-          {wa && (
-            <Button variant="outline" asChild>
-              <a href={wa} target="_blank" rel="noreferrer">
-                <MessageCircle className="text-success" /> WhatsApp
-              </a>
-            </Button>
-          )}
+          <WhatsAppButtons
+            phone={order.phone}
+            name={order.orderNo}
+            messages={[
+              { label: "Order details + delivery date", text: orderMsg, photos: orderPhotos },
+              { label: "Ready for pickup", text: readyMsg },
+            ]}
+          />
           <Button variant="outline" asChild>
             <Link href={`/orders/${order.id}/edit`}>
               <Pencil /> Edit
@@ -104,6 +128,26 @@ export function OrderView({
           </Button>
         </div>
       </div>
+
+      {justBooked && order.phone && (
+        <div className="flex flex-col gap-3 rounded-xl border border-success/40 bg-success/10 p-4 sm:flex-row sm:items-center">
+          <div className="flex-1 text-sm">
+            <p className="font-medium">Order booked — send the details to {order.customerName ?? "the customer"} on WhatsApp</p>
+            <p className="text-muted-foreground">
+              Delivery date, balance{orderPhotos.length ? ` and ${orderPhotos.length} fabric photo${orderPhotos.length > 1 ? "s" : ""}` : ""}.
+              <span className="ml"> കസ്റ്റമർക്ക് WhatsApp-ൽ അയക്കുക</span>
+            </p>
+          </div>
+          <WhatsAppButtons
+            phone={order.phone}
+            name={order.orderNo}
+            messages={[
+              { label: "Order details + delivery date", text: orderMsg, photos: orderPhotos },
+              { label: "Ready for pickup", text: readyMsg },
+            ]}
+          />
+        </div>
+      )}
 
       {/* Status stepper */}
       {order.status !== "Cancelled" && (

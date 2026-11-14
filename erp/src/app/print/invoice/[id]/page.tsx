@@ -23,7 +23,8 @@ export default async function Invoice({ params }: { params: Promise<{ id: string
         <div className="mx-auto w-[210mm] min-h-[297mm] bg-white p-[14mm] text-[10.5pt] text-black shadow-lg print:min-h-0 print:w-auto print:p-0 print:shadow-none">
           <header className="flex items-start justify-between border-b-2 border-[#153D33] pb-4">
             <div>
-              <div className="font-display text-[26pt] leading-none font-bold tracking-[0.2em] text-[#153D33]">{shop.name}</div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/brand/logo-topbar-light.svg" alt={shop.name} className="-ml-1 h-[17mm] w-auto" />
               <div className="mt-1 text-[9pt] tracking-[0.3em] text-[#8a6a2a]">{shop.tagline}</div>
               <div className="mt-1 text-[9pt]">{shop.services}</div>
             </div>

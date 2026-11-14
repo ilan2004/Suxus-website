@@ -12,6 +12,7 @@ export const metadata: Metadata = {
   title: { default: "SUXUS ERP", template: "%s · SUXUS ERP" },
   description: "Daily operations for SUXUS Heritage Tailor",
   robots: { index: false, follow: false },
+  appleWebApp: { capable: true, title: "SUXUS", statusBarStyle: "default" },
 };
 
 export const viewport: Viewport = { themeColor: "#153D33", width: "device-width", initialScale: 1 };

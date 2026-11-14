@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, hasAnyLoginUser, loginUsers } from "@/lib/auth";
 import { LoginForm } from "./login-form";
-import { Logo } from "@/components/app/logo";
+import { LoginLogo } from "@/components/app/logo";
 
 export const metadata = { title: "Sign in" };
 export const dynamic = "force-dynamic";
@@ -13,8 +13,9 @@ export default async function LoginPage() {
   return (
     <div className="grid min-h-dvh lg:grid-cols-[1.1fr_1fr]">
       <div className="relative hidden flex-col justify-between overflow-hidden bg-sidebar p-10 text-sidebar-foreground lg:flex">
-        <Logo />
+        <span className="text-xs tracking-[0.2em] text-sidebar-muted uppercase">ERP · Daily operations</span>
         <div>
+          <LoginLogo dark className="mb-8 h-44 w-auto" />
           <p className="font-display text-4xl leading-tight font-semibold text-white">
             Every bill, order and metre —<br />
             <span className="text-gold">in one place.</span>
@@ -26,10 +27,8 @@ export default async function LoginPage() {
       </div>
       <div className="flex items-center justify-center p-6">
         <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden">
-            <div className="inline-flex rounded-xl bg-sidebar p-3 text-sidebar-foreground">
-              <Logo />
-            </div>
+          <div className="mb-6 lg:hidden">
+            <LoginLogo className="h-32 w-auto" />
           </div>
           <h1 className="font-display text-2xl font-semibold">Sign in</h1>
           <p className="mt-1 text-sm text-muted-foreground">

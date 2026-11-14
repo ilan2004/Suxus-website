@@ -37,8 +37,10 @@ export function ThermalBill({
   return (
     <div className="thermal mx-auto w-[72mm] bg-white p-[2mm] font-mono text-[11.5px] leading-[1.35] text-black">
       <div className="text-center">
-        <div className="text-[18px] font-bold tracking-[0.25em]">{shop.name}</div>
-        <div className="text-[10px] tracking-[0.2em]">{shop.tagline}</div>
+        {/* 1-bit logo made for 58/80 mm thermal printers */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/brand/receipt-logo.png" alt={shop.name} className="mx-auto w-[48mm] [image-rendering:pixelated]" />
+        <div className="mt-0.5 text-[10px] tracking-[0.2em]">{shop.tagline}</div>
         <div className="text-[10px]">{shop.services}</div>
         <div className="mt-1 text-[10px]">{shop.address1}</div>
         <div className="text-[10px]">{shop.address2}</div>

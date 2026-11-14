@@ -3,12 +3,12 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Ban, MessageCircle, Plus, Printer, Scissors } from "lucide-react";
+import { ArrowLeft, Ban, MessageCircle, Plus, Printer, Scissors, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ThermalBill } from "@/components/print/thermal-bill";
-import { cancelSale } from "@/lib/actions/sales";
+import { cancelSale, deleteCancelledSale } from "@/lib/actions/sales";
 import type { ShopInfo } from "@/lib/defaults";
 import type { getSaleFull } from "@/lib/queries";
 import { fmtDate, num, rupees, waLink } from "@/lib/utils";
@@ -134,6 +134,20 @@ export function SaleView({ sale, shop, autoPrint, canCancel }: { sale: Sale; sho
               }}
             >
               <Ban /> Cancel bill
+            </Button>
+          )}
+          {canCancel && sale.cancelled && (
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                if (!confirm(`Delete ${sale.billNo} permanently? Use this only for trial / wrong entries. This cannot be undone.`)) return;
+                const r = await deleteCancelledSale(sale.id);
+                if (!r.ok) return void toast.error(r.error);
+                toast.success(`${sale.billNo} deleted`);
+                router.push("/sales");
+              }}
+            >
+              <Trash2 /> Delete permanently
             </Button>
           )}
         </div>

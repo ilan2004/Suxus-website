@@ -155,3 +155,36 @@ export async function cancelSale(id: number, reason: string): Promise<Result<nul
   revalidatePath("/fabrics");
   return ok(null);
 }
+
+/**
+ * Permanently removes a cancelled bill (e.g. a trial entry). Only cancelled bills can be deleted —
+ * real bills are cancelled instead so the numbering and history stay intact.
+ * If it was the latest bill, the FS- counter steps back so the number is reused.
+ */
+export async function deleteCancelledSale(id: number): Promise<Result<null>> {
+  const user = await requireUser({ partner: true });
+  const db = await getDb();
+  const res = await db.transaction(async (tx) => {
+    const [sale] = await tx.select().from(schema.sales).where(eq(schema.sales.id, id));
+    if (!sale) return "Bill not found";
+    if (!sale.cancelled) return "Cancel the bill first — only cancelled bills can be deleted";
+    await removeCash(tx, "sale", id);
+    if (sale.orderId) {
+      await tx.update(schema.orders).set({ saleId: null }).where(eq(schema.orders.id, sale.orderId));
+      await recalcOrder(tx, sale.orderId);
+    }
+    await tx.delete(schema.sales).where(eq(schema.sales.id, id)); // items cascade
+    // Reuse the number if nothing was billed after it
+    const [maxRow] = await tx
+      .select({ n: sql<number>`coalesce(max(cast(substring(${schema.sales.billNo} from 4) as integer)), 0)`.mapWith(Number) })
+      .from(schema.sales);
+    await tx.update(schema.counters).set({ value: maxRow.n }).where(eq(schema.counters.key, "FS"));
+    await audit(tx, user, "delete", "sale", id, `${sale.billNo} deleted (was cancelled: ${sale.remarks ?? ""})`);
+    return null;
+  });
+  if (res) return fail(res);
+  revalidatePath("/sales");
+  revalidatePath("/fabrics");
+  revalidatePath("/");
+  return ok(null);
+}

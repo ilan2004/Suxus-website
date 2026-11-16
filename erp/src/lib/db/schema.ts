@@ -323,6 +323,8 @@ export const purchases = pgTable("purchases", {
   total: money("total").notNull().default(0),
   paid: money("paid").notNull().default(0),
   remarks: text("remarks"),
+  /** Import key (Entry ID or Date+Supplier+Total) for re-imports. */
+  entryId: text("entry_id"),
   createdAt: created(),
   updatedAt: updated(),
 });
@@ -374,6 +376,8 @@ export const setupExpenses = pgTable("setup_expenses", {
   billNo: text("bill_no"),
   hasBill: boolean("has_bill").notNull().default(false),
   remarks: text("remarks"),
+  /** Import key (Entry ID from the Excel file, or Date+Paid To+Amount) — lets a re-import update instead of duplicating. */
+  entryId: text("entry_id"),
   createdAt: created(),
   updatedAt: updated(),
 });
@@ -407,6 +411,8 @@ export const cashBook = pgTable(
     /** Set when the entry was posted automatically from a sale / payment / wage etc. */
     source: text("source"),
     sourceId: integer("source_id"),
+    /** Import key for manual entries brought in from Excel. */
+    entryId: text("entry_id"),
     createdAt: created(),
     updatedAt: updated(),
   },
@@ -429,6 +435,8 @@ export const supplierPayments = pgTable(
     /** "Business Account" → posted to the cash book. A partner's name → their own money (not in the cash book). Empty → imported, unknown. */
     paidBy: text("paid_by"),
     note: text("note"),
+    /** Import key (Entry ID or Date+Supplier+Amount) for re-imports. */
+    entryId: text("entry_id"),
     createdAt: created(),
   },
   (t) => [index("supplier_payments_supplier_idx").on(t.supplierId)],

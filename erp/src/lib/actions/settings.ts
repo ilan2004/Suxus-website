@@ -52,8 +52,9 @@ export async function importExcelAction(form: FormData): Promise<Result<Record<s
   if (file.size > 15 * 1024 * 1024) return fail("File is too large (max 15 MB)");
   try {
     const { importWorkbook } = await import("@/lib/import-xlsx");
-    const report = await importWorkbook(await file.arrayBuffer());
-    await audit(await getDb(), user, "create", "import", null, file.name);
+    const mode = form.get("mode") === "merge" ? "merge" : "first";
+    const report = await importWorkbook(await file.arrayBuffer(), mode);
+    await audit(await getDb(), user, "create", "import", null, `${file.name} (${mode})`);
     revalidatePath("/", "layout");
     return ok(report);
   } catch (e) {

@@ -12,6 +12,7 @@ import { Field } from "@/components/app/field";
 import { importExcelAction, updateSetting } from "@/lib/actions/settings";
 import { LIST_LABELS, type ListKey } from "@/lib/defaults";
 import type { AppSettings } from "@/lib/settings";
+import { cn } from "@/lib/utils";
 
 function useSave() {
   const router = useRouter();
@@ -238,6 +239,7 @@ function ImportForm() {
   const router = useRouter();
   const [report, setReport] = React.useState<Record<string, string> | null>(null);
   const [file, setFile] = React.useState<File | null>(null);
+  const [mode, setMode] = React.useState<"first" | "merge">("merge");
   const [pending, start] = React.useTransition();
   return (
     <div className="grid max-w-2xl gap-4 rounded-xl border bg-card p-5">
@@ -246,11 +248,35 @@ function ImportForm() {
         <div className="text-sm">
           <p className="font-medium">Import the SUXUS Daily Operations Book (.xlsx)</p>
           <p className="mt-1 text-muted-foreground">
-            Brings in dropdown lists, shop info, piece rates, staff, suppliers, setup expenses, opening stock, and any customers, fabric stock,
-            purchases and cash book rows. Tables that already have data are skipped, so it is safe to run again.
+            Upload the Daily Operations Book any time. <strong>Merge</strong> adds rows that are new in the Excel and updates rows that changed
+            (matched by Entry ID, or Date + Paid To + Amount) — nothing is deleted and nothing is added twice. Use <strong>First import</strong> only on a new, empty ERP.
           </p>
           <p className="ml mt-1">എക്സൽ ഫയലിലെ വിവരങ്ങൾ ഇവിടേക്ക് കൊണ്ടുവരാം.</p>
         </div>
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {(
+          [
+            ["merge", "Merge — add new rows only", "Adds rows that are new in the Excel and updates rows that changed. Nothing is deleted. Setup Expenses, Payments on Account, Purchases, Cash Book.", "പുതിയവ ചേർക്കുക, മാറിയവ പുതുക്കുക"],
+            ["first", "First import (fill empty tables)", "As before: fills only tables that are still empty, and also loads dropdown lists and shop details. Tables with data are skipped.", "ആദ്യ തവണ മാത്രം"],
+          ] as const
+        ).map(([k, title, desc, ml]) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => setMode(k)}
+            className={cn("grid gap-1 rounded-xl border p-3 text-left text-sm transition-colors", mode === k ? "border-primary bg-primary/5 ring-2 ring-primary/20" : "hover:bg-muted/40")}
+          >
+            <span className="flex items-center gap-2 font-medium">
+              <span className={cn("grid size-4 place-items-center rounded-full border-2", mode === k ? "border-primary" : "border-muted-foreground/40")}>
+                {mode === k && <span className="size-2 rounded-full bg-primary" />}
+              </span>
+              {title}
+            </span>
+            <span className="text-xs text-muted-foreground">{desc}</span>
+            <span className="ml">{ml}</span>
+          </button>
+        ))}
       </div>
       <label className="flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed p-8 text-center hover:bg-muted/40">
         <Upload className="size-6 text-muted-foreground" />
@@ -264,6 +290,7 @@ function ImportForm() {
           start(async () => {
             const fd = new FormData();
             fd.set("file", file!);
+            fd.set("mode", mode);
             const r = await importExcelAction(fd);
             if (!r.ok) return void toast.error(r.error);
             setReport(r.data);

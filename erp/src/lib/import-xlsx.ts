@@ -1,11 +1,12 @@
 import "server-only";
 import ExcelJS from "exceljs";
-import { eq, sql } from "drizzle-orm";
+import { eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "./db";
 import { counters } from "./db/schema";
 import { getSettings, saveSetting } from "./settings";
 import type { Lists } from "./defaults";
 import { linkSetupExpenses, splitSupplierName, tidySupplierNames } from "./supplier-link";
+import { keyAmount, keyText, mergeRows, statLine } from "./import-merge";
 
 type Cell = ExcelJS.CellValue;
 
@@ -75,6 +76,18 @@ async function bumpCounter(db: DB, key: string, value: number) {
 }
 
 export type ImportReport = Record<string, string>;
+export type ImportMode = "first" | "merge";
+
+/** Column number (1-based) of a header in row 2 matching the pattern, e.g. "Entry ID". */
+function headerCol(ws: ExcelJS.Worksheet | undefined, re: RegExp) {
+  if (!ws) return null;
+  let found: number | null = null;
+  ws.getRow(2).eachCell((cell, col) => {
+    if (found == null && re.test(str(cell.value) ?? "")) found = col;
+  });
+  return found;
+}
+const ENTRY_ID = /entry\s*id/i;
 
 /** Removes pictures / drawings / comments — the import only needs cell values, and ExcelJS can crash on some drawings. */
 async function stripDrawings(buffer: ArrayBuffer) {
@@ -112,7 +125,7 @@ async function loadWorkbook(buffer: ArrayBuffer) {
   }
 }
 
-export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport> {
+export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "first"): Promise<ImportReport> {
   const wb = await loadWorkbook(buffer);
   const db = await getDb();
   const report: ImportReport = {};
@@ -120,7 +133,8 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
 
   /* ── Lists, shop info, piece rates, compositions, incentive slabs ── */
   const L = ws("Lists");
-  if (L) {
+  if (L && mode === "merge") report.Settings = "kept as they are (merge mode does not change lists or shop details)";
+  if (L && mode === "first") {
     const col = (c: number) => {
       const items: string[] = [];
       for (let r = 3; r <= 40; r++) {
@@ -177,7 +191,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
   }
 
   const I = ws("Incentive");
-  if (I) {
+  if (I && mode === "first") {
     const slabs = [5, 6, 7, 8]
       .map((r) => ({ from: n(I.getCell(r, 2).value), to: n(I.getCell(r, 3).value), rate: n(I.getCell(r, 4).value) }))
       .filter((s): s is { from: number; to: number; rate: number } => s.from != null && s.to != null && s.rate != null);
@@ -188,6 +202,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
   {
     let added = 0,
       updated = 0,
+      unchangedStaff = 0,
       maxCode = 0;
     for (const r of rows(ws("Staff"), [2])) {
       const code = str(r.getCell(1).value);
@@ -206,10 +221,13 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
       };
       const m = code?.match(/(\d+)/);
       if (m) maxCode = Math.max(maxCode, Number(m[1]));
-      const [existing] = await db.select({ id: schema.staff.id }).from(schema.staff).where(eq(schema.staff.name, name));
+      const [existing] = await db.select().from(schema.staff).where(eq(schema.staff.name, name));
       if (existing) {
-        await db.update(schema.staff).set(values).where(eq(schema.staff.id, existing.id));
-        updated++;
+        const changed = (Object.keys(values) as (keyof typeof values)[]).some((k) => String(values[k] ?? "") !== String(existing[k] ?? ""));
+        if (changed) {
+          await db.update(schema.staff).set(values).where(eq(schema.staff.id, existing.id));
+          updated++;
+        } else unchangedStaff++;
       } else {
         const [clash] = code ? await db.select({ id: schema.staff.id }).from(schema.staff).where(eq(schema.staff.code, code)) : [];
         const finalCode = code && !clash ? code : `S${String(++maxCode).padStart(2, "0")}`;
@@ -218,7 +236,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
       }
     }
     await bumpCounter(db, "staff", maxCode);
-    report.Staff = `${added} added, ${updated} updated`;
+    report.Staff = `${added} added, ${updated} updated, ${unchangedStaff} unchanged`;
   }
 
   /* ── Suppliers (skipped when the name already exists) ── */
@@ -256,11 +274,15 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
   /* ── Payments on account (money paid later for goods taken on credit) ── */
   {
     const sheet = wb.worksheets.find((w) => /payments?\s*(on|to)?\s*(account|a\s*\/\s*c)/i.test(w.name));
-    const [existing] = await db.select({ c: sql<number>`count(*)`.mapWith(Number) }).from(schema.supplierPayments);
-    if (sheet && existing.c === 0) {
-      let added = 0;
+    const [existingCount] = await db.select({ c: sql<number>`count(*)`.mapWith(Number) }).from(schema.supplierPayments);
+    if (!sheet) report["Payments on Account"] = "sheet not found in this file — add the supplier payments with Suppliers → Pay supplier";
+    else if (mode === "first" && existingCount.c > 0) report["Payments on Account"] = "skipped (supplier payments already exist — use Merge mode)";
+    else {
       const all = await db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers);
       const norm = (x: string) => x.toLowerCase().replace(/&/g, "and").replace(/[^a-z0-9]/g, "");
+      const idCol = headerCol(sheet, ENTRY_ID);
+      const today = new Date().toISOString().slice(0, 10);
+      const incoming = [];
       for (const r of rows(sheet, [2, 3])) {
         const name = str(r.getCell(2).value)!;
         const amount = n(r.getCell(3).value);
@@ -272,42 +294,93 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
           all.push(sup);
         }
         const date = d(r.getCell(1).value);
-        const note = [str(r.getCell(6).value), date ? null : "(date not filled in Excel — set to import day)"].filter(Boolean).join(" ");
-        await db.insert(schema.supplierPayments).values({
-          supplierId: sup.id,
-          date: date ?? new Date().toISOString().slice(0, 10),
-          amount,
-          mode: str(r.getCell(4).value) ?? "Cash",
-          ref: str(r.getCell(5).value),
-          paidBy: null, // Excel doesn't say who paid — kept out of the cash book, like the workbook
-          note: note || null,
+        const note = [str(r.getCell(6).value), date ? null : "(date not filled in Excel — set to import day)"].filter(Boolean).join(" ") || null;
+        incoming.push({
+          key: `${date ?? "nodate"}|${sup.id}|${keyAmount(amount)}`,
+          loose: date ? `${date}|${sup.id}` : undefined,
+          entryId: idCol ? str(r.getCell(idCol).value) : null,
+          values: { supplierId: sup.id, ...(date ? { date } : {}), amount, mode: str(r.getCell(4).value) ?? "Cash", ref: str(r.getCell(5).value), note } as Record<string, unknown>,
+          hasDate: !!date,
         });
-        added++;
       }
-      report["Payments on Account"] = `${added} imported`;
-    } else if (sheet) report["Payments on Account"] = "skipped (supplier payments already exist)";
-    else report["Payments on Account"] = "sheet not found in this file — add the supplier payments with Suppliers → Pay supplier";
+      const existing = (await db.select().from(schema.supplierPayments)).map((e) => ({
+        id: e.id,
+        entryId: e.entryId,
+        key: `${e.date}|${e.supplierId}|${keyAmount(e.amount)}`,
+        loose: `${e.date}|${e.supplierId}`,
+        values: e as unknown as Record<string, unknown>,
+      }));
+      const stats = await mergeRows({
+        incoming,
+        existing,
+        compare: ["date", "amount", "mode", "ref", "note"],
+        insert: async (v, entryId) => {
+          await db.insert(schema.supplierPayments).values({ ...(v as object), date: (v.date as string) ?? today, paidBy: null, entryId } as typeof schema.supplierPayments.$inferInsert);
+        },
+        update: async (id, v, entryId) => {
+          await db.update(schema.supplierPayments).set({ ...(v as object), entryId }).where(eq(schema.supplierPayments.id, id));
+        },
+        // rows with no date in Excel were stored with the import day: match them by supplier + amount + that note
+        fallback: (row, free) =>
+          row.key.startsWith("nodate|")
+            ? (free.find((e) => e.values.supplierId === row.values.supplierId && keyAmount(e.values.amount) === keyAmount(row.values.amount) && /date not filled/i.test(String(e.values.note ?? "")))?.id ?? null)
+            : null,
+      });
+      report["Payments on Account"] = statLine(stats);
+    }
   }
 
   /* ── Setup expenses ── */
-  if (await isEmpty(db, schema.setupExpenses)) {
-    const list = rows(ws("Setup Expenses"), [1, 2])
+  {
+    const sheet = ws("Setup Expenses");
+    const idCol = headerCol(sheet, ENTRY_ID);
+    const parsed = rows(sheet, [1, 2])
       .map((r) => ({
-        date: d(r.getCell(1).value),
-        category: str(r.getCell(2).value)!,
-        description: str(r.getCell(3).value),
-        paidTo: str(r.getCell(4).value),
-        paidBy: str(r.getCell(5).value) ?? "Business Account",
-        amount: n(r.getCell(6).value),
-        mode: str(r.getCell(7).value),
-        billNo: str(r.getCell(8).value),
-        hasBill: yes(r.getCell(9).value),
-        remarks: str(r.getCell(10).value),
+        entryId: idCol ? str(r.getCell(idCol).value) : null,
+        values: {
+          date: d(r.getCell(1).value),
+          category: str(r.getCell(2).value)!,
+          description: str(r.getCell(3).value),
+          paidTo: str(r.getCell(4).value),
+          paidBy: str(r.getCell(5).value) ?? "Business Account",
+          amount: n(r.getCell(6).value),
+          mode: str(r.getCell(7).value),
+          billNo: str(r.getCell(8).value),
+          hasBill: yes(r.getCell(9).value),
+          remarks: str(r.getCell(10).value),
+        },
       }))
-      .filter((x): x is typeof x & { date: string; amount: number } => !!x.date && x.amount != null);
-    if (list.length) await db.insert(schema.setupExpenses).values(list);
-    report["Setup Expenses"] = `${list.length} imported`;
-  } else report["Setup Expenses"] = "skipped (already has data)";
+      .filter((x) => !!x.values.date && x.values.amount != null);
+    const setupKey = (v: { date: unknown; paidTo: unknown; amount: unknown }) => `${v.date}|${keyText(v.paidTo)}|${keyAmount(v.amount)}`;
+    if (mode === "first") {
+      if (await isEmpty(db, schema.setupExpenses)) {
+        const keys = new Map<string, number>();
+        const list = parsed.map((x) => {
+          const k = setupKey(x.values);
+          const occ = (keys.get(k) ?? 0) + 1;
+          keys.set(k, occ);
+          return { ...(x.values as typeof x.values & { date: string; amount: number }), entryId: x.entryId ? `id:${keyText(x.entryId)}` : `${k}#${occ}` };
+        });
+        if (list.length) await db.insert(schema.setupExpenses).values(list);
+        report["Setup Expenses"] = `${list.length} imported`;
+      } else report["Setup Expenses"] = "skipped (already has data — use Merge mode)";
+    } else {
+      const setupLoose = (v: { date: unknown; paidTo: unknown }) => `${v.date}|${keyText(v.paidTo)}`;
+      const existing = (await db.select().from(schema.setupExpenses)).map((e) => ({ id: e.id, entryId: e.entryId, key: setupKey(e), loose: setupLoose(e), values: e as unknown as Record<string, unknown> }));
+      const stats = await mergeRows({
+        incoming: parsed.map((x) => ({ key: setupKey(x.values), loose: setupLoose(x.values), entryId: x.entryId, values: x.values as Record<string, unknown> })),
+        existing,
+        compare: ["date", "paidTo", "amount", "category", "description", "paidBy", "mode", "billNo", "hasBill", "remarks"],
+        insert: async (v, entryId) => {
+          await db.insert(schema.setupExpenses).values({ ...(v as object), entryId } as typeof schema.setupExpenses.$inferInsert);
+        },
+        update: async (id, v, entryId) => {
+          await db.update(schema.setupExpenses).set({ ...(v as object), entryId }).where(eq(schema.setupExpenses.id, id));
+        },
+      });
+      report["Setup Expenses"] = statLine(stats);
+    }
+  }
 
   /* ── Opening stock & assets ── */
   if (await isEmpty(db, schema.openingStock)) {
@@ -323,7 +396,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
     }));
     if (list.length) await db.insert(schema.openingStock).values(list);
     report["Opening Stock"] = `${list.length} imported`;
-  } else report["Opening Stock"] = "skipped (already has data)";
+  } else report["Opening Stock"] = mode === "merge" ? "not merged (only filled when empty) — edit on the Opening Stock page" : "skipped (already has data)";
 
   /* ── Customers ── */
   if (await isEmpty(db, schema.customers)) {
@@ -345,7 +418,7 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
     if (list.length) await db.insert(schema.customers).values(list);
     await bumpCounter(db, "C", Math.max(max, list.length));
     report.Customers = `${list.length} imported`;
-  } else report.Customers = "skipped (already has data)";
+  } else report.Customers = mode === "merge" ? "not merged (only filled when empty)" : "skipped (already has data)";
 
   /* ── Fabric stock ── */
   if (await isEmpty(db, schema.fabrics)) {
@@ -376,58 +449,118 @@ export async function importWorkbook(buffer: ArrayBuffer): Promise<ImportReport>
     if (list.length) await db.insert(schema.fabrics).values(list);
     for (const [p, v] of Object.entries(perPrefix)) await bumpCounter(db, `fabric:${p}`, v);
     report["Fabric Stock"] = `${list.length} imported`;
-  } else report["Fabric Stock"] = "skipped (already has data)";
+  } else report["Fabric Stock"] = mode === "merge" ? "not merged (only filled when empty)" : "skipped (already has data)";
 
   /* ── Cash book (manual entries) ── */
-  if (await isEmpty(db, schema.cashBook)) {
-    const list = rows(ws("Cash Book"), [1, 2])
+  {
+    const sheet = ws("Cash Book");
+    const idCol = headerCol(sheet, ENTRY_ID);
+    const parsed = rows(sheet, [1, 2])
       .map((r) => ({
-        date: d(r.getCell(1).value),
-        particulars: str(r.getCell(2).value)!,
-        category: str(r.getCell(3).value) ?? "Other Expense",
-        amountIn: n(r.getCell(4).value) ?? 0,
-        amountOut: n(r.getCell(5).value) ?? 0,
-        mode: str(r.getCell(6).value) ?? "Cash",
-        remarks: str(r.getCell(8).value),
-        partner: str(r.getCell(9).value),
+        entryId: idCol ? str(r.getCell(idCol).value) : null,
+        values: {
+          date: d(r.getCell(1).value),
+          particulars: str(r.getCell(2).value)!,
+          category: str(r.getCell(3).value) ?? "Other Expense",
+          amountIn: n(r.getCell(4).value) ?? 0,
+          amountOut: n(r.getCell(5).value) ?? 0,
+          mode: str(r.getCell(6).value) ?? "Cash",
+          remarks: str(r.getCell(8).value),
+          partner: str(r.getCell(9).value),
+        },
       }))
-      .filter((x): x is typeof x & { date: string } => !!x.date);
-    if (list.length) await db.insert(schema.cashBook).values(list);
-    report["Cash Book"] = `${list.length} imported`;
-  } else report["Cash Book"] = "skipped (already has entries)";
+      .filter((x) => !!x.values.date);
+    const cashKey = (v: { date: unknown; particulars: unknown; amountIn: unknown; amountOut: unknown }) =>
+      `${v.date}|${keyText(v.particulars)}|${keyAmount(v.amountIn)}|${keyAmount(v.amountOut)}`;
+    if (mode === "first") {
+      if (await isEmpty(db, schema.cashBook)) {
+        const list = parsed.map((x) => x.values as typeof x.values & { date: string });
+        if (list.length) await db.insert(schema.cashBook).values(list);
+        report["Cash Book"] = `${list.length} imported`;
+      } else report["Cash Book"] = "skipped (already has entries — use Merge mode)";
+    } else {
+      // only hand-entered rows take part; automatic entries (bills, payments …) are never touched
+      const existing = (await db.select().from(schema.cashBook).where(isNull(schema.cashBook.source))).map((e) => ({
+        id: e.id,
+        entryId: e.entryId,
+        key: cashKey(e),
+        loose: `${e.date}|${keyText(e.particulars)}`,
+        values: e as unknown as Record<string, unknown>,
+      }));
+      const stats = await mergeRows({
+        incoming: parsed.map((x) => ({ key: cashKey(x.values), loose: `${x.values.date}|${keyText(x.values.particulars)}`, entryId: x.entryId, values: x.values as Record<string, unknown> })),
+        existing,
+        compare: ["date", "particulars", "amountIn", "amountOut", "category", "mode", "remarks", "partner"],
+        insert: async (v, entryId) => {
+          await db.insert(schema.cashBook).values({ ...(v as object), entryId } as typeof schema.cashBook.$inferInsert);
+        },
+        update: async (id, v, entryId) => {
+          await db.update(schema.cashBook).set({ ...(v as object), entryId }).where(eq(schema.cashBook.id, id));
+        },
+      });
+      report["Cash Book"] = statLine(stats);
+    }
+  }
 
   /* ── Purchases ── */
-  if (await isEmpty(db, schema.purchases)) {
-    const list = [];
-    for (const r of rows(ws("Purchases"), [1, 2])) {
+  {
+    const sheet = ws("Purchases");
+    const idCol = headerCol(sheet, ENTRY_ID);
+    const parsed = [];
+    for (const r of rows(sheet, [1, 2])) {
       const date = d(r.getCell(1).value);
       if (!date) continue;
       const supplierName = str(r.getCell(2).value)!;
-      let [sup] = await db.select({ id: schema.suppliers.id }).from(schema.suppliers).where(eq(schema.suppliers.name, supplierName));
+      let [sup] = await db.select({ id: schema.suppliers.id }).from(schema.suppliers).where(sql`lower(${schema.suppliers.name}) = lower(${supplierName})`);
       if (!sup) [sup] = await db.insert(schema.suppliers).values({ name: supplierName }).returning({ id: schema.suppliers.id });
       const qty = n(r.getCell(5).value) ?? 0;
       const rate = n(r.getCell(6).value) ?? 0;
-      const taxable = qty * rate;
-      const gstPct = n(r.getCell(8).value) ?? 0;
-      const gstAmount = taxable * (gstPct > 1 ? gstPct / 100 : gstPct);
-      list.push({
-        date,
-        supplierId: sup.id,
-        invoiceNo: str(r.getCell(3).value),
-        description: str(r.getCell(4).value),
-        qty,
-        rate,
-        taxable,
-        gstPct: gstPct > 1 ? gstPct : gstPct * 100,
-        gstAmount,
-        total: taxable + gstAmount,
-        paid: n(r.getCell(11).value) ?? 0,
-        remarks: str(r.getCell(13).value),
+      const taxable = Math.round(qty * rate * 100) / 100;
+      const gstRaw = n(r.getCell(8).value) ?? 0;
+      const gstPct = gstRaw > 1 ? gstRaw : gstRaw * 100;
+      const gstAmount = Math.round(((taxable * gstPct) / 100) * 100) / 100;
+      parsed.push({
+        entryId: idCol ? str(r.getCell(idCol).value) : null,
+        values: {
+          date,
+          supplierId: sup.id,
+          invoiceNo: str(r.getCell(3).value),
+          description: str(r.getCell(4).value),
+          qty,
+          rate,
+          taxable,
+          gstPct,
+          gstAmount,
+          total: Math.round((taxable + gstAmount) * 100) / 100,
+          paid: n(r.getCell(11).value) ?? 0,
+          remarks: str(r.getCell(13).value),
+        },
       });
     }
-    if (list.length) await db.insert(schema.purchases).values(list);
-    report.Purchases = `${list.length} imported`;
-  } else report.Purchases = "skipped (already has data)";
+    const purchaseKey = (v: { date: unknown; supplierId: unknown; total: unknown }) => `${v.date}|${v.supplierId}|${keyAmount(v.total)}`;
+    if (mode === "first") {
+      if (await isEmpty(db, schema.purchases)) {
+        const list = parsed.map((x) => x.values);
+        if (list.length) await db.insert(schema.purchases).values(list);
+        report.Purchases = `${list.length} imported`;
+      } else report.Purchases = "skipped (already has data — use Merge mode)";
+    } else {
+      const purchaseLoose = (v: { date: unknown; supplierId: unknown; invoiceNo: unknown }) => `${v.date}|${v.supplierId}|${keyText(v.invoiceNo)}`;
+      const existing = (await db.select().from(schema.purchases)).map((e) => ({ id: e.id, entryId: e.entryId, key: purchaseKey(e), loose: purchaseLoose(e), values: e as unknown as Record<string, unknown> }));
+      const stats = await mergeRows({
+        incoming: parsed.map((x) => ({ key: purchaseKey(x.values), loose: purchaseLoose(x.values), entryId: x.entryId, values: x.values as Record<string, unknown> })),
+        existing,
+        compare: ["date", "invoiceNo", "description", "qty", "rate", "taxable", "gstPct", "gstAmount", "total", "paid", "remarks"],
+        insert: async (v, entryId) => {
+          await db.insert(schema.purchases).values({ ...(v as object), entryId } as typeof schema.purchases.$inferInsert);
+        },
+        update: async (id, v, entryId) => {
+          await db.update(schema.purchases).set({ ...(v as object), entryId }).where(eq(schema.purchases.id, id));
+        },
+      });
+      report.Purchases = statLine(stats);
+    }
+  }
 
   /* ── Link setup expenses to suppliers by "Paid to" (and tidy old bracket names) ── */
   const tidied = await tidySupplierNames(db);

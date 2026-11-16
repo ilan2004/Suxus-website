@@ -58,3 +58,27 @@ export function plainAmount(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return null;
   return new Intl.NumberFormat("en-IN", { maximumFractionDigits: 2 }).format(n);
 }
+
+/** Placeholders that come from the record (an order) — a template that needs one is only offered when it has a value. */
+const RECORD_KEYS: PlaceholderKey[] = ["order_no", "item", "amount", "date", "balance"];
+
+/**
+ * Can this template be sent for this record? Greeting and Offer templates always can.
+ * Order / Payment templates need every order placeholder they use; {balance} must be more than 0.
+ */
+export function templateAvailability(t: { category: string; body: string }, values: PlaceholderValues): { ok: true } | { ok: false; reason: string } {
+  if (t.category === "Greeting" || t.category === "Offer") return { ok: true };
+  const used = new Set(Array.from(t.body.matchAll(/\{([a-z_]+)\}/g), (m) => m[1]));
+  const empty = (k: PlaceholderKey) => {
+    const v = values[k];
+    if (v == null || String(v).trim() === "") return true;
+    if (k === "balance" || k === "amount") return Number(String(v).replace(/[^\d.]/g, "")) <= 0;
+    return false;
+  };
+  const missing = RECORD_KEYS.filter((k) => used.has(k) && empty(k));
+  if (!missing.length) return { ok: true };
+  if (empty("order_no") && (missing.includes("order_no") || missing.some((k) => k !== "balance"))) return { ok: false, reason: "No order for this customer" };
+  if (missing.includes("balance")) return { ok: false, reason: "No balance due" };
+  if (missing.includes("date")) return { ok: false, reason: "No delivery date on the order" };
+  return { ok: false, reason: `No ${missing.join(", ")} for this record` };
+}

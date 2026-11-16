@@ -504,3 +504,27 @@ export const customerMessages = pgTable(
   },
   (t) => [index("customer_messages_customer_idx").on(t.customerId)],
 );
+
+/* ───────────────────────── Contact import ───────────────────────── */
+
+/**
+ * Phone contacts uploaded on Customers → Import contacts. Kept between sittings so a long list can be
+ * worked through over many days. status: pending (not yet reviewed) | added | skipped | invalid (phone unreadable).
+ */
+export const contactImports = pgTable(
+  "contact_imports",
+  {
+    id: serial("id").primaryKey(),
+    name: text("name").notNull(),
+    /** Clean 10-digit mobile; null when it could not be read. */
+    phone: text("phone"),
+    rawPhone: text("raw_phone"),
+    status: text("status").notNull().default("pending"),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    source: text("source"), // file name
+    reviewedBy: text("reviewed_by"),
+    createdAt: created(),
+    updatedAt: updated(),
+  },
+  (t) => [uniqueIndex("contact_imports_phone_uq").on(t.phone), index("contact_imports_status_idx").on(t.status)],
+);

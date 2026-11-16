@@ -17,6 +17,7 @@ import {
   fillTemplate,
   isValidIndianMobile,
   plainAmount,
+  templateAvailability,
   waMeLink,
   type PlaceholderValues,
 } from "@/lib/message-template";
@@ -86,7 +87,11 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
     });
   };
 
-  const list = (data?.templates ?? []).filter((t) => cat === "All" || t.category === cat);
+  // Templates this record can't fill (e.g. "Payment due" with nothing due) go to the bottom, greyed out with the reason.
+  const list = (data?.templates ?? [])
+    .filter((t) => cat === "All" || t.category === cat)
+    .map((t) => ({ t, a: templateAvailability(t, values) }))
+    .sort((x, y) => Number(y.a.ok) - Number(x.a.ok));
 
   return (
     // Stops clicks inside the dialog from reaching a clickable table row behind it (React events bubble through portals).
@@ -139,8 +144,15 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
                   </p>
                 )}
                 {!loading &&
-                  list.map((t) => (
-                    <button key={t.id} type="button" onClick={() => choose(t)} className="group flex items-start gap-3 rounded-lg border bg-card p-3 text-left hover:border-primary/40 hover:bg-muted/40">
+                  list.map(({ t, a }) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      disabled={!a.ok}
+                      title={a.ok ? undefined : a.reason}
+                      onClick={() => choose(t)}
+                      className="group flex items-start gap-3 rounded-lg border bg-card p-3 text-left enabled:hover:border-primary/40 enabled:hover:bg-muted/40 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
                       <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-2">
                           <span className="truncate text-sm font-medium">{t.name}</span>
@@ -148,7 +160,11 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
                             {t.category}
                           </Badge>
                         </span>
-                        <span className="mt-1 line-clamp-2 block font-ml text-xs whitespace-pre-line text-muted-foreground">{fillTemplate(t.body, allValues)}</span>
+                        {a.ok ? (
+                          <span className="mt-1 line-clamp-2 block font-ml text-xs whitespace-pre-line text-muted-foreground">{fillTemplate(t.body, allValues)}</span>
+                        ) : (
+                          <span className="mt-1 block text-xs text-muted-foreground">{a.reason}</span>
+                        )}
                       </span>
                       <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground/50 group-hover:translate-x-0.5" />
                     </button>

@@ -3,6 +3,9 @@ import { c } from "@/lib/db/sql";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
+import Link from "next/link";
+import { ContactRound } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { PageHeader } from "@/components/app/page-header";
 import { CustomersTable } from "./customers-table";
 
@@ -34,7 +37,18 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
 
   return (
     <>
-      <PageHeader title="Customers" ml="കസ്റ്റമർ ലിസ്റ്റ്" description={`${rows.length} customers`} />
+      <PageHeader
+        title="Customers"
+        ml="കസ്റ്റമർ ലിസ്റ്റ്"
+        description={`${rows.length} customers`}
+        actions={
+          <Button asChild variant="outline">
+            <Link href="/customers/import">
+              <ContactRound /> Import contacts <span className="ml">കോൺടാക്ട് ചേർക്കുക</span>
+            </Link>
+          </Button>
+        }
+      />
       <CustomersTable rows={rows} types={lists.customerType} openNew={openNew === "1"} />
     </>
   );

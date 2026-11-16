@@ -7,6 +7,7 @@ import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextNumber, pad } from "@/lib/numbering";
+import { rememberDeleted } from "@/lib/import-tombstone";
 import { getSetting } from "@/lib/settings";
 import { fail, money, ok, optDate, optId, optText, zodError, type Result } from "./util";
 import { createUploadTargets, deletePhotos, isOurPhotoUrl, storageMode, type UploadTarget } from "@/lib/storage";
@@ -79,6 +80,7 @@ export async function deleteFabric(id: number): Promise<Result<"deleted" | "deac
     revalidatePath("/fabrics");
     return ok("deactivated");
   }
+  await rememberDeleted(db, "fabric", [id]);
   const [gone] = await db.delete(schema.fabrics).where(eq(schema.fabrics.id, id)).returning();
   if (gone) await deletePhotos([...gone.photoUrls, ...gone.thumbUrls]);
   await audit(db, user, "delete", "fabric", id);

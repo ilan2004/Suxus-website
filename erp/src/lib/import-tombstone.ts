@@ -4,7 +4,7 @@ import type { DB, Tx } from "./db";
 import { schema } from "./db";
 import { keyAmount, keyText } from "./import-merge";
 
-export type TombEntity = "setup_expense" | "purchase" | "cash_book" | "supplier_payment";
+export type TombEntity = "setup_expense" | "purchase" | "cash_book" | "supplier_payment" | "fabric" | "opening_stock";
 
 /**
  * Remember deleted rows so that a later Merge import of the Excel book does not add them back.
@@ -42,6 +42,19 @@ export async function rememberDeleted(db: DB | Tx, entity: TombEntity, ids: numb
       occ.set(base, n);
       if (ids.includes(r.id)) keys.push({ entryId: r.entryId ?? `${base}#${n}`, summary: `${r.date} ${r.particulars}` });
     }
+  } else if (entity === "fabric") {
+    // Fabric Stock is keyed on its Code column
+    const all = await db.select({ id: s.fabrics.id, code: s.fabrics.code, brand: s.fabrics.brand }).from(s.fabrics).where(inArray(s.fabrics.id, ids));
+    for (const r of all) keys.push({ entryId: fabricImportKey(r.code), summary: `${r.code} ${r.brand}` });
+  } else if (entity === "opening_stock") {
+    const all = await db.select().from(s.openingStock).orderBy(asc(s.openingStock.id));
+    const occ = new Map<string, number>();
+    for (const r of all) {
+      const base = openingStockKey(r);
+      const n = (occ.get(base) ?? 0) + 1;
+      occ.set(base, n);
+      if (ids.includes(r.id)) keys.push({ entryId: `${base}#${n}`, summary: `${r.description} · ${r.ownedBy}` });
+    }
   } else {
     const all = await db.select().from(s.supplierPayments).orderBy(asc(s.supplierPayments.id));
     const occ = new Map<string, number>();
@@ -63,3 +76,10 @@ export async function deletedKeys(db: DB | Tx, entity: TombEntity) {
 export async function forgetDeleted(db: DB | Tx, entity: TombEntity, entryIds: string[]) {
   if (entryIds.length) await db.delete(schema.importDeleted).where(and(eq(schema.importDeleted.entity, entity), inArray(schema.importDeleted.entryId, entryIds)));
 }
+
+/** Import key for a Fabric Stock row with a code (the merge engine appends "#1"). */
+export const fabricImportKey = (code: string) => `code:${keyText(code)}#1`;
+
+/** Opening Stock key: Item + Owned By + Value (qty × unit value). */
+export const openingStockKey = (r: { description: unknown; ownedBy: unknown; qty: unknown; unitValue: unknown }) =>
+  `${keyText(r.description)}|${keyText(r.ownedBy)}|${keyAmount(Number(r.qty ?? 0) * Number(r.unitValue ?? 0))}`;

@@ -119,6 +119,7 @@ export async function saveAsset(input: AssetInput): Promise<Result<null>> {
 export async function deleteAsset(id: number): Promise<Result<null>> {
   const user = await requireUser({ partner: true });
   const db = await getDb();
+  await rememberDeleted(db, "opening_stock", [id]);
   await db.delete(schema.openingStock).where(eq(schema.openingStock.id, id));
   await audit(db, user, "delete", "opening_stock", id);
   revalidatePath("/opening-stock");

@@ -3,11 +3,12 @@ import ExcelJS from "exceljs";
 import { eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "./db";
 import { counters } from "./db/schema";
+import { nextNumber } from "./numbering";
 import { getSettings, saveSetting } from "./settings";
 import type { Lists } from "./defaults";
 import { linkSetupExpenses, splitSupplierName, tidySupplierNames } from "./supplier-link";
 import { keyAmount, keyText, mergeRows, statLine } from "./import-merge";
-import { deletedKeys } from "./import-tombstone";
+import { deletedKeys, openingStockKey } from "./import-tombstone";
 
 type Cell = ExcelJS.CellValue;
 
@@ -386,8 +387,8 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
   }
 
   /* ── Opening stock & assets ── */
-  if (await isEmpty(db, schema.openingStock)) {
-    const list = rows(ws("Opening Stock"), [2, 3]).map((r) => ({
+  {
+    const parsed = rows(ws("Opening Stock"), [2, 3]).map((r) => ({
       assetType: str(r.getCell(2).value)!,
       description: str(r.getCell(3).value)!,
       qty: n(r.getCell(4).value) ?? 0,
@@ -397,9 +398,32 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
       valuationDate: d(r.getCell(9).value),
       remarks: str(r.getCell(10).value),
     }));
-    if (list.length) await db.insert(schema.openingStock).values(list);
-    report["Opening Stock"] = `${list.length} imported`;
-  } else report["Opening Stock"] = mode === "merge" ? "not merged (only filled when empty) — edit on the Opening Stock page" : "skipped (already has data)";
+    if (await isEmpty(db, schema.openingStock)) {
+      if (parsed.length) await db.insert(schema.openingStock).values(parsed);
+      report["Opening Stock"] = `${parsed.length} imported`;
+    } else if (mode === "merge") {
+      // Key: Item + Owned By + Value. If only the value changed, a single row with the same Item + Owned By is updated.
+      const loose = (v: { description: unknown; ownedBy: unknown }) => `${keyText(v.description)}|${keyText(v.ownedBy)}`;
+      const existing = (await db.select().from(schema.openingStock)).map((e) => ({ id: e.id, entryId: null, key: openingStockKey(e), loose: loose(e), values: e as unknown as Record<string, unknown> }));
+      const stats = await mergeRows({
+        incoming: parsed.map((v) => ({ key: openingStockKey(v), loose: loose(v), entryId: null, values: v as Record<string, unknown> })),
+        existing,
+        compare: ["assetType", "description", "qty", "unitValue", "ownedBy", "condition", "valuationDate", "remarks"],
+        skip: await deletedKeys(db, "opening_stock"),
+        insert: async (v) => {
+          await db.insert(schema.openingStock).values(v as typeof schema.openingStock.$inferInsert);
+        },
+        update: async (id, v) => {
+          await db.update(schema.openingStock).set({ ...(v as object), updatedAt: new Date() }).where(eq(schema.openingStock.id, id));
+        },
+        fallback: (row, free) => {
+          const c = free.filter((e) => loose(e.values as { description: unknown; ownedBy: unknown }) === loose(row.values as { description: unknown; ownedBy: unknown }));
+          return c.length === 1 ? c[0].id : null;
+        },
+      });
+      report["Opening Stock"] = statLine(stats);
+    } else report["Opening Stock"] = "skipped (already has data — use Merge mode)";
+  }
 
   /* ── Customers ── */
   if (await isEmpty(db, schema.customers)) {
@@ -424,35 +448,93 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
   } else report.Customers = mode === "merge" ? "not merged (only filled when empty)" : "skipped (already has data)";
 
   /* ── Fabric stock ── */
-  if (await isEmpty(db, schema.fabrics)) {
+  {
     const comps = (await getSettings()).compositions;
-    const perPrefix: Record<string, number> = {};
-    const list = rows(ws("Fabric Stock"), [3]).map((r) => {
+    const supplierOf = (remarks: unknown) => String(remarks ?? "").match(/Supplier:\s*([^·]+)/)?.[1]?.trim() ?? "";
+    const parsed = rows(ws("Fabric Stock"), [3]).map((r) => {
       const composition = str(r.getCell(17).value) ?? "Other";
-      const prefix = comps.find((c) => c.name === composition)?.prefix ?? "OTH";
-      let code = str(r.getCell(1).value);
-      if (!code) code = `${prefix}-${String((perPrefix[prefix] ?? 0) + 1).padStart(3, "0")}`;
-      const m = code.match(/^([A-Z]+)-(\d+)$/);
-      if (m) perPrefix[m[1]] = Math.max(perPrefix[m[1]] ?? 0, Number(m[2]));
+      const supplier = str(r.getCell(6).value);
       return {
-        code,
-        barcode: str(r.getCell(2).value),
-        brand: str(r.getCell(3).value)!,
-        type: str(r.getCell(4).value),
-        shade: str(r.getCell(5).value),
-        purchaseDate: d(r.getCell(7).value),
-        purchaseMtr: n(r.getCell(8).value) ?? 0,
-        costPerMtr: n(r.getCell(9).value) ?? 0,
-        saleRate: n(r.getCell(11).value) ?? 0,
-        remarks: [str(r.getCell(6).value) && `Supplier: ${str(r.getCell(6).value)}`, str(r.getCell(15).value)].filter(Boolean).join(" · ") || null,
-        composition,
-        colourFamily: str(r.getCell(18).value),
+        code: str(r.getCell(1).value),
+        prefix: comps.find((c) => c.name === composition)?.prefix ?? "OTH",
+        supplier: supplier ?? "",
+        values: {
+          barcode: str(r.getCell(2).value),
+          brand: str(r.getCell(3).value)!,
+          type: str(r.getCell(4).value),
+          shade: str(r.getCell(5).value),
+          purchaseDate: d(r.getCell(7).value),
+          purchaseMtr: n(r.getCell(8).value) ?? 0,
+          costPerMtr: n(r.getCell(9).value) ?? 0,
+          saleRate: n(r.getCell(11).value) ?? 0,
+          remarks: [supplier && `Supplier: ${supplier}`, str(r.getCell(15).value)].filter(Boolean).join(" · ") || null,
+          composition,
+          colourFamily: str(r.getCell(18).value),
+        },
       };
     });
-    if (list.length) await db.insert(schema.fabrics).values(list);
-    for (const [p, v] of Object.entries(perPrefix)) await bumpCounter(db, `fabric:${p}`, v);
-    report["Fabric Stock"] = `${list.length} imported`;
-  } else report["Fabric Stock"] = mode === "merge" ? "not merged (only filled when empty)" : "skipped (already has data)";
+    const bumpCodes = async (codes: string[]) => {
+      const per: Record<string, number> = {};
+      for (const c of codes) {
+        const m = c.match(/^([A-Z]+)-(\d+)$/);
+        if (m) per[m[1]] = Math.max(per[m[1]] ?? 0, Number(m[2]));
+      }
+      for (const [p, v] of Object.entries(per)) await bumpCounter(db, `fabric:${p}`, v);
+    };
+    if (await isEmpty(db, schema.fabrics)) {
+      const perPrefix: Record<string, number> = {};
+      for (const x of parsed) {
+        const m = x.code?.match(/^([A-Z]+)-(\d+)$/);
+        if (m) perPrefix[m[1]] = Math.max(perPrefix[m[1]] ?? 0, Number(m[2]));
+      }
+      const list = parsed.map((x) => {
+        let code = x.code;
+        if (!code) {
+          perPrefix[x.prefix] = (perPrefix[x.prefix] ?? 0) + 1;
+          code = `${x.prefix}-${String(perPrefix[x.prefix]).padStart(3, "0")}`;
+        }
+        return { ...x.values, code };
+      });
+      if (list.length) await db.insert(schema.fabrics).values(list);
+      for (const [p, v] of Object.entries(perPrefix)) await bumpCounter(db, `fabric:${p}`, v);
+      report["Fabric Stock"] = `${list.length} imported`;
+    } else if (mode === "merge") {
+      // Key: Code (unique). Rows without a code fall back to Quality + Colour + Supplier.
+      const qKey = (brand: unknown, shade: unknown, supplier: unknown) => `q:${keyText(brand)}|${keyText(shade)}|${keyText(supplier)}`;
+      await bumpCodes(parsed.map((x) => x.code ?? "").filter(Boolean)); // new Excel codes never clash with codes the ERP hands out
+      const existing = (await db.select().from(schema.fabrics)).map((e) => ({
+        id: e.id,
+        entryId: null,
+        key: `code:${keyText(e.code)}`,
+        values: { ...e, q: qKey(e.brand, e.shade, supplierOf(e.remarks)) } as unknown as Record<string, unknown>,
+      }));
+      const prefixOf = new Map(parsed.map((x) => [x.values, x.prefix]));
+      const codeOf = new Map(parsed.map((x) => [x.values, x.code]));
+      const stats = await mergeRows({
+        incoming: parsed.map((x) => ({ key: x.code ? `code:${keyText(x.code)}` : qKey(x.values.brand, x.values.shade, x.supplier), entryId: null, values: x.values as Record<string, unknown> })),
+        existing,
+        compare: ["barcode", "brand", "type", "shade", "purchaseDate", "purchaseMtr", "costPerMtr", "saleRate", "remarks", "composition", "colourFamily"],
+        skip: await deletedKeys(db, "fabric"),
+        fallback: (row, free) => {
+          if (!row.key.startsWith("q:")) return null;
+          const c = free.filter((e) => e.values.q === row.key);
+          return c.length === 1 ? c[0].id : null;
+        },
+        insert: async (v) => {
+          let code = codeOf.get(v as never) ?? null;
+          if (!code) {
+            const prefix = prefixOf.get(v as never) ?? "OTH";
+            code = `${prefix}-${String(await nextNumber(db, `fabric:${prefix}`)).padStart(3, "0")}`;
+          }
+          await db.insert(schema.fabrics).values({ ...(v as object), code } as typeof schema.fabrics.$inferInsert);
+        },
+        update: async (id, v) => {
+          await db.update(schema.fabrics).set({ ...(v as object), updatedAt: new Date() }).where(eq(schema.fabrics.id, id));
+        },
+      });
+      report["Fabric Stock"] = statLine(stats);
+    } else report["Fabric Stock"] = "skipped (already has data — use Merge mode)";
+  }
 
   /* ── Cash book (manual entries) ── */
   {

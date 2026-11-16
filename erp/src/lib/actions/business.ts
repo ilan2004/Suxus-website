@@ -9,6 +9,8 @@ import { audit } from "@/lib/audit";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { incentiveFor } from "@/lib/reports";
 import { linkSetupExpenses } from "@/lib/supplier-link";
+import { rememberDeleted } from "@/lib/import-tombstone";
+import { inArray } from "drizzle-orm";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 
 /* ───── Setup & renovation expenses ───── */
@@ -60,15 +62,29 @@ export async function saveSetupExpense(input: SetupInput): Promise<Result<null>>
   return ok(null);
 }
 
-export async function deleteSetupExpense(id: number): Promise<Result<null>> {
+export async function deleteSetupExpense(id: number): Promise<Result<{ deleted: number }>> {
+  return deleteSetupExpenses([id]);
+}
+
+/** Deletes one or more setup expenses. They are remembered, so a Merge import of the Excel will not add them back. */
+export async function deleteSetupExpenses(ids: number[]): Promise<Result<{ deleted: number }>> {
   const user = await requireUser({ partner: true });
+  const clean = [...new Set(ids.filter((n) => Number.isInteger(n) && n > 0))];
+  if (!clean.length) return fail("Nothing selected");
   const db = await getDb();
-  await db.delete(schema.setupExpenses).where(eq(schema.setupExpenses.id, id));
-  await removeCash(db, "setup", id);
-  await audit(db, user, "delete", "setup_expense", id);
+  const deleted = await db.transaction(async (tx) => {
+    await rememberDeleted(tx, "setup_expense", clean);
+    const rows = await tx.delete(schema.setupExpenses).where(inArray(schema.setupExpenses.id, clean)).returning();
+    for (const r of rows) {
+      await removeCash(tx, "setup", r.id);
+      await audit(tx, user, "delete", "setup_expense", r.id, `${r.date} ${r.paidTo ?? ""} ₹${r.amount}`);
+    }
+    return rows.length;
+  });
   revalidatePath("/setup-expenses");
   revalidatePath("/capital");
-  return ok(null);
+  revalidatePath("/suppliers");
+  return ok({ deleted });
 }
 
 /* ───── Opening stock & assets ───── */

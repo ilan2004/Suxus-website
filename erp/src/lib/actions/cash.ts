@@ -7,6 +7,7 @@ import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { fail, money, ok, optText, reqDate, zodError, type Result } from "./util";
+import { rememberDeleted } from "@/lib/import-tombstone";
 
 const CashInput = z
   .object({
@@ -52,6 +53,7 @@ export async function saveCashEntry(input: CashInput): Promise<Result<null>> {
 export async function deleteCashEntry(id: number): Promise<Result<null>> {
   const user = await requireUser({ partner: true });
   const db = await getDb();
+  await rememberDeleted(db, "cash_book", [id]);
   const [row] = await db
     .delete(schema.cashBook)
     .where(and(eq(schema.cashBook.id, id), isNull(schema.cashBook.source)))

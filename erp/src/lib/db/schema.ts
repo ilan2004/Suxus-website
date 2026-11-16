@@ -458,3 +458,15 @@ export const wagePayments = pgTable(
   },
   (t) => [index("wage_payments_tailor_idx").on(t.tailorId)],
 );
+
+/** Rows deleted in the ERP that came from Excel — a Merge import will not add them back. */
+export const importDeleted = pgTable(
+  "import_deleted",
+  {
+    entity: text("entity").notNull(), // setup_expense | purchase | cash_book | supplier_payment
+    entryId: text("entry_id").notNull(),
+    summary: text("summary"),
+    deletedAt: created(),
+  },
+  (t) => [uniqueIndex("import_deleted_pk").on(t.entity, t.entryId)],
+);

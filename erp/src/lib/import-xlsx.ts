@@ -7,6 +7,7 @@ import { getSettings, saveSetting } from "./settings";
 import type { Lists } from "./defaults";
 import { linkSetupExpenses, splitSupplierName, tidySupplierNames } from "./supplier-link";
 import { keyAmount, keyText, mergeRows, statLine } from "./import-merge";
+import { deletedKeys } from "./import-tombstone";
 
 type Cell = ExcelJS.CellValue;
 
@@ -314,6 +315,7 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
         incoming,
         existing,
         compare: ["date", "amount", "mode", "ref", "note"],
+        skip: await deletedKeys(db, "supplier_payment"),
         insert: async (v, entryId) => {
           await db.insert(schema.supplierPayments).values({ ...(v as object), date: (v.date as string) ?? today, paidBy: null, entryId } as typeof schema.supplierPayments.$inferInsert);
         },
@@ -371,6 +373,7 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
         incoming: parsed.map((x) => ({ key: setupKey(x.values), loose: setupLoose(x.values), entryId: x.entryId, values: x.values as Record<string, unknown> })),
         existing,
         compare: ["date", "paidTo", "amount", "category", "description", "paidBy", "mode", "billNo", "hasBill", "remarks"],
+        skip: await deletedKeys(db, "setup_expense"),
         insert: async (v, entryId) => {
           await db.insert(schema.setupExpenses).values({ ...(v as object), entryId } as typeof schema.setupExpenses.$inferInsert);
         },
@@ -491,6 +494,7 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
         incoming: parsed.map((x) => ({ key: cashKey(x.values), loose: `${x.values.date}|${keyText(x.values.particulars)}`, entryId: x.entryId, values: x.values as Record<string, unknown> })),
         existing,
         compare: ["date", "particulars", "amountIn", "amountOut", "category", "mode", "remarks", "partner"],
+        skip: await deletedKeys(db, "cash_book"),
         insert: async (v, entryId) => {
           await db.insert(schema.cashBook).values({ ...(v as object), entryId } as typeof schema.cashBook.$inferInsert);
         },
@@ -551,6 +555,7 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
         incoming: parsed.map((x) => ({ key: purchaseKey(x.values), loose: purchaseLoose(x.values), entryId: x.entryId, values: x.values as Record<string, unknown> })),
         existing,
         compare: ["date", "invoiceNo", "description", "qty", "rate", "taxable", "gstPct", "gstAmount", "total", "paid", "remarks"],
+        skip: await deletedKeys(db, "purchase"),
         insert: async (v, entryId) => {
           await db.insert(schema.purchases).values({ ...(v as object), entryId } as typeof schema.purchases.$inferInsert);
         },

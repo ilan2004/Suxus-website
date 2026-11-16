@@ -17,7 +17,7 @@ import { TableCell, TableRow } from "@/components/ui/table";
 import { Field } from "@/components/app/field";
 import { ListSelect, SearchSelect } from "@/components/app/search-select";
 import { StatCard } from "@/components/app/stat-card";
-import { deleteSetupExpense, saveSetupExpense, type SetupInput } from "@/lib/actions/business";
+import { deleteSetupExpense, deleteSetupExpenses, saveSetupExpense, type SetupInput } from "@/lib/actions/business";
 import { cn, fmtDate, rupees, today } from "@/lib/utils";
 
 type Row = {
@@ -47,6 +47,15 @@ export function SetupView({
   const router = useRouter();
   const [edit, setEdit] = React.useState<SetupInput | null>(null);
   const [cat, setCat] = React.useState<string | null>(null);
+  const [picked, setPicked] = React.useState<Set<number>>(new Set());
+  const [deleting, startDelete] = React.useTransition();
+  const togglePick = (id: number) =>
+    setPicked((cur) => {
+      const n = new Set(cur);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
   const total = rows.reduce((s, r) => s + r.amount, 0);
   const byPartner = lists.partner.map((p) => ({ p, v: rows.filter((r) => r.paidBy === p).reduce((s, r) => s + r.amount, 0) })).filter((x) => x.v !== 0);
   const byCat = Object.entries(rows.reduce<Record<string, number>>((a, r) => ((a[r.category] = (a[r.category] ?? 0) + r.amount), a), {})).sort((a, b) => b[1] - a[1]);
@@ -54,10 +63,27 @@ export function SetupView({
   const data = rows.filter((r) => !cat || r.category === cat);
 
   const columns: ColumnDef<Row>[] = [
+    {
+      id: "pick",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          data-no-row-click
+          aria-label="Select row"
+          className="size-5 accent-[var(--primary)]"
+          checked={picked.has(row.original.id)}
+          onChange={() => togglePick(row.original.id)}
+        />
+      ),
+    },
     { accessorKey: "date", header: "Date", cell: ({ row }) => fmtDate(row.original.date) },
     { accessorKey: "category", header: "Category", cell: ({ row }) => <span className="text-xs">{row.original.category}</span> },
     {
-      accessorKey: "description",
+      // searchable by Description and Paid To
+      id: "description",
+      accessorFn: (r) => `${r.description ?? ""} ${r.paidTo ?? ""} ${r.billNo ?? ""}`,
       header: "Description",
       cell: ({ row }) => (
         <div className="max-w-80">
@@ -114,11 +140,38 @@ export function SetupView({
         columns={columns}
         data={data}
         onRowClick={(r) => setEdit({ ...r })}
-        searchPlaceholder="Search description, paid to, bill no…"
+        searchPlaceholder="Search paid to, description, bill no, amount…"
         toolbar={
-          <Button onClick={() => setEdit({ date: today(), category: lists.setupCategory[0], paidBy: lists.partner[0], amount: 0, mode: "Cash", hasBill: false })}>
-            <Plus /> Add expense
-          </Button>
+          <>
+            {picked.size > 0 && (
+              <>
+                <Button variant="ghost" onClick={() => setPicked(new Set())}>
+                  Clear ({picked.size})
+                </Button>
+                <Button
+                  variant="destructive"
+                  disabled={deleting}
+                  onClick={() => {
+                    const sel = rows.filter((r) => picked.has(r.id));
+                    const list = sel.map((r) => `• ${fmtDate(r.date)}  ${r.paidTo ?? "(no Paid To)"}  ${rupees(r.amount)}`).join("\n");
+                    if (!confirm(`Delete these ${sel.length} entries?\n\n${list}\n\nThey will not come back on the next Excel Merge import.`)) return;
+                    startDelete(async () => {
+                      const r = await deleteSetupExpenses([...picked]);
+                      if (!r.ok) return void toast.error(r.error);
+                      toast.success(`${r.data.deleted} deleted`);
+                      setPicked(new Set());
+                      router.refresh();
+                    });
+                  }}
+                >
+                  {deleting ? <Loader2 className="animate-spin" /> : <Trash2 />} Delete selected ({picked.size})
+                </Button>
+              </>
+            )}
+            <Button onClick={() => setEdit({ date: today(), category: lists.setupCategory[0], paidBy: lists.partner[0], amount: 0, mode: "Cash", hasBill: false })}>
+              <Plus /> Add expense
+            </Button>
+          </>
         }
         footer={(rs) => (
           <TableRow>
@@ -218,8 +271,10 @@ function SetupSheet({
                 variant="ghost"
                 className="mr-auto text-destructive"
                 onClick={async () => {
-                  if (!confirm("Delete this expense?")) return;
-                  await deleteSetupExpense(v.id!);
+                  if (!confirm("Delete this expense? It will not come back on the next Excel Merge import.")) return;
+                  const r = await deleteSetupExpense(v.id!);
+                  if (!r.ok) return void toast.error(r.error);
+                  toast.success("Deleted");
                   onSaved();
                   onClose();
                 }}

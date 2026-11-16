@@ -9,6 +9,7 @@ import { audit } from "@/lib/audit";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
 import { linkSetupExpenses, tidySupplierNames } from "@/lib/supplier-link";
+import { rememberDeleted } from "@/lib/import-tombstone";
 import { fail, money, ok, optId, optText, reqDate, zodError, type Result } from "./util";
 
 /* ───── Purchases (supplier bills) ───── */
@@ -72,6 +73,7 @@ export async function savePurchase(input: PurchaseInput): Promise<Result<{ id: n
 export async function deletePurchase(id: number): Promise<Result<null>> {
   const user = await requireUser({ partner: true });
   const db = await getDb();
+  await rememberDeleted(db, "purchase", [id]);
   await db.delete(schema.purchases).where(eq(schema.purchases.id, id));
   await removeCash(db, "purchase", id);
   await audit(db, user, "delete", "purchase", id);
@@ -168,6 +170,7 @@ export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<R
 export async function deleteSupplierPayment(id: number): Promise<Result<null>> {
   const user = await requireUser({ partner: true });
   const db = await getDb();
+  await rememberDeleted(db, "supplier_payment", [id]);
   const [p] = await db.delete(schema.supplierPayments).where(eq(schema.supplierPayments.id, id)).returning();
   await removeCash(db, "supplier_payment", id);
   await audit(db, user, "delete", "supplier_payment", id);

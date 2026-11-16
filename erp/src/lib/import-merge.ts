@@ -7,7 +7,7 @@ import "server-only";
  * genuine identical rows (same day, same person, same amount) stay two rows.
  * Matching row → fields updated only if something changed; no match → inserted.
  */
-export type MergeStats = { added: number; updated: number; unchanged: number };
+export type MergeStats = { added: number; updated: number; unchanged: number; skipped: number };
 
 export const keyText = (s: unknown) => (s == null ? "" : String(s)).trim().replace(/\s+/g, " ").toLowerCase();
 export const keyAmount = (n: unknown) => Number(n ?? 0).toFixed(2);
@@ -42,10 +42,12 @@ export async function mergeRows<V extends Record<string, unknown>>(opts: {
   compare: (keyof V & string)[];
   insert: (values: V, entryId: string) => Promise<void>;
   update: (id: number, values: V, entryId: string) => Promise<void>;
+  /** Import keys of rows deleted in the ERP — never added back. */
+  skip?: Set<string>;
   /** Optional last-chance match (e.g. rows imported earlier without a date). */
   fallback?: (row: { key: string; values: V }, free: { id: number; values: Record<string, unknown> }[]) => number | null;
 }): Promise<MergeStats> {
-  const stats: MergeStats = { added: 0, updated: 0, unchanged: 0 };
+  const stats: MergeStats = { added: 0, updated: 0, unchanged: 0, skipped: 0 };
   const existing = [...opts.existing].sort((a, b) => a.id - b.id);
   const exFull = withOccurrence(existing.map((e) => e.key));
   const byEntry = new Map<string, (typeof existing)[number]>();
@@ -74,6 +76,10 @@ export async function mergeRows<V extends Record<string, unknown>>(opts: {
       match = id != null ? existing.find((e) => e.id === id) : undefined;
     }
     if (!match) {
+      if (opts.skip?.has(storeKey) || opts.skip?.has(fullKey)) {
+        stats.skipped++;
+        continue;
+      }
       await opts.insert(row.values, storeKey);
       stats.added++;
       continue;
@@ -87,4 +93,5 @@ export async function mergeRows<V extends Record<string, unknown>>(opts: {
   return stats;
 }
 
-export const statLine = (s: MergeStats) => `${s.added} added, ${s.updated} updated, ${s.unchanged} unchanged`;
+export const statLine = (s: MergeStats) =>
+  `${s.added} added, ${s.updated} updated, ${s.unchanged} unchanged${s.skipped ? `, ${s.skipped} skipped (deleted in ERP)` : ""}`;

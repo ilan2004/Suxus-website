@@ -57,6 +57,13 @@
       "when": 1794817862162,
       "tag": "0007_import_entry_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1794830166996,
+      "tag": "0008_import_deleted",
+      "breakpoints": true
     }
   ]
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import { DataTable, type ColumnDef } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { TableCell, TableRow } from "@/components/ui/table";
@@ -39,6 +40,16 @@ export function BulkTable({ rows }: { rows: BulkRow[] }) {
       header: "Balance",
       meta: { align: "right" },
       cell: ({ row }) => (row.original.balance > 0 ? <span className="font-medium text-destructive">{rupees(row.original.balance)}</span> : <span className="text-muted-foreground">—</span>),
+    },
+    {
+      id: "wa",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const o = row.original;
+        const name = o.contactPerson || o.institution;
+        return <WhatsAppTemplateButton variant="icon" phone={o.phone} values={orderMessageValues({ ...o, name })} bulkOrderId={o.id} to={name} />;
+      },
     },
   ];
   return (

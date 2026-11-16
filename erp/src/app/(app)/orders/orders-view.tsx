@@ -1,5 +1,6 @@
 "use client";
 
+import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -237,6 +238,15 @@ function OrderList({ orders }: { orders: OrderRow[] }) {
       header: "Balance",
       meta: { align: "right" },
       cell: ({ row }) => (row.original.balance > 0 ? <span className="font-medium text-destructive">{rupees(row.original.balance)}</span> : <span className="text-muted-foreground">—</span>),
+    },
+    {
+      id: "wa",
+      header: "",
+      enableSorting: false,
+      cell: ({ row }) => {
+        const o = row.original;
+        return <WhatsAppTemplateButton variant="icon" phone={o.phone} values={orderMessageValues({ ...o, name: o.customerName ?? "" })} customerId={o.customerId} orderId={o.id} to={o.customerName ?? o.orderNo} />;
+      },
     },
   ];
   return (

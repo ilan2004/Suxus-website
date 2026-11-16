@@ -15,7 +15,8 @@ import { Empty } from "@/components/app/empty";
 import { CustomerDialog } from "@/components/forms/customer-dialog";
 import { MeasurementCard, MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
 import { deleteCustomer } from "@/lib/actions/customers";
-import { fmtDate, rupees, waLink } from "@/lib/utils";
+import { fmtDate, rupees } from "@/lib/utils";
+import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import type { OrderRow } from "@/lib/queries";
 
 type Customer = {
@@ -28,6 +29,7 @@ type Customer = {
   firstVisit: string | null;
   remarks: string | null;
 };
+type SentMessage = { id: number; sentAt: string; templateName: string | null; text: string; phone: string; sentBy: string | null; orderNo: string | null };
 type Bill = { id: number; billNo: string; date: string; net: number; paymentMode: string; cancelled: boolean; stitchingHere: boolean };
 
 export function CustomerView({
@@ -35,6 +37,7 @@ export function CustomerView({
   orders,
   bills,
   measurements,
+  messages,
   lists,
   canDelete,
 }: {
@@ -42,13 +45,16 @@ export function CustomerView({
   orders: OrderRow[];
   bills: Bill[];
   measurements: MeasurementRow[];
+  messages: SentMessage[];
   lists: { customerType: string[]; fit: string[] };
   canDelete: boolean;
 }) {
   const router = useRouter();
   const [editing, setEditing] = React.useState(false);
   const [mDialog, setMDialog] = React.useState<Partial<MeasurementRow> | null>(null);
-  const wa = waLink(customer.phone);
+  // Order details for {order_no} {item} {date} {balance}: the latest open order, else the latest order.
+  const ctxOrder = orders.find((o) => !["Delivered", "Cancelled"].includes(o.status)) ?? orders.find((o) => o.status !== "Cancelled");
+  const waValues = ctxOrder ? orderMessageValues({ ...ctxOrder, name: customer.name }) : { name: customer.name };
   const due = orders.filter((o) => o.status !== "Cancelled").reduce((s, o) => s + o.balance, 0);
   const business =
     orders.filter((o) => o.status !== "Cancelled").reduce((s, o) => s + o.total, 0) +
@@ -69,9 +75,12 @@ export function CustomerView({
           </div>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
             {customer.phone && (
-              <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1.5 hover:text-foreground">
-                <Phone className="size-3.5" /> {customer.phone}
-              </a>
+              <span className="inline-flex items-center gap-2">
+                <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1.5 hover:text-foreground">
+                  <Phone className="size-3.5" /> {customer.phone}
+                </a>
+                <WhatsAppTemplateButton variant="compact" phone={customer.phone} values={waValues} customerId={customer.id} orderId={ctxOrder?.id} to={customer.name} />
+              </span>
             )}
             {customer.place && (
               <span className="inline-flex items-center gap-1.5">
@@ -83,13 +92,6 @@ export function CustomerView({
           {customer.remarks && <p className="mt-2 text-sm">{customer.remarks}</p>}
         </div>
         <div className="flex flex-wrap gap-2">
-          {wa && (
-            <Button variant="outline" asChild>
-              <a href={wa} target="_blank" rel="noreferrer">
-                <MessageCircle className="text-success" /> WhatsApp
-              </a>
-            </Button>
-          )}
           <Button variant="outline" onClick={() => setEditing(true)}>
             <Pencil /> Edit
           </Button>
@@ -140,6 +142,7 @@ export function CustomerView({
           <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
           <TabsTrigger value="bills">Bills ({bills.length})</TabsTrigger>
           <TabsTrigger value="measurements">Measurements ({measurements.length})</TabsTrigger>
+          <TabsTrigger value="messages">Messages sent ({messages.length})</TabsTrigger>
         </TabsList>
         <TabsContent value="orders">
           {orders.length ? (
@@ -154,6 +157,7 @@ export function CustomerView({
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Total</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
+                    <TableHead className="w-10" />
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -169,6 +173,9 @@ export function CustomerView({
                       <TableCell className="text-right tabular-nums">{rupees(o.total)}</TableCell>
                       <TableCell className="text-right tabular-nums">
                         {o.balance > 0 ? <span className="text-destructive">{rupees(o.balance)}</span> : "—"}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <WhatsAppTemplateButton variant="icon" phone={o.phone || customer.phone} values={orderMessageValues({ ...o, name: customer.name })} customerId={customer.id} orderId={o.id} to={customer.name} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -224,6 +231,28 @@ export function CustomerView({
             </Empty>
           )}
         </TabsContent>
+        <TabsContent value="messages">
+          {messages.length ? (
+            <ul className="grid gap-2">
+              {messages.map((m) => (
+                <li key={m.id} className="rounded-xl border bg-card p-3">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">{fmtDateTime(m.sentAt)}</span>
+                    <Badge variant="secondary">{m.templateName ?? "Own message"}</Badge>
+                    {m.orderNo && <span className="font-mono">{m.orderNo}</span>}
+                    <span>to +91 {m.phone}</span>
+                    {m.sentBy && <span>· by {m.sentBy}</span>}
+                  </div>
+                  <p className="mt-2 font-ml text-sm whitespace-pre-line">{m.text}</p>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <Empty icon={MessageCircle} title="No messages sent yet">
+              <p className="mt-1 text-sm text-muted-foreground">Use the WhatsApp button next to the phone number.</p>
+            </Empty>
+          )}
+        </TabsContent>
       </Tabs>
 
       <CustomerDialog open={editing} onOpenChange={setEditing} initial={customer} types={lists.customerType} onSaved={() => router.refresh()} />
@@ -242,4 +271,8 @@ export function CustomerView({
       />
     </div>
   );
+}
+
+function fmtDateTime(iso: string) {
+  return new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(iso));
 }

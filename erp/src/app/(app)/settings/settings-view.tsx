@@ -13,6 +13,8 @@ import { importExcelAction, updateSetting } from "@/lib/actions/settings";
 import { LIST_LABELS, type ListKey } from "@/lib/defaults";
 import type { AppSettings } from "@/lib/settings";
 import { cn } from "@/lib/utils";
+import type { MessageTemplate } from "@/lib/actions/messages";
+import { TemplatesTab } from "./templates-tab";
 
 function useSave() {
   const router = useRouter();
@@ -27,15 +29,20 @@ function useSave() {
   return { pending, save };
 }
 
-export function SettingsView({ settings }: { settings: AppSettings }) {
+const TABS = ["shop", "lists", "rates", "codes", "slabs", "templates", "import"];
+
+export function SettingsView({ settings, templates, tab }: { settings: AppSettings; templates: MessageTemplate[]; tab?: string }) {
   return (
-    <Tabs defaultValue="shop">
+    <Tabs defaultValue={tab && TABS.includes(tab) ? tab : "shop"}>
       <TabsList className="h-auto flex-wrap">
         <TabsTrigger value="shop">Shop & bills</TabsTrigger>
         <TabsTrigger value="lists">Dropdown lists</TabsTrigger>
         <TabsTrigger value="rates">Piece rates</TabsTrigger>
         <TabsTrigger value="codes">Fabric codes</TabsTrigger>
         <TabsTrigger value="slabs">Incentive slabs</TabsTrigger>
+        <TabsTrigger value="templates">
+          Message templates <span className="ml ml-1">സന്ദേശങ്ങൾ</span>
+        </TabsTrigger>
         <TabsTrigger value="import">Import / Backup</TabsTrigger>
       </TabsList>
       <TabsContent value="shop">
@@ -52,6 +59,9 @@ export function SettingsView({ settings }: { settings: AppSettings }) {
       </TabsContent>
       <TabsContent value="slabs">
         <SlabsForm slabs={settings.slabs} />
+      </TabsContent>
+      <TabsContent value="templates">
+        <TemplatesTab templates={templates} />
       </TabsContent>
       <TabsContent value="import">
         <div className="grid gap-4">

@@ -472,3 +472,35 @@ export const importDeleted = pgTable(
   },
   (t) => [uniqueIndex("import_deleted_pk").on(t.entity, t.entryId)],
 );
+
+/* ───────────────────────── WhatsApp messages ───────────────────────── */
+
+/** Saved WhatsApp message templates (Settings → Message templates). Body may hold {name} {order_no} … placeholders. */
+export const messageTemplates = pgTable("message_templates", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  category: text("category").notNull().default("Greeting"), // Greeting | Order | Payment | Offer
+  body: text("body").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  useCount: integer("use_count").notNull().default(0),
+  createdAt: created(),
+  updatedAt: updated(),
+});
+
+/** Every message sent from the ERP (one customer at a time via wa.me) — shown as "Messages sent" on the customer. */
+export const customerMessages = pgTable(
+  "customer_messages",
+  {
+    id: serial("id").primaryKey(),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "cascade" }),
+    orderId: integer("order_id").references(() => orders.id, { onDelete: "set null" }),
+    bulkOrderId: integer("bulk_order_id").references(() => bulkOrders.id, { onDelete: "set null" }),
+    templateId: integer("template_id").references(() => messageTemplates.id, { onDelete: "set null" }),
+    templateName: text("template_name"),
+    phone: text("phone").notNull(),
+    text: text("text").notNull(),
+    sentBy: text("sent_by"),
+    sentAt: created(),
+  },
+  (t) => [index("customer_messages_customer_idx").on(t.customerId)],
+);

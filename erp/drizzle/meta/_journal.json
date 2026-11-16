@@ -71,6 +71,13 @@
       "when": 1794834481128,
       "tag": "0009_supplier_opening_balance",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1794842257864,
+      "tag": "0010_message_templates",
+      "breakpoints": true
     }
   ]
 }

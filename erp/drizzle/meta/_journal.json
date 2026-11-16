@@ -64,6 +64,13 @@
       "when": 1794830166996,
       "tag": "0008_import_deleted",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1794834481128,
+      "tag": "0009_supplier_opening_balance",
+      "breakpoints": true
     }
   ]
 }

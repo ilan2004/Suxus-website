@@ -95,6 +95,7 @@ const SupplierInput = z.object({
   gstNo: optText,
   supplies: optText,
   aliases: optText,
+  openingBalance: z.coerce.number<number>().min(0, "Opening balance cannot be negative").default(0),
   notes: optText,
 });
 export type SupplierInput = z.input<typeof SupplierInput>;

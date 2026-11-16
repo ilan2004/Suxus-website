@@ -14,13 +14,17 @@ function SheetContent({
   side = "right",
   hideClose,
   ...props
-}: React.ComponentProps<typeof SheetPrimitive.Content> & { side?: "right" | "left"; hideClose?: boolean }) {
+}: React.ComponentProps<typeof SheetPrimitive.Content> & { side?: "right" | "left" | "responsive"; hideClose?: boolean }) {
   return (
     <SheetPrimitive.Portal>
       <SheetPrimitive.Overlay className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0" />
       <SheetPrimitive.Content
         className={cn(
-          "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-300 inset-y-0 h-full overflow-y-auto",
+          "fixed z-50 flex flex-col gap-4 bg-background shadow-lg transition ease-in-out data-[state=closed]:animate-out data-[state=closed]:duration-300 data-[state=open]:animate-in data-[state=open]:duration-300 overflow-y-auto",
+          side !== "responsive" && "inset-y-0 h-full",
+          // Bottom sheet on phones, side drawer from sm up
+          side === "responsive" &&
+            "inset-x-0 bottom-0 max-h-[85dvh] rounded-t-2xl border-t data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:inset-x-auto sm:inset-y-0 sm:right-0 sm:h-full sm:max-h-none sm:w-full sm:max-w-md sm:rounded-none sm:border-t-0 sm:border-l sm:data-[state=closed]:slide-out-to-right sm:data-[state=open]:slide-in-from-right",
           side === "right" && "right-0 w-full border-l data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right sm:max-w-xl",
           side === "left" && "left-0 w-72 border-r data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left",
           className,

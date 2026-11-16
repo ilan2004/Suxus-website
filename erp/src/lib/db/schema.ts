@@ -104,6 +104,8 @@ export const suppliers = pgTable("suppliers", {
   supplies: text("supplies"),
   /** Other names this supplier appears under — GPay name, nickname, shop sign (comma separated). */
   aliases: text("aliases"),
+  /** Money already owed before the book was started — added to the balance due. */
+  openingBalance: money("opening_balance").notNull().default(0),
   notes: text("notes"),
   createdAt: created(),
   updatedAt: updated(),

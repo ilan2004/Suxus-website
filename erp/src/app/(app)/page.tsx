@@ -5,7 +5,8 @@ import { AlertTriangle, CalendarClock, CircleDollarSign, Layers, PackageCheck, P
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
-import { bulkList, fabricsWithStock, ordersWithBalance } from "@/lib/queries";
+import { bulkList, fabricsWithStock, ordersWithBalance, supplierDues } from "@/lib/queries";
+import { SupplierDuesList } from "@/components/app/supplier-dues";
 import { StatCard } from "@/components/app/stat-card";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
@@ -22,7 +23,7 @@ export default async function Dashboard() {
   const from30 = addDays(t, -29);
   const { sales, payments, saleItems } = schema;
 
-  const [orders, fabrics, shop, todaySales, dailySales, dailyPays, todayPays, pendingSales, bulk] = await Promise.all([
+  const [orders, fabrics, shop, todaySales, dailySales, dailyPays, todayPays, pendingSales, bulk, dues] = await Promise.all([
     ordersWithBalance(),
     fabricsWithStock(),
     getSetting("shop"),
@@ -53,6 +54,7 @@ export default async function Dashboard() {
       .from(sales)
       .where(and(eq(sales.stitchingHere, true), isNull(sales.orderId), eq(sales.cancelled, false))),
     bulkList(),
+    supplierDues(),
   ]);
 
   const open = orders.filter((o) => !["Delivered", "Cancelled"].includes(o.status));
@@ -225,6 +227,21 @@ export default async function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-ml">കൊടുക്കാനുള്ളത്</CardTitle>
+          <p className="text-sm text-muted-foreground">Balance to pay suppliers · largest first</p>
+          <CardAction>
+            <Button variant="ghost" size="sm" asChild>
+              <Link href="/suppliers">Suppliers</Link>
+            </Button>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          <SupplierDuesList rows={dues.rows} total={dues.total} today={t} />
+        </CardContent>
+      </Card>
     </div>
   );
 }

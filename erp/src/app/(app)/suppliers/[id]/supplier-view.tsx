@@ -94,7 +94,7 @@ export function SupplierView({
       </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <StatCard label="Taken on credit" ml="കടമായി വാങ്ങിയത്" value={rupees(s.owed)} sub={`Purchases ${rupees(s.billed)} · Setup on credit ${rupees(s.setupCredit)}`} />
+        <StatCard label="Taken on credit" ml="കടമായി വാങ്ങിയത്" value={rupees(s.owed)} sub={`${s.openingBalance ? `Opening ${rupees(s.openingBalance)} · ` : ""}Purchases ${rupees(s.billed)} · Setup on credit ${rupees(s.setupCredit)}`} />
         <StatCard label="Paid on account" ml="കൊടുത്തത്" value={rupees(s.paid)} sub={`${payments.length} payment(s)`} tone="success" />
         <StatCard label="Balance due" ml="കൊടുക്കാനുള്ളത്" value={rupees(s.balance)} tone={s.balance > 0 ? "destructive" : "success"} />
         <StatCard label="Paid on the spot" ml="ഉടനെ കൊടുത്തത്" value={rupees(s.setupPaid)} sub="Setup items not on credit" tone="gold" />
@@ -186,7 +186,7 @@ export function SupplierView({
         onDone={() => router.refresh()}
       />
       <SupplierDialog
-        value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, aliases: s.aliases, notes: s.notes } : null}
+        value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, aliases: s.aliases, openingBalance: s.openingBalance, notes: s.notes } : null}
         onClose={() => setEdit(false)}
         onSaved={() => router.refresh()}
       />

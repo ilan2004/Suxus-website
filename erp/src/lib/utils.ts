@@ -33,6 +33,26 @@ export function fmtDate(iso: string | null | undefined) {
   return `${d}-${m}-${y}`;
 }
 
+/** 11-Nov-2026 */
+export function fmtDateMon(iso: string | null | undefined) {
+  if (!iso) return "";
+  const [y, m, d] = iso.slice(0, 10).split("-");
+  const mon = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][Number(m) - 1] ?? m;
+  return `${d}-${mon}-${y}`;
+}
+
+/** "today", "yesterday", "5 days ago", "3 months ago" — counted in whole days from `ref` (IST today). */
+export function daysAgo(iso: string | null | undefined, ref = today()) {
+  if (!iso) return "";
+  const days = Math.round((Date.parse(ref.slice(0, 10) + "T00:00:00Z") - Date.parse(iso.slice(0, 10) + "T00:00:00Z")) / 86400000);
+  if (days <= 0) return days === 0 ? "today" : "upcoming";
+  if (days === 1) return "yesterday";
+  if (days < 60) return `${days} days ago`;
+  const months = Math.round(days / 30.44);
+  if (months < 24) return `${months} months ago`;
+  return `${Math.round(days / 365.25)} years ago`;
+}
+
 export function monthStart(iso = today()) {
   return iso.slice(0, 8) + "01";
 }

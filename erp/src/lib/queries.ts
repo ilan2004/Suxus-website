@@ -260,6 +260,7 @@ export async function suppliersWithBalance() {
       gstNo: suppliers.gstNo,
       supplies: suppliers.supplies,
       aliases: suppliers.aliases,
+      openingBalance: suppliers.openingBalance,
       notes: suppliers.notes,
       billed,
       paidAtBill,
@@ -270,15 +271,33 @@ export async function suppliersWithBalance() {
     })
     .from(suppliers)
     .orderBy(asc(suppliers.name));
-  // Owed = fabric purchases + setup goods taken on credit − (paid at purchase + payments on account)
-  return rows.map((r) => ({
-    ...r,
-    owed: Math.round((r.billed + r.setupCredit) * 100) / 100,
-    paid: Math.round((r.paidAtBill + r.paidLater) * 100) / 100,
-    balance: Math.round((r.billed + r.setupCredit - r.paidAtBill - r.paidLater) * 100) / 100,
-  }));
+  // Owed = opening balance + fabric purchases + setup goods taken on credit ("Credit (Due)" only)
+  // Balance = owed − (paid at purchase + payments on account)
+  return rows.map((r) => {
+    const opening = Number(r.openingBalance) || 0;
+    const owed = opening + r.billed + r.setupCredit;
+    return {
+      ...r,
+      openingBalance: opening,
+      owed: Math.round(owed * 100) / 100,
+      paid: Math.round((r.paidAtBill + r.paidLater) * 100) / 100,
+      balance: Math.round((owed - r.paidAtBill - r.paidLater) * 100) / 100,
+    };
+  });
 }
 export type SupplierRow = Awaited<ReturnType<typeof suppliersWithBalance>>[number];
+
+/** Suppliers we still owe money to, largest first, plus the total (the "Balance to pay" figure). */
+export async function supplierDues() {
+  const rows = await suppliersWithBalance();
+  const due = rows
+    .filter((r) => r.balance > 0)
+    .sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name))
+    .map((r) => ({ id: r.id, name: r.name, supplies: r.supplies, balance: r.balance, lastPaid: r.lastPaid }));
+  const total = Math.round(due.reduce((s, r) => s + r.balance, 0) * 100) / 100;
+  return { rows: due, total, all: rows };
+}
+export type SupplierDue = Awaited<ReturnType<typeof supplierDues>>["rows"][number];
 
 export async function purchasesList() {
   const db = await getDb();

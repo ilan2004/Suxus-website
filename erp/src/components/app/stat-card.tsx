@@ -12,6 +12,7 @@ export function StatCard({
   tone = "default",
   className,
   href,
+  interactive,
 }: {
   label: string;
   ml?: string;
@@ -22,7 +23,10 @@ export function StatCard({
   className?: string;
   /** Makes the card a link to the records behind the number. */
   href?: string;
+  /** Show the hover border and chevron without a link (the caller wraps the card in a button). */
+  interactive?: boolean;
 }) {
+  const clickable = !!href || !!interactive;
   const toneCls = {
     default: "bg-primary/10 text-primary",
     gold: "bg-gold/20 text-[#8a6a2a] dark:text-gold",
@@ -31,7 +35,7 @@ export function StatCard({
     success: "bg-success/15 text-success",
   }[tone];
   const body = (
-    <div className={cn("group relative h-full rounded-xl border bg-card p-4 shadow-xs", href && "transition-colors hover:border-primary/40", className)}>
+    <div className={cn("group relative h-full rounded-xl border bg-card p-4 shadow-xs", clickable && "cursor-pointer transition-colors hover:border-primary/40", className)}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <p className="text-xs font-medium text-muted-foreground">
@@ -46,7 +50,7 @@ export function StatCard({
           </span>
         )}
       </div>
-      {href && <ChevronRight className="absolute right-3 bottom-3 size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />}
+      {clickable && <ChevronRight className="absolute right-3 bottom-3 size-4 text-muted-foreground/50 transition-transform group-hover:translate-x-0.5" />}
     </div>
   );
   return href ? (

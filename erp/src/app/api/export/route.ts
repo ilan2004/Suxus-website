@@ -181,7 +181,7 @@ export async function GET(req: NextRequest) {
   const sup = await suppliersWithBalance();
   sheet(wb, "Suppliers", "SUPPLIERS & PAYMENT DETAILS", [
     { header: "Supplier", key: "name", width: 30 }, { header: "Type", key: "type" }, { header: "Place", key: "place" }, { header: "Phone", key: "phone", width: 18 }, { header: "UPI ID", key: "upi", width: 22 },
-    { header: "Bank A/c & IFSC", key: "bank", width: 30 }, { header: "GST No", key: "gstNo", width: 18 }, { header: "Supplies", key: "supplies", width: 24 }, { header: "On credit", key: "owed", money: true },
+    { header: "Bank A/c & IFSC", key: "bank", width: 30 }, { header: "GST No", key: "gstNo", width: 18 }, { header: "Supplies", key: "supplies", width: 24 }, { header: "Opening balance", key: "openingBalance", money: true }, { header: "On credit", key: "owed", money: true },
     { header: "Paid on account", key: "paid", money: true }, { header: "Balance due", key: "balance", money: true }, { header: "Setup paid", key: "setupPaid", money: true }, { header: "Notes", key: "notes", width: 40 },
   ], sup);
 

@@ -51,6 +51,17 @@ export function SupplierDialog({ value, onClose, onSaved }: { value: SupplierInp
           <Field label="Other names (GPay name, nickname)" ml="മറ്റ് പേരുകൾ" hint="Comma separated, e.g. SEENATH, LED World — used to find this supplier's payments" className="sm:col-span-2">
             <Input value={v.aliases ?? ""} onChange={(e) => setV({ ...v, aliases: e.target.value })} placeholder="e.g. SEENATH" />
           </Field>
+          <Field label="Opening balance" ml="മുമ്പത്തെ ബാക്കി" hint="Money owed from before the book was started. Added to the balance due." className="sm:col-span-2">
+            <Input
+              type="number"
+              inputMode="decimal"
+              min={0}
+              step="0.01"
+              value={v.openingBalance ? String(v.openingBalance) : ""}
+              onChange={(e) => setV({ ...v, openingBalance: e.target.value === "" ? 0 : Number(e.target.value) })}
+              placeholder="0"
+            />
+          </Field>
           <Field label="Notes" ml="കുറിപ്പ്" className="sm:col-span-2">
             <Textarea value={v.notes ?? ""} onChange={(e) => setV({ ...v, notes: e.target.value })} rows={3} />
           </Field>

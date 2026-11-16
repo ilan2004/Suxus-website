@@ -23,10 +23,11 @@ export default async function Dashboard() {
   const from30 = addDays(t, -29);
   const { sales, payments, saleItems } = schema;
 
-  const [orders, fabrics, shop, todaySales, dailySales, dailyPays, todayPays, pendingSales, bulk, dues] = await Promise.all([
+  const [orders, fabrics, shop, lists, todaySales, dailySales, dailyPays, todayPays, pendingSales, bulk, dues] = await Promise.all([
     ordersWithBalance(),
     fabricsWithStock(),
     getSetting("shop"),
+    getSetting("lists"),
     db
       .select({
         count: sql<number>`count(*)`.mapWith(Number),
@@ -239,7 +240,7 @@ export default async function Dashboard() {
           </CardAction>
         </CardHeader>
         <CardContent>
-          <SupplierDuesList rows={dues.rows} total={dues.total} today={t} />
+          <SupplierDuesList rows={dues.rows} total={dues.total} today={t} payers={["Business Account", ...lists.partner.filter((p) => p !== "Business Account")]} />
         </CardContent>
       </Card>
     </div>

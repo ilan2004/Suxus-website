@@ -3,6 +3,7 @@ import * as React from "react";
 import { Dialog as DialogPrimitive } from "radix-ui";
 import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isToastEvent } from "@/components/ui/sonner";
 
 const Dialog = (p: React.ComponentProps<typeof DialogPrimitive.Root>) => <DialogPrimitive.Root data-slot="dialog" {...p} />;
 const DialogTrigger = (p: React.ComponentProps<typeof DialogPrimitive.Trigger>) => <DialogPrimitive.Trigger data-slot="dialog-trigger" {...p} />;
@@ -19,6 +20,10 @@ function DialogContent({ className, children, ...props }: React.ComponentProps<t
           className,
         )}
         {...props}
+        onInteractOutside={(e) => {
+          if (isToastEvent(e.detail.originalEvent)) e.preventDefault();
+          props.onInteractOutside?.(e);
+        }}
       >
         {children}
         <DialogPrimitive.Close className="absolute top-4 right-4 rounded-sm opacity-70 transition-opacity hover:opacity-100 focus:outline-hidden">

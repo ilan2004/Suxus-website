@@ -10,9 +10,9 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatCard } from "@/components/app/stat-card";
-import { PayDialog } from "@/components/forms/pay-dialog";
+import { SupplierPayDialog } from "@/components/forms/supplier-pay-dialog";
 import { SupplierDialog } from "@/components/forms/supplier-dialog";
-import { deleteSupplier, deleteSupplierPayment, paySupplier } from "@/lib/actions/purchases";
+import { deleteSupplier, deleteSupplierPayment } from "@/lib/actions/purchases";
 import type { PurchaseRow, SupplierRow } from "@/lib/queries";
 import { fmtDate, rupees } from "@/lib/utils";
 
@@ -24,7 +24,6 @@ export function SupplierView({
   purchases,
   payments,
   setup,
-  modes,
   partners,
   isPartner,
 }: {
@@ -32,7 +31,6 @@ export function SupplierView({
   purchases: PurchaseRow[];
   payments: Pay[];
   setup: Setup[];
-  modes: string[];
   partners: string[];
   isPartner: boolean;
 }) {
@@ -96,7 +94,21 @@ export function SupplierView({
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Taken on credit" ml="കടമായി വാങ്ങിയത്" value={rupees(s.owed)} sub={`${s.openingBalance ? `Opening ${rupees(s.openingBalance)} · ` : ""}Purchases ${rupees(s.billed)} · Setup on credit ${rupees(s.setupCredit)}`} />
         <StatCard label="Paid on account" ml="കൊടുത്തത്" value={rupees(s.paid)} sub={`${payments.length} payment(s)`} tone="success" />
-        <StatCard label="Balance due" ml="കൊടുക്കാനുള്ളത്" value={rupees(s.balance)} tone={s.balance > 0 ? "destructive" : "success"} />
+        <StatCard
+          label="Balance due"
+          ml="കൊടുക്കാനുള്ളത്"
+          value={s.balance < 0 ? `${rupees(-s.balance)} adv.` : rupees(s.balance)}
+          tone={s.balance > 0 ? "destructive" : "success"}
+          sub={
+            s.balance > 0 ? (
+              <Button size="sm" className="mt-1.5 h-7 px-2.5" onClick={() => setPay(true)}>
+                <CircleDollarSign className="size-3.5" /> Pay
+              </Button>
+            ) : s.balance < 0 ? (
+              "Paid in advance"
+            ) : undefined
+          }
+        />
         <StatCard label="Paid on the spot" ml="ഉടനെ കൊടുത്തത്" value={rupees(s.setupPaid)} sub="Setup items not on credit" tone="gold" />
       </div>
 
@@ -150,8 +162,10 @@ export function SupplierView({
                           size="icon-sm"
                           aria-label="Delete"
                           onClick={async () => {
-                            if (!confirm("Delete this payment?")) return;
-                            await deleteSupplierPayment(p.id);
+                            if (!confirm(`Delete this payment?\n\n${fmtDate(p.date)} · ${rupees(p.amount, true)} · ${p.mode}${p.ref ? ` · ${p.ref}` : ""}`)) return;
+                            const r = await deleteSupplierPayment(p.id);
+                            if (!r.ok) return void toast.error(r.error);
+                            toast.success("Payment deleted");
                             router.refresh();
                           }}
                         >
@@ -174,16 +188,11 @@ export function SupplierView({
         </TabsContent>
       </Tabs>
 
-      <PayDialog
+      <SupplierPayDialog
+        supplier={{ id: s.id, name: s.name, balance: s.balance, phone: s.phone, upi: s.upi, bank: s.bank, lastMode: s.lastMode }}
         open={pay}
         onOpenChange={setPay}
-        title={`Pay ${s.name}`}
-        description="Payment on account — for goods taken on credit"
-        suggested={s.balance}
-        modes={modes}
         payers={["Business Account", ...partners.filter((p) => p !== "Business Account")]}
-        onSubmit={(v) => paySupplier({ supplierId: s.id, ...v })}
-        onDone={() => router.refresh()}
       />
       <SupplierDialog
         value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, aliases: s.aliases, openingBalance: s.openingBalance, notes: s.notes } : null}

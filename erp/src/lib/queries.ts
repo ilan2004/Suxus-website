@@ -248,6 +248,7 @@ export async function suppliersWithBalance() {
     (select max(${c(supplierPayments.date)}) from ${supplierPayments} where ${c(supplierPayments.supplierId)} = ${c(suppliers.id)}),
     (select max(${c(purchases.date)}) from ${purchases} where ${c(purchases.supplierId)} = ${c(suppliers.id)} and ${c(purchases.paid)} > 0)
   )`;
+  const lastMode = sql<string | null>`(select ${c(supplierPayments.mode)} from ${supplierPayments} where ${c(supplierPayments.supplierId)} = ${c(suppliers.id)} order by ${c(supplierPayments.date)} desc, ${c(supplierPayments.id)} desc limit 1)`;
   const rows = await db
     .select({
       id: suppliers.id,
@@ -268,6 +269,7 @@ export async function suppliersWithBalance() {
       setupPaid,
       setupCredit,
       lastPaid,
+      lastMode,
     })
     .from(suppliers)
     .orderBy(asc(suppliers.name));
@@ -293,7 +295,7 @@ export async function supplierDues() {
   const due = rows
     .filter((r) => r.balance > 0)
     .sort((a, b) => b.balance - a.balance || a.name.localeCompare(b.name))
-    .map((r) => ({ id: r.id, name: r.name, supplies: r.supplies, balance: r.balance, lastPaid: r.lastPaid }));
+    .map((r) => ({ id: r.id, name: r.name, supplies: r.supplies, balance: r.balance, lastPaid: r.lastPaid, lastMode: r.lastMode, phone: r.phone, upi: r.upi, bank: r.bank }));
   const total = Math.round(due.reduce((s, r) => s + r.balance, 0) * 100) / 100;
   return { rows: due, total, all: rows };
 }

@@ -15,7 +15,7 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
   const db = await getDb();
   const [purchases, pays, setup, lists] = await Promise.all([
     purchasesList().then((r) => r.filter((p) => p.supplierId === id)),
-    db.select().from(schema.supplierPayments).where(eq(schema.supplierPayments.supplierId, id)).orderBy(desc(schema.supplierPayments.date)),
+    db.select().from(schema.supplierPayments).where(eq(schema.supplierPayments.supplierId, id)).orderBy(desc(schema.supplierPayments.date), desc(schema.supplierPayments.id)),
     db
       .select()
       .from(schema.setupExpenses)
@@ -23,5 +23,5 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
       .orderBy(desc(schema.setupExpenses.date)),
     getSetting("lists"),
   ]);
-  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} modes={lists.paymentMode} partners={lists.partner} isPartner={session.role === "partner"} />;
+  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} partners={lists.partner} isPartner={session.role === "partner"} />;
 }

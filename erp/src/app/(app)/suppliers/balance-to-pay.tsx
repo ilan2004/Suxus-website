@@ -8,7 +8,7 @@ import { SupplierDuesList } from "@/components/app/supplier-dues";
 import type { SupplierDue } from "@/lib/queries";
 import { rupees } from "@/lib/utils";
 
-export function BalanceToPayCard({ rows, total, today }: { rows: SupplierDue[]; total: number; today: string }) {
+export function BalanceToPayCard({ rows, total, today, payers }: { rows: SupplierDue[]; total: number; today: string; payers?: string[] }) {
   const [open, setOpen] = React.useState(false);
   return (
     <Sheet open={open} onOpenChange={setOpen}>
@@ -31,10 +31,10 @@ export function BalanceToPayCard({ rows, total, today }: { rows: SupplierDue[]; 
           <SheetTitle>
             Balance to pay — <span className="font-ml">കൊടുക്കാനുള്ളത്</span>
           </SheetTitle>
-          <SheetDescription>Largest first. Tap a supplier to open their account.</SheetDescription>
+          <SheetDescription>Largest first. Tap a name to open the account, or Pay to record a payment.</SheetDescription>
         </SheetHeader>
         <div className="px-3 pb-[max(1.5rem,env(safe-area-inset-bottom))]">
-          <SupplierDuesList rows={rows} total={total} today={today} onNavigate={() => setOpen(false)} />
+          <SupplierDuesList rows={rows} total={total} today={today} onNavigate={() => setOpen(false)} payers={payers} />
         </div>
       </SheetContent>
     </Sheet>

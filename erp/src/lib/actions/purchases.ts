@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
+import { suppliersWithBalance } from "@/lib/queries";
 import { linkSetupExpenses, tidySupplierNames } from "@/lib/supplier-link";
 import { rememberDeleted } from "@/lib/import-tombstone";
 import { fail, money, ok, optId, optText, reqDate, zodError, type Result } from "./util";
@@ -138,15 +139,27 @@ const SupplierPay = z.object({
   note: optText,
 });
 
-export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<Result<null>> {
+async function balanceOf(id: number) {
+  return (await suppliersWithBalance()).find((x) => x.id === id)?.balance ?? 0;
+}
+
+export type SupplierPaid = { id: number; name: string; amount: number; before: number; after: number };
+
+export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<Result<SupplierPaid>> {
   const user = await requireUser();
   const parsed = SupplierPay.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
   const db = await getDb();
+  const before = await balanceOf(d.supplierId);
+  let paymentId = 0;
+  let name = "";
   await db.transaction(async (tx) => {
     const [s] = await tx.select().from(schema.suppliers).where(eq(schema.suppliers.id, d.supplierId));
+    if (!s) throw new Error("Supplier not found");
     const [p] = await tx.insert(schema.supplierPayments).values(d).returning();
+    paymentId = p.id;
+    name = s.name;
     // Fabric suppliers → "Fabric Purchase"; shops / tradesmen for the setup → "Setup / Renovation"
     const [hasPurchases] = await tx.select({ id: schema.purchases.id }).from(schema.purchases).where(eq(schema.purchases.supplierId, d.supplierId)).limit(1);
     if (d.paidBy === "Business Account") {
@@ -162,9 +175,29 @@ export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<R
     }
     await audit(tx, user, "create", "supplier_payment", p.id, `${s?.name} ₹${d.amount}`);
   });
+  revalidateSupplierPages(d.supplierId);
+  return ok({ id: paymentId, name, amount: d.amount, before, after: await balanceOf(d.supplierId) });
+}
+
+function revalidateSupplierPages(supplierId?: number) {
   revalidatePath("/suppliers");
-  revalidatePath(`/suppliers/${d.supplierId}`);
+  if (supplierId) revalidatePath(`/suppliers/${supplierId}`);
   revalidatePath("/purchases");
+  revalidatePath("/cash-book");
+  revalidatePath("/");
+}
+
+/** "Undo" right after saving — removes the payment as if it was never entered (no import tombstone). */
+export async function undoSupplierPayment(id: number): Promise<Result<null>> {
+  const user = await requireUser();
+  const db = await getDb();
+  const [p] = await db.select().from(schema.supplierPayments).where(eq(schema.supplierPayments.id, id));
+  if (!p) return ok(null);
+  if (Date.now() - new Date(p.createdAt).getTime() > 3 * 60_000) return fail("Too late to undo — delete it from the supplier's payment history.");
+  await db.delete(schema.supplierPayments).where(eq(schema.supplierPayments.id, id));
+  await removeCash(db, "supplier_payment", id);
+  await audit(db, user, "delete", "supplier_payment", id, "undo");
+  revalidateSupplierPages(p.supplierId);
   return ok(null);
 }
 
@@ -175,8 +208,7 @@ export async function deleteSupplierPayment(id: number): Promise<Result<null>> {
   const [p] = await db.delete(schema.supplierPayments).where(eq(schema.supplierPayments.id, id)).returning();
   await removeCash(db, "supplier_payment", id);
   await audit(db, user, "delete", "supplier_payment", id);
-  if (p) revalidatePath(`/suppliers/${p.supplierId}`);
-  revalidatePath("/suppliers");
+  revalidateSupplierPages(p?.supplierId);
   return ok(null);
 }
 

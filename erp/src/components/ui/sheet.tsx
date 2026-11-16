@@ -3,6 +3,7 @@ import * as React from "react";
 import { Dialog as SheetPrimitive } from "radix-ui";
 import { XIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { isToastEvent } from "@/components/ui/sonner";
 
 const Sheet = (p: React.ComponentProps<typeof SheetPrimitive.Root>) => <SheetPrimitive.Root {...p} />;
 const SheetTrigger = (p: React.ComponentProps<typeof SheetPrimitive.Trigger>) => <SheetPrimitive.Trigger {...p} />;
@@ -30,6 +31,10 @@ function SheetContent({
           className,
         )}
         {...props}
+        onInteractOutside={(e) => {
+          if (isToastEvent(e.detail.originalEvent)) e.preventDefault();
+          props.onInteractOutside?.(e);
+        }}
       >
         {children}
         {!hideClose && (

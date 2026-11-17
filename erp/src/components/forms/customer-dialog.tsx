@@ -58,8 +58,11 @@ export function CustomerDialog({
             <Field label="Name" ml="പേര്" required htmlFor="c-name">
               <Input id="c-name" value={v.name} onChange={set("name")} autoFocus required />
             </Field>
-            <Field label="Phone" ml="ഫോൺ" htmlFor="c-phone">
-              <Input id="c-phone" value={v.phone ?? ""} onChange={set("phone")} inputMode="tel" placeholder="10-digit mobile" />
+            <Field label="Phone" ml="ഫോൺ" htmlFor="c-phone" hint="Abroad? Type + and country code">
+              <Input id="c-phone" value={v.phone ?? ""} onChange={set("phone")} inputMode="tel" placeholder="98461 86713 or +971501234567" />
+            </Field>
+            <Field label="Second number" ml="രണ്ടാം നമ്പർ" htmlFor="c-phone2" hint="Optional — e.g. Gulf WhatsApp">
+              <Input id="c-phone2" value={v.altPhone ?? ""} onChange={set("altPhone")} inputMode="tel" placeholder="+971…" />
             </Field>
             <Field label="Place" ml="സ്ഥലം" htmlFor="c-place">
               <Input id="c-place" value={v.place ?? ""} onChange={set("place")} />

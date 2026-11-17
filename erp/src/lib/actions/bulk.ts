@@ -9,6 +9,7 @@ import { audit } from "@/lib/audit";
 import { nextDocNo, resetCounterToMax } from "@/lib/numbering";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
+import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 
 const BulkInput = z.object({
@@ -64,7 +65,7 @@ export async function saveBulkOrder(input: BulkInput): Promise<Result<{ id: numb
   const db = await getDb();
   try {
     const res = await db.transaction(async (tx) => {
-      const values = { ...d, broughtById: d.broughtById ?? null };
+      const values = { ...d, phone: intlOrAsTyped(d.phone), broughtById: d.broughtById ?? null };
       let row;
       if (id) {
         [row] = await tx.update(schema.bulkOrders).set(values).where(eq(schema.bulkOrders.id, id)).returning();

@@ -8,12 +8,14 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { CustomerDialog } from "@/components/forms/customer-dialog";
 import { fmtDate, rupees, waLink } from "@/lib/utils";
+import { formatPhone } from "@/lib/phone";
 
 type Row = {
   id: number;
   code: string;
   name: string;
   phone: string | null;
+  altPhone: string | null;
   place: string | null;
   type: string | null;
   firstVisit: string | null;
@@ -39,13 +41,18 @@ export function CustomersTable({ rows, types, openNew }: { rows: Row[]; types: s
       ),
     },
     {
-      accessorKey: "phone",
+      id: "phone",
+      // searchable as "+919846186713", "98461 86713" or the second number
+      accessorFn: (r) => [r.phone, formatPhone(r.phone), r.altPhone, formatPhone(r.altPhone)].filter(Boolean).join(" "),
       header: "Phone",
       cell: ({ row }) => {
-        const wa = waLink(row.original.phone);
-        return row.original.phone ? (
+        const wa = waLink(row.original.phone) ?? waLink(row.original.altPhone);
+        return row.original.phone || row.original.altPhone ? (
           <span className="inline-flex items-center gap-2">
-            {row.original.phone}
+            <span className="leading-tight">
+              <span className="block whitespace-nowrap">{formatPhone(row.original.phone ?? row.original.altPhone)}</span>
+              {row.original.phone && row.original.altPhone && <span className="block text-[11px] whitespace-nowrap text-muted-foreground">{formatPhone(row.original.altPhone)}</span>}
+            </span>
             {wa && (
               <a href={wa} target="_blank" rel="noreferrer" className="text-success" title="WhatsApp">
                 <MessageCircle className="size-4" />

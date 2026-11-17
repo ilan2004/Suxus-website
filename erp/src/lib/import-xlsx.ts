@@ -4,6 +4,7 @@ import { eq, isNull, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "./db";
 import { counters } from "./db/schema";
 import { nextNumber } from "./numbering";
+import { intlOrAsTyped } from "./phone";
 import { getSettings, saveSetting } from "./settings";
 import type { Lists } from "./defaults";
 import { linkSetupExpenses, splitSupplierName, tidySupplierNames } from "./supplier-link";
@@ -435,7 +436,7 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
       return {
         code,
         name: str(r.getCell(2).value)!,
-        phone: str(r.getCell(3).value)?.replace(/[^\d+]/g, "") ?? null,
+        phone: intlOrAsTyped(str(r.getCell(3).value)),
         place: str(r.getCell(4).value),
         type: str(r.getCell(5).value),
         firstVisit: d(r.getCell(6).value),

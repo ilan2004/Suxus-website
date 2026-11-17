@@ -84,6 +84,7 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
   const paid = sql<number>`coalesce((select sum(${c(payments.amount)}) from ${payments} where ${c(payments.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemsSummary = sql<string>`coalesce((select string_agg(${c(orderItems.qty)} || ' × ' || ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   const tailor = sql<string | null>`(select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orders.tailorId)})`;
+  const altPhone = sql<string | null>`(select ${c(schema.customers.altPhone)} from ${schema.customers} where ${c(schema.customers.id)} = ${c(orders.customerId)})`;
   const rows = await db
     .select({
       id: orders.id,
@@ -92,6 +93,7 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
       customerId: orders.customerId,
       customerName: orders.customerName,
       phone: orders.phone,
+      altPhone,
       workType: orders.workType,
       urgency: orders.urgency,
       trialDate: orders.trialDate,

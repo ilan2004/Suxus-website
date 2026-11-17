@@ -1,3 +1,4 @@
+import { waNumber } from "./phone";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -57,13 +58,11 @@ export function monthStart(iso = today()) {
   return iso.slice(0, 8) + "01";
 }
 
-/** WhatsApp link with Indian number normalisation (10 digits → +91). */
+/** WhatsApp chat link: https://wa.me/<international number without +>. Null when the number can't be read. */
 export function waLink(phone: string | null | undefined, text?: string) {
-  if (!phone) return null;
-  let digits = phone.replace(/\D/g, "");
-  if (digits.length === 10) digits = "91" + digits;
-  if (digits.length === 11 && digits.startsWith("0")) digits = "91" + digits.slice(1);
-  return `https://wa.me/${digits}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
+  const n = waNumber(phone);
+  if (!n) return null;
+  return `https://wa.me/${n}${text ? `?text=${encodeURIComponent(text)}` : ""}`;
 }
 
 export const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;

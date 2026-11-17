@@ -13,18 +13,18 @@ import { listTemplatesForPicker, logMessageSent, type MessageTemplate } from "@/
 import {
   MAX_MESSAGE_LENGTH,
   TEMPLATE_CATEGORIES,
-  cleanIndianPhone,
   fillTemplate,
-  isValidIndianMobile,
   plainAmount,
   templateAvailability,
-  waMeLink,
   type PlaceholderValues,
 } from "@/lib/message-template";
 import { cn } from "@/lib/utils";
+import { formatPhone, toIntlPhone, waMeLink } from "@/lib/phone";
 
 type Props = {
   phone: string | null | undefined;
+  /** Second number (e.g. a Gulf WhatsApp) — offered as a choice when present. */
+  altPhone?: string | null;
   /** Values for {name} {order_no} {item} {amount} {date} {balance}; {shop} and {phone} come from Settings. */
   values: PlaceholderValues;
   customerId?: number | null;
@@ -40,7 +40,7 @@ type Props = {
  * One-customer-at-a-time WhatsApp sender: pick a saved template → edit → open wa.me.
  * Deliberately no "send to all": WhatsApp bans personal numbers used for bulk sending.
  */
-export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bulkOrderId, to, variant = "button", className }: Props) {
+export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, orderId, bulkOrderId, to, variant = "button", className }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -56,7 +56,7 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
     setOpen(true);
     setPicked(null);
     setCat("All");
-    setNum(cleanIndianPhone(phone));
+    setNum(toIntlPhone(phone) ?? toIntlPhone(altPhone) ?? (phone ?? altPhone ?? "").trim());
     setLoading(true);
     const r = await listTemplatesForPicker();
     setLoading(false);
@@ -69,18 +69,21 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
     setText(t === "blank" ? "" : fillTemplate(t.body, { ...values, shop: data?.shop, phone: data?.shopPhone }));
   };
 
-  const digits = cleanIndianPhone(num);
-  const phoneOk = isValidIndianMobile(digits);
+  const intl = toIntlPhone(num);
+  const phoneOk = !!intl;
+  const main = toIntlPhone(phone);
+  const second = toIntlPhone(altPhone);
+  const numbers = [main && { n: main, label: "Main" }, second && second !== main && { n: second, label: "Second" }].filter((x): x is { n: string; label: string } => !!x);
   const tooLong = text.length > MAX_MESSAGE_LENGTH;
   const canSend = phoneOk && text.trim().length > 0 && !tooLong;
 
   const send = () => {
     if (!canSend) return;
     // Open synchronously inside the click so phones/browsers don't block the new tab.
-    window.open(waMeLink(digits, text.trim()), "_blank", "noopener,noreferrer");
+    window.open(waMeLink(intl!, text.trim())!, "_blank", "noopener,noreferrer");
     const tpl = picked && picked !== "blank" ? picked : null;
     setOpen(false);
-    logMessageSent({ customerId, orderId, bulkOrderId, templateId: tpl?.id ?? null, templateName: tpl?.name ?? "Own message", phone: digits, text: text.trim() }).then((r) => {
+    logMessageSent({ customerId, orderId, bulkOrderId, templateId: tpl?.id ?? null, templateName: tpl?.name ?? "Own message", phone: intl!, text: text.trim() }).then((r) => {
       if (!r.ok) return void toast.error(`WhatsApp opened, but not saved to history: ${r.error}`);
       toast.success(`WhatsApp opened for ${to}`, { description: "Saved under Messages sent." });
       router.refresh();
@@ -97,15 +100,15 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
     // Stops clicks inside the dialog from reaching a clickable table row behind it (React events bubble through portals).
     <span className={cn("inline-flex", className)} data-no-row-click onClick={(e) => e.stopPropagation()}>
       {variant === "icon" ? (
-        <Button variant="ghost" size="icon-sm" aria-label={`WhatsApp ${to}`} title="WhatsApp message" onClick={start} disabled={!phone}>
+        <Button variant="ghost" size="icon-sm" aria-label={`WhatsApp ${to}`} title="WhatsApp message" onClick={start} disabled={!phone && !altPhone}>
           <MessageCircle className="text-success" />
         </Button>
       ) : variant === "compact" ? (
-        <Button variant="outline" size="sm" className="h-7 px-2.5" onClick={start} disabled={!phone}>
+        <Button variant="outline" size="sm" className="h-7 px-2.5" onClick={start} disabled={!phone && !altPhone}>
           <MessageCircle className="text-success" /> WhatsApp
         </Button>
       ) : (
-        <Button variant="outline" onClick={start} disabled={!phone}>
+        <Button variant="outline" onClick={start} disabled={!phone && !altPhone}>
           <MessageCircle className="text-success" /> WhatsApp
         </Button>
       )}
@@ -183,14 +186,27 @@ export function WhatsAppTemplateButton({ phone, values, customerId, orderId, bul
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="wa-phone">
                   WhatsApp number
                 </label>
-                <div className="flex items-center gap-2">
-                  <span className="rounded-md border bg-muted px-2.5 py-1.5 text-sm text-muted-foreground">+91</span>
-                  <Input id="wa-phone" inputMode="tel" value={num} onChange={(e) => setNum(e.target.value)} className={cn(!phoneOk && "border-warning")} />
-                </div>
-                {!phoneOk && (
+                {numbers.length > 1 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {numbers.map(({ n, label }) => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setNum(n)}
+                        className={cn("h-8 rounded-full border px-3 font-mono text-xs", intl === n ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-muted")}
+                      >
+                        {label} · {formatPhone(n)}
+                      </button>
+                    ))}
+                  </div>
+                )}
+                <Input id="wa-phone" inputMode="tel" value={num} onChange={(e) => setNum(e.target.value)} className={cn("font-mono", !phoneOk && "border-warning")} placeholder="+971501234567" />
+                {!phoneOk ? (
                   <p className="flex items-center gap-1.5 text-xs text-warning">
-                    <AlertTriangle className="size-3.5" /> This number has {digits.length} digits — it must be 10. Fix it here or in the customer record.
+                    <AlertTriangle className="size-3.5 shrink-0" /> Can&apos;t read this number. Use a 10-digit Indian mobile, or + and the country code (e.g. +971501234567).
                   </p>
+                ) : (
+                  <p className="text-[11px] text-muted-foreground">Opens wa.me/{intl!.slice(1)}</p>
                 )}
               </div>
               <div className="grid gap-1">

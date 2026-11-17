@@ -121,7 +121,7 @@ export function OrderForm({
           {!customer && (
             <div className="grid grid-cols-2 gap-2">
               <Input placeholder="or type name" value={walkIn.name} onChange={(e) => setWalkIn((w) => ({ ...w, name: e.target.value }))} />
-              <Input placeholder="phone" inputMode="tel" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} />
+              <Input placeholder="phone (+971… if abroad)" inputMode="tel" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} />
             </div>
           )}
           <Field label="Work type" ml="വർക്ക് തരം" required>

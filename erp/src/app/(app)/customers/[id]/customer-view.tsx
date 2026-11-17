@@ -16,6 +16,7 @@ import { CustomerDialog } from "@/components/forms/customer-dialog";
 import { MeasurementCard, MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
 import { deleteCustomer } from "@/lib/actions/customers";
 import { fmtDate, rupees } from "@/lib/utils";
+import { formatPhone } from "@/lib/phone";
 import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import type { OrderRow } from "@/lib/queries";
 
@@ -24,6 +25,7 @@ type Customer = {
   code: string;
   name: string;
   phone: string | null;
+  altPhone: string | null;
   place: string | null;
   type: string | null;
   firstVisit: string | null;
@@ -74,12 +76,14 @@ export function CustomerView({
             {customer.type && <Badge variant="secondary">{customer.type}</Badge>}
           </div>
           <div className="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
-            {customer.phone && (
-              <span className="inline-flex items-center gap-2">
-                <a href={`tel:${customer.phone}`} className="inline-flex items-center gap-1.5 hover:text-foreground">
-                  <Phone className="size-3.5" /> {customer.phone}
-                </a>
-                <WhatsAppTemplateButton variant="compact" phone={customer.phone} values={waValues} customerId={customer.id} orderId={ctxOrder?.id} to={customer.name} />
+            {(customer.phone || customer.altPhone) && (
+              <span className="inline-flex flex-wrap items-center gap-x-3 gap-y-1">
+                {[customer.phone, customer.altPhone].filter(Boolean).map((p, i) => (
+                  <a key={p} href={`tel:${p}`} className="inline-flex items-center gap-1.5 hover:text-foreground" title={i ? "Second number" : undefined}>
+                    <Phone className="size-3.5" /> {formatPhone(p)}
+                  </a>
+                ))}
+                <WhatsAppTemplateButton variant="compact" phone={customer.phone} altPhone={customer.altPhone} values={waValues} customerId={customer.id} orderId={ctxOrder?.id} to={customer.name} />
               </span>
             )}
             {customer.place && (
@@ -175,7 +179,7 @@ export function CustomerView({
                         {o.balance > 0 ? <span className="text-destructive">{rupees(o.balance)}</span> : "—"}
                       </TableCell>
                       <TableCell className="text-right">
-                        <WhatsAppTemplateButton variant="icon" phone={o.phone || customer.phone} values={orderMessageValues({ ...o, name: customer.name })} customerId={customer.id} orderId={o.id} to={customer.name} />
+                        <WhatsAppTemplateButton variant="icon" phone={o.phone || customer.phone} altPhone={customer.altPhone} values={orderMessageValues({ ...o, name: customer.name })} customerId={customer.id} orderId={o.id} to={customer.name} />
                       </TableCell>
                     </TableRow>
                   ))}
@@ -240,7 +244,7 @@ export function CustomerView({
                     <span className="font-medium text-foreground">{fmtDateTime(m.sentAt)}</span>
                     <Badge variant="secondary">{m.templateName ?? "Own message"}</Badge>
                     {m.orderNo && <span className="font-mono">{m.orderNo}</span>}
-                    <span>to +91 {m.phone}</span>
+                    <span>to {formatPhone(m.phone)}</span>
                     {m.sentBy && <span>· by {m.sentBy}</span>}
                   </div>
                   <p className="mt-2 font-ml text-sm whitespace-pre-line">{m.text}</p>

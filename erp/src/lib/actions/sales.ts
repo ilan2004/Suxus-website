@@ -10,6 +10,7 @@ import { audit } from "@/lib/audit";
 import { nextDocNo, resetCounterToMax } from "@/lib/numbering";
 import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
+import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optId, optText, reqDate, zodError, type Result } from "./util";
 import { recalcOrder } from "@/lib/order-calc";
 
@@ -71,7 +72,7 @@ export async function createSale(input: SaleInput): Promise<Result<{ id: number;
       }
 
       let customerName = d.customerName;
-      let phone = d.phone;
+      let phone = intlOrAsTyped(d.phone);
       if (d.customerId) {
         const [c] = await tx.select().from(schema.customers).where(eq(schema.customers.id, d.customerId));
         customerName = c?.name ?? customerName;

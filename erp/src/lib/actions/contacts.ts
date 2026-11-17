@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -12,7 +12,7 @@ import { fail, ok, zodError, type Result } from "./util";
 
 const Upload = z.object({
   source: z.string().max(200),
-  contacts: z.array(z.object({ name: z.string().max(200), raw: z.string().max(100) })).max(1000),
+  contacts: z.array(z.object({ name: z.string().max(200), raw: z.string().max(100), raw2: z.string().max(100).optional() })).max(1000),
 });
 
 /**
@@ -27,15 +27,18 @@ export async function uploadContacts(input: z.input<typeof Upload>): Promise<Res
   const db = await getDb();
   const t = schema.contactImports;
 
-  const good = new Map<string, { name: string; phone: string; rawPhone: string }>();
+  const good = new Map<string, { name: string; phone: string; phone2: string | null; rawPhone: string }>();
   const bad: { name: string; rawPhone: string }[] = [];
   for (const c of contacts) {
     const name = c.name.trim().replace(/\s+/g, " ") || c.raw.trim();
     if (!name && !c.raw.trim()) continue;
-    const phone = normalizeContactPhone(c.raw);
+    let phone = normalizeContactPhone(c.raw);
+    let phone2 = normalizeContactPhone(c.raw2);
+    if (!phone && phone2) [phone, phone2] = [phone2, null]; // first number unreadable, second fine → use the second
+    if (phone2 === phone) phone2 = null;
     if (phone) {
-      if (!good.has(phone)) good.set(phone, { name, phone, rawPhone: c.raw.trim() });
-    } else bad.push({ name, rawPhone: c.raw.trim() });
+      if (!good.has(phone)) good.set(phone, { name, phone, phone2, rawPhone: [c.raw.trim(), c.raw2?.trim()].filter(Boolean).join(" / ") });
+    } else bad.push({ name, rawPhone: [c.raw.trim(), c.raw2?.trim()].filter(Boolean).join(" / ") });
   }
 
   let added = 0;
@@ -69,13 +72,14 @@ export async function uploadContacts(input: z.input<typeof Upload>): Promise<Res
 
 const Ids = z.array(z.number().int().positive()).min(1).max(5000);
 
-/** Customers whose number (last 10 digits) is one of these phones → phone → customer id. */
+/** Customers whose main or second number is one of these (international) numbers → number → customer id. */
 async function customersByPhone(db: Awaited<ReturnType<typeof getDb>>, phones: string[]) {
-  if (!phones.length) return new Map<string, number>();
+  const map = new Map<string, number>();
+  if (!phones.length) return map;
   const c = schema.customers;
-  const last10 = sql<string>`right(regexp_replace(coalesce(${c.phone}, ''), '[^0-9]', '', 'g'), 10)`;
-  const rows = await db.select({ id: c.id, p: last10 }).from(c).where(inArray(last10, phones));
-  return new Map(rows.map((r) => [r.p, r.id]));
+  const rows = await db.select({ id: c.id, phone: c.phone, alt: c.altPhone }).from(c).where(or(inArray(c.phone, phones), inArray(c.altPhone, phones)));
+  for (const r of rows) for (const p of [r.phone, r.alt]) if (p && !map.has(p)) map.set(p, r.id);
+  return map;
 }
 
 /** "Add selected": one customer per contact (name + phone only). Numbers that are already customers are just marked Added. */
@@ -86,17 +90,17 @@ export async function addContactsAsCustomers(ids: number[]): Promise<Result<{ ad
   const db = await getDb();
   const t = schema.contactImports;
   const picked = await db.select().from(t).where(and(inArray(t.id, parsed.data), inArray(t.status, ["pending", "skipped"])));
-  const existing = await customersByPhone(db, picked.map((p) => p.phone!).filter(Boolean));
+  const existing = await customersByPhone(db, picked.flatMap((p) => [p.phone, p.phone2]).filter((x): x is string => !!x));
   let added = 0;
   let alreadyPresent = 0;
   await db.transaction(async (tx) => {
     for (const p of picked) {
       if (!p.phone) continue;
-      let customerId = existing.get(p.phone);
+      let customerId = existing.get(p.phone) ?? (p.phone2 ? existing.get(p.phone2) : undefined);
       if (customerId) alreadyPresent++;
       else {
         const code = await nextDocNo(tx, "C");
-        const [row] = await tx.insert(schema.customers).values({ code, name: p.name, phone: p.phone }).returning({ id: schema.customers.id });
+        const [row] = await tx.insert(schema.customers).values({ code, name: p.name, phone: p.phone, altPhone: p.phone2 }).returning({ id: schema.customers.id });
         customerId = row.id;
         existing.set(p.phone, customerId);
         added++;

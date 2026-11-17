@@ -1,13 +1,14 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { asc, desc, eq, sql } from "drizzle-orm";
+import { asc, desc, eq, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { getSetting } from "@/lib/settings";
-import { MAX_MESSAGE_LENGTH, TEMPLATE_CATEGORIES, cleanIndianPhone, isValidIndianMobile } from "@/lib/message-template";
+import { MAX_MESSAGE_LENGTH, TEMPLATE_CATEGORIES } from "@/lib/message-template";
+import { PHONE_HELP, toIntlPhone } from "@/lib/phone";
 import { fail, ok, optId, zodError, type Result } from "./util";
 
 export type MessageTemplate = { id: number; name: string; category: string; body: string; sortOrder: number; useCount: number };
@@ -117,8 +118,8 @@ export async function logMessageSent(input: z.input<typeof LogInput>): Promise<R
   const parsed = LogInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
-  const phone = cleanIndianPhone(d.phone);
-  if (!isValidIndianMobile(phone)) return fail("Phone number must be 10 digits");
+  const phone = toIntlPhone(d.phone);
+  if (!phone) return fail(`Phone: ${PHONE_HELP}`);
   const db = await getDb();
   let customerId = d.customerId ?? null;
   if (!customerId && d.orderId) {
@@ -126,12 +127,12 @@ export async function logMessageSent(input: z.input<typeof LogInput>): Promise<R
     customerId = o?.c ?? null;
   }
   if (!customerId) {
-    // Walk-in order with no customer record: attach to the customer with the same mobile number, if any.
+    // Walk-in order with no customer record: attach to the customer with the same number (main or second), if any.
     const c = schema.customers;
     const [m] = await db
       .select({ id: c.id })
       .from(c)
-      .where(sql`right(regexp_replace(coalesce(${c.phone}, ''), '[^0-9]', '', 'g'), 10) = ${phone}`)
+      .where(or(eq(c.phone, phone), eq(c.altPhone, phone)))
       .limit(1);
     customerId = m?.id ?? null;
   }

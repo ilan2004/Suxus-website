@@ -3,19 +3,13 @@
  * and .vcf (vCard, as exported by Android / iPhone). Only names and numbers leave the phone.
  */
 
-export type RawContact = { name: string; raw: string };
+import { toIntlPhone } from "./phone";
 
-/** Spaces, dashes, brackets, +91 / 91 / 0 prefixes → the last 10 digits. Null when it isn't a 10-digit number. */
-export function normalizeContactPhone(raw: string | null | undefined): string | null {
-  const d = (raw ?? "").replace(/\D/g, "");
-  if (d.length === 10) return d;
-  if (d.length > 10 && (d.startsWith("91") || d.startsWith("0"))) {
-    const last = d.slice(-10);
-    const prefix = d.slice(0, -10);
-    if (/^(0|91|091|0091|910)$/.test(prefix)) return last;
-  }
-  return null;
-}
+/** raw2: the "Second number" column (or a vCard's second number), when there is one. */
+export type RawContact = { name: string; raw: string; raw2?: string };
+
+/** +… kept as written; 10 digits starting 6–9 → +91…; anything else → null ("Could not read"). */
+export const normalizeContactPhone = toIntlPhone;
 
 /* ───── CSV ───── */
 
@@ -61,8 +55,12 @@ function fromTable(table: string[][]): RawContact[] {
   const first = find(/^(first name|given name)$/);
   const last = find(/^(last name|family name|surname)$/);
   if (nameCol < 0 && first < 0) nameCol = find(/name/, /(last|family|middle|file|nick|org|company|phonetic)/);
-  let phoneCol = find(/^(phone|mobile|mobile number|phone number|number|contact|contact number|whatsapp)$/);
-  if (phoneCol < 0) phoneCol = find(/(phone|mobile|number|tel)/, /(type|label)/);
+  const SECOND = /(second|2nd|alternate|alt\b|other|phone 2|mobile 2|number 2|tel 2)/;
+  let phoneCol = find(/^(phone|mobile|mobile number|phone number|number|contact|contact number|whatsapp|first number|phone 1)$/);
+  if (phoneCol < 0) phoneCol = find(/(phone|mobile|number|tel)/, new RegExp(`(type|label|${SECOND.source.slice(1, -1)})`));
+  let phone2Col = find(/^(second number|second phone|second mobile|alternate number|alternate phone|alt number|alt phone|other number|phone 2|mobile 2)$/);
+  // e.g. Google Contacts "Phone 2 - Value"
+  if (phone2Col < 0) phone2Col = head.findIndex((h, i) => i !== phoneCol && SECOND.test(h) && /(phone|mobile|number|tel)/.test(h) && !/(type|label)/.test(h));
   const hasHeader = nameCol >= 0 || first >= 0 || phoneCol >= 0;
   if (!hasHeader) {
     nameCol = 0;
@@ -71,9 +69,11 @@ function fromTable(table: string[][]): RawContact[] {
   return table.slice(hasHeader ? 1 : 0).flatMap((r) => {
     const name = (nameCol >= 0 ? r[nameCol] : [r[first], last >= 0 ? r[last] : ""].join(" ")).trim().replace(/\s+/g, " ");
     // Google exports put several numbers in one cell: "98461 86713 ::: 0483 2700000"
-    const raw = (phoneCol >= 0 ? (r[phoneCol] ?? "") : "").split(/:::|\n/)[0].trim();
+    const cell = (phoneCol >= 0 ? (r[phoneCol] ?? "") : "").split(/:::|\n/).map((x) => x.trim());
+    const raw = cell[0] ?? "";
+    const raw2 = ((phone2Col >= 0 ? (r[phone2Col] ?? "") : "").split(/:::|\n/)[0] || cell[1] || "").trim();
     if (!name && !raw) return [];
-    return [{ name: name || raw, raw }];
+    return [{ name: name || raw, raw, ...(raw2 ? { raw2 } : {}) }];
   });
 }
 
@@ -161,7 +161,8 @@ export function parseVcf(text: string): RawContact[] {
     else if (prop === "END") {
       const name = (fn || n).replace(/\\,/g, ",").replace(/\\;/g, ";").trim();
       const best = tels.find((t) => t.cell && normalizeContactPhone(t.v)) ?? tels.find((t) => normalizeContactPhone(t.v)) ?? tels[0];
-      if (name || best) out.push({ name: name || best?.v || "", raw: best?.v ?? "" });
+      const second = tels.find((t) => t !== best && normalizeContactPhone(t.v) && normalizeContactPhone(t.v) !== normalizeContactPhone(best?.v));
+      if (name || best) out.push({ name: name || best?.v || "", raw: best?.v ?? "", ...(second ? { raw2: second.v } : {}) });
     }
   }
   return out;

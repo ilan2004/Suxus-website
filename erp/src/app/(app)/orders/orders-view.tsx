@@ -245,7 +245,7 @@ function OrderList({ orders }: { orders: OrderRow[] }) {
       enableSorting: false,
       cell: ({ row }) => {
         const o = row.original;
-        return <WhatsAppTemplateButton variant="icon" phone={o.phone} values={orderMessageValues({ ...o, name: o.customerName ?? "" })} customerId={o.customerId} orderId={o.id} to={o.customerName ?? o.orderNo} />;
+        return <WhatsAppTemplateButton variant="icon" phone={o.phone} altPhone={o.altPhone} values={orderMessageValues({ ...o, name: o.customerName ?? "" })} customerId={o.customerId} orderId={o.id} to={o.customerName ?? o.orderNo} />;
       },
     },
   ];

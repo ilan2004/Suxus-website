@@ -10,8 +10,9 @@ import { Input } from "@/components/ui/input";
 import { addContactsAsCustomers, clearContactList, setContactStatus, uploadContacts } from "@/lib/actions/contacts";
 import { parseContactFile } from "@/lib/contact-parse";
 import { cn } from "@/lib/utils";
+import { formatPhone } from "@/lib/phone";
 
-type Contact = { id: number; name: string; phone: string | null; rawPhone: string | null; status: string; customerId: number | null };
+type Contact = { id: number; name: string; phone: string | null; phone2: string | null; rawPhone: string | null; status: string; customerId: number | null };
 type View = "pending" | "added" | "skipped";
 
 const PAGE = 200;
@@ -20,7 +21,6 @@ const VIEWS: { key: View; label: string }[] = [
   { key: "added", label: "Added" },
   { key: "skipped", label: "Skipped" },
 ];
-const fmtPhone = (p: string) => `${p.slice(0, 5)} ${p.slice(5)}`;
 const nf = (n: number) => n.toLocaleString("en-IN");
 
 export function ContactImportView({ contacts, customerPhones, canClear }: { contacts: Contact[]; customerPhones: [string, number][]; canClear: boolean }) {
@@ -42,7 +42,8 @@ export function ContactImportView({ contacts, customerPhones, canClear }: { cont
     for (const c of readable) if (c.status in r) r[c.status as View]++;
     return r;
   }, [readable]);
-  const isCustomer = React.useCallback((c: Contact) => c.status !== "added" && !!c.phone && customers.has(c.phone), [customers]);
+  const custOf = React.useCallback((c: Contact) => (c.phone ? customers.get(c.phone) : undefined) ?? (c.phone2 ? customers.get(c.phone2) : undefined), [customers]);
+  const isCustomer = React.useCallback((c: Contact) => c.status !== "added" && custOf(c) != null, [custOf]);
 
   // Filter: status tab + search on name or number. "Already a customer" rows go to the end.
   const list = React.useMemo(() => {
@@ -51,7 +52,7 @@ export function ContactImportView({ contacts, customerPhones, canClear }: { cont
     const rows = readable.filter((c) => {
       if (c.status !== view) return false;
       if (!text) return true;
-      return c.name.toLowerCase().includes(text) || (digits.length >= 2 && c.phone!.includes(digits));
+      return c.name.toLowerCase().includes(text) || (digits.length >= 2 && (c.phone!.includes(digits) || !!c.phone2?.includes(digits)));
     });
     return view === "added" ? rows : [...rows.filter((c) => !isCustomer(c)), ...rows.filter(isCustomer)];
   }, [readable, view, query, isCustomer]);
@@ -130,7 +131,7 @@ export function ContactImportView({ contacts, customerPhones, canClear }: { cont
           ) : (
             <p className="font-medium">Upload your contacts</p>
           )}
-          <p className="text-xs text-muted-foreground">.xlsx or .csv with Name and Phone columns, or a .vcf exported from the phone. Uploading again only adds new numbers. Nothing is written back to the phone.</p>
+          <p className="text-xs text-muted-foreground">.xlsx or .csv with Name and Phone columns (and Second number, if you have it), or a .vcf exported from the phone. Foreign numbers need their + country code, e.g. +971501234567. Uploading again only adds new numbers. Nothing is written back to the phone.</p>
         </div>
         <input
           ref={fileRef}
@@ -229,7 +230,7 @@ export function ContactImportView({ contacts, customerPhones, canClear }: { cont
               {list.slice(0, limit).map((c) => {
                 const already = isCustomer(c);
                 const disabled = already || c.status === "added";
-                const custId = c.customerId ?? (c.phone ? customers.get(c.phone) : undefined);
+                const custId = c.customerId ?? custOf(c);
                 return (
                   <li key={c.id}>
                     <label className={cn("flex items-center gap-3 px-3 py-2.5", disabled ? "cursor-default" : "cursor-pointer hover:bg-muted/50", already && "opacity-60")}>
@@ -244,7 +245,10 @@ export function ContactImportView({ contacts, customerPhones, canClear }: { cont
                       )}
                       <span className="min-w-0 flex-1">
                         <span className="block truncate text-sm font-medium">{c.name}</span>
-                        <span className="block font-mono text-xs text-muted-foreground">{fmtPhone(c.phone!)}</span>
+                        <span className="block truncate font-mono text-xs text-muted-foreground">
+                          {formatPhone(c.phone)}
+                          {c.phone2 && <span className="opacity-75"> · {formatPhone(c.phone2)}</span>}
+                        </span>
                       </span>
                       {already && custId && (
                         <Link href={`/customers/${custId}`} className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground hover:underline">
@@ -278,7 +282,7 @@ export function ContactImportView({ contacts, customerPhones, canClear }: { cont
           <button type="button" onClick={() => setShowBad((s) => !s)} className="flex w-full items-center gap-2 p-3 text-left text-sm">
             <AlertTriangle className="size-4 text-warning" />
             <span className="font-medium">Could not read ({nf(unreadable.length)})</span>
-            <span className="text-xs text-muted-foreground">— numbers that are not 10 digits</span>
+            <span className="text-xs text-muted-foreground">— not a 10-digit Indian mobile and no + country code</span>
             <ChevronDown className={cn("ml-auto size-4 transition-transform", showBad && "rotate-180")} />
           </button>
           {showBad && (

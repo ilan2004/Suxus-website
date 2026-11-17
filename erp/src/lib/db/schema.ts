@@ -81,7 +81,10 @@ export const customers = pgTable(
     id: serial("id").primaryKey(),
     code: text("code").notNull().unique(), // C-0001
     name: text("name").notNull(),
+    /** Full international number, e.g. +919847123456 / +971501234567 */
     phone: text("phone"),
+    /** Second number (e.g. Gulf WhatsApp) — either can be used for WhatsApp. */
+    altPhone: text("alt_phone"),
     place: text("place"),
     type: text("type"), // Walk-in, Regular, Institution …
     firstVisit: date("first_visit"),
@@ -516,8 +519,10 @@ export const contactImports = pgTable(
   {
     id: serial("id").primaryKey(),
     name: text("name").notNull(),
-    /** Clean 10-digit mobile; null when it could not be read. */
+    /** Full international number (+91…, +971…); null when it could not be read. */
     phone: text("phone"),
+    /** "Second number" column, when readable. */
+    phone2: text("phone2"),
     rawPhone: text("raw_phone"),
     status: text("status").notNull().default("pending"),
     customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),

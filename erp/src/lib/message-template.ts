@@ -38,21 +38,6 @@ export function fillTemplate(body: string, values: PlaceholderValues) {
     .trim();
 }
 
-/** "+91 98461 86713" / "098461 86713" / "919846186713" → "9846186713". */
-export function cleanIndianPhone(raw: string | null | undefined) {
-  let d = (raw ?? "").split("/")[0].replace(/\D/g, "");
-  if (d.length === 12 && d.startsWith("91")) d = d.slice(2);
-  else if (d.length === 11 && d.startsWith("0")) d = d.slice(1);
-  return d;
-}
-
-export const isValidIndianMobile = (d: string) => /^\d{10}$/.test(d);
-
-export function waMeLink(tenDigits: string, text: string) {
-  // encodeURIComponent keeps Malayalam, emoji and line breaks intact (UTF-8 percent-encoding).
-  return `https://wa.me/91${tenDigits}?text=${encodeURIComponent(text)}`;
-}
-
 /** Indian digit grouping without the ₹ sign (templates write "₹{balance}" themselves). */
 export function plainAmount(n: number | null | undefined) {
   if (n == null || !Number.isFinite(n)) return null;

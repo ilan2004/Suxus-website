@@ -8,12 +8,14 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextDocNo } from "@/lib/numbering";
 import { today } from "@/lib/utils";
+import { PHONE_HELP, formatPhone, toIntlPhone } from "@/lib/phone";
 import { fail, ok, optDate, optText, zodError, type Result } from "./util";
 
 const CustomerInput = z.object({
   id: z.number().int().optional(),
   name: z.string().trim().min(1, "Name is required"),
   phone: optText,
+  altPhone: optText,
   place: optText,
   type: optText,
   firstVisit: optDate,
@@ -27,19 +29,23 @@ export async function saveCustomer(input: CustomerInput): Promise<Result<Saved>>
   const parsed = CustomerInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
-  const phone = d.phone ? d.phone.replace(/[^\d+]/g, "") : null;
+  // Store full international numbers: +919847123456 / +971501234567
+  const phone = d.phone ? toIntlPhone(d.phone) : null;
+  if (d.phone && !phone) return fail(`Phone: ${PHONE_HELP}`);
+  let altPhone = d.altPhone ? toIntlPhone(d.altPhone) : null;
+  if (d.altPhone && !altPhone) return fail(`Second number: ${PHONE_HELP}`);
+  if (altPhone && altPhone === phone) altPhone = null;
   const db = await getDb();
 
-  if (phone) {
-    const dupe = await db
-      .select({ id: schema.customers.id, name: schema.customers.name })
-      .from(schema.customers)
-      .where(eq(schema.customers.phone, phone));
-    const other = dupe.find((c) => c.id !== d.id);
-    if (other) return fail(`Phone already belongs to ${other.name}`);
+  for (const p of [phone, altPhone]) {
+    if (!p) continue;
+    const c = schema.customers;
+    const dupe = await db.select({ id: c.id, name: c.name }).from(c).where(or(eq(c.phone, p), eq(c.altPhone, p)));
+    const other = dupe.find((x) => x.id !== d.id);
+    if (other) return fail(`${formatPhone(p)} already belongs to ${other.name}`);
   }
 
-  const values = { name: d.name, phone, place: d.place, type: d.type, firstVisit: d.firstVisit ?? today(), remarks: d.remarks };
+  const values = { name: d.name, phone, altPhone, place: d.place, type: d.type, firstVisit: d.firstVisit ?? today(), remarks: d.remarks };
   let row;
   if (d.id) {
     [row] = await db.update(schema.customers).set(values).where(eq(schema.customers.id, d.id)).returning();
@@ -71,12 +77,12 @@ export async function deleteCustomer(id: number): Promise<Result<null>> {
 
 export async function findCustomerByPhone(phone: string) {
   await requireUser();
-  const p = phone.replace(/[^\d+]/g, "");
-  if (p.length < 6) return null;
+  const p = toIntlPhone(phone);
+  if (!p) return null;
   const db = await getDb();
   const [c] = await db
     .select()
     .from(schema.customers)
-    .where(or(eq(schema.customers.phone, p), eq(schema.customers.phone, p.slice(-10))));
+    .where(or(eq(schema.customers.phone, p), eq(schema.customers.altPhone, p)));
   return c ?? null;
 }

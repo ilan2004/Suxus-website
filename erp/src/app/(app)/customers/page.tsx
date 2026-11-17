@@ -21,6 +21,7 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
       code: customers.code,
       name: customers.name,
       phone: customers.phone,
+      altPhone: customers.altPhone,
       place: customers.place,
       type: customers.type,
       firstVisit: customers.firstVisit,

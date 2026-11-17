@@ -6,7 +6,17 @@ import JsBarcode from "jsbarcode";
 export function Barcode({ value }: { value: string }) {
   const ref = useRef<SVGSVGElement>(null);
   useEffect(() => {
-    if (ref.current) JsBarcode(ref.current, value, { format: "CODE128", height: 28, width: 1.3, displayValue: false, margin: 0 });
+    if (!ref.current) return;
+    JsBarcode(ref.current, value, { format: "CODE128", height: 60, width: 2, displayValue: false, margin: 0 });
+    // Scale by CSS (11 mm tall, never wider than the label) instead of the pixel size JsBarcode sets
+    const w = ref.current.getAttribute("width");
+    const h = ref.current.getAttribute("height");
+    if (w && h) {
+      ref.current.setAttribute("viewBox", `0 0 ${parseFloat(w)} ${parseFloat(h)}`);
+      ref.current.removeAttribute("width");
+      ref.current.removeAttribute("height");
+      ref.current.setAttribute("preserveAspectRatio", "none");
+    }
   }, [value]);
-  return <svg ref={ref} className="my-[0.5mm] h-[9mm] max-w-full" />;
+  return <svg ref={ref} />;
 }

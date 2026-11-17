@@ -10,7 +10,7 @@ export function AutoPrint({ auto = true, paper = "80mm" }: { auto?: boolean; pap
     const t = setTimeout(() => window.print(), 350);
     return () => clearTimeout(t);
   }, [auto]);
-  const size = paper === "A4" ? "A4" : paper === "label" ? "50mm 25mm" : "80mm auto";
+  const size = paper === "A4" ? "A4" : paper === "label" ? "60mm 40mm" : "80mm auto";
   return (
     <>
       <style>{`@media print { @page { size: ${size}; margin: ${paper === "A4" ? "12mm" : "0"}; } }`}</style>

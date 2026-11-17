@@ -32,15 +32,21 @@ type Props = {
   bulkOrderId?: number | null;
   /** Who the message is for — shown in the dialog title. */
   to: string;
-  variant?: "button" | "icon" | "compact";
+  variant?: "button" | "icon" | "compact" | "none";
   className?: string;
+  /** Open from code (e.g. right after an order is moved to Ready) — use with variant "none". */
+  autoOpenKey?: number;
+  /** Template name to fill straight away (falls back to the picker if missing or not fillable). */
+  preselect?: string;
+  /** Title shown instead of "WhatsApp <to>", e.g. "SO-0042 is ready — tell the customer?" */
+  title?: string;
 };
 
 /**
  * One-customer-at-a-time WhatsApp sender: pick a saved template → edit → open wa.me.
  * Deliberately no "send to all": WhatsApp bans personal numbers used for bulk sending.
  */
-export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, orderId, bulkOrderId, to, variant = "button", className }: Props) {
+export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, orderId, bulkOrderId, to, variant = "button", className, autoOpenKey, preselect, title }: Props) {
   const router = useRouter();
   const [open, setOpen] = React.useState(false);
   const [loading, setLoading] = React.useState(false);
@@ -62,7 +68,19 @@ export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, or
     setLoading(false);
     if (!r.ok) return void toast.error(r.error);
     setData(r.data);
+    if (preselect) {
+      const t = r.data.templates.find((x) => x.name.toLowerCase() === preselect.toLowerCase());
+      if (t && templateAvailability(t, values).ok) {
+        setPicked(t);
+        setText(fillTemplate(t.body, { ...values, shop: r.data.shop, phone: r.data.shopPhone }));
+      }
+    }
   };
+
+  // Opened from code: each new key opens the dialog once
+  React.useEffect(() => {
+    if (autoOpenKey) start();
+  }, [autoOpenKey]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const choose = (t: MessageTemplate | "blank") => {
     setPicked(t);
@@ -99,7 +117,7 @@ export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, or
   return (
     // Stops clicks inside the dialog from reaching a clickable table row behind it (React events bubble through portals).
     <span className={cn("inline-flex", className)} data-no-row-click onClick={(e) => e.stopPropagation()}>
-      {variant === "icon" ? (
+      {variant === "none" ? null : variant === "icon" ? (
         <Button variant="ghost" size="icon-sm" aria-label={`WhatsApp ${to}`} title="WhatsApp message" onClick={start} disabled={!phone && !altPhone}>
           <MessageCircle className="text-success" />
         </Button>
@@ -121,7 +139,7 @@ export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, or
                   <ChevronLeft />
                 </Button>
               )}
-              WhatsApp {to}
+              {title ?? `WhatsApp ${to}`}
             </DialogTitle>
             <DialogDescription>{picked ? "Check the message, change anything, then Send." : "Choose a message — most used first."}</DialogDescription>
           </DialogHeader>
@@ -222,9 +240,15 @@ export function WhatsAppTemplateButton({ phone, altPhone, values, customerId, or
                 {tooLong && <p className="text-xs text-destructive">Too long — shorten it so WhatsApp doesn&apos;t cut it off.</p>}
               </div>
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setPicked(null)}>
-                  Back
-                </Button>
+                {preselect ? (
+                  <Button variant="outline" onClick={() => setOpen(false)}>
+                    Later
+                  </Button>
+                ) : (
+                  <Button variant="outline" onClick={() => setPicked(null)}>
+                    Back
+                  </Button>
+                )}
                 <Button onClick={send} disabled={!canSend} className="bg-[#1f8f4e] text-white hover:bg-[#1a7a43]">
                   <Send /> Send on WhatsApp
                 </Button>

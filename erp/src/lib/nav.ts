@@ -1,4 +1,5 @@
 import {
+  KanbanSquare,
   LayoutDashboard,
   ShoppingBag,
   Scissors,
@@ -30,6 +31,7 @@ export const NAV: NavGroup[] = [
       { href: "/", en: "Dashboard", ml: "ഡാഷ്ബോർഡ്", icon: LayoutDashboard },
       { href: "/sales", en: "Fabric Sales", ml: "തുണി വിൽപ്പന", icon: ShoppingBag },
       { href: "/orders", en: "Stitching Orders", ml: "തയ്യൽ ഓർഡർ", icon: Scissors },
+      { href: "/orders/board", en: "Order board", ml: "ഓർഡർ ബോർഡ്", icon: KanbanSquare },
       { href: "/bulk", en: "Bulk Orders", ml: "ബൾക്ക് ഓർഡർ", icon: Building2 },
       { href: "/cash-book", en: "Cash Book", ml: "ക്യാഷ് ബുക്ക്", icon: BookOpen },
     ],

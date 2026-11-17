@@ -3,19 +3,14 @@
 import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { CalendarClock, KanbanSquare, List, User, Zap } from "lucide-react";
-import { toast } from "sonner";
+import { KanbanSquare, List } from "lucide-react";
 import { DataTable, type ColumnDef } from "@/components/app/data-table";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { TableCell, TableRow } from "@/components/ui/table";
-import { setOrderStatus } from "@/lib/actions/orders";
 import type { OrderRow } from "@/lib/queries";
 import { cn, fmtDate, rupees, today } from "@/lib/utils";
 
-const BOARD = ["Booked", "Cut", "Stitching", "Ready"];
 const FILTERS = [
   { key: "all", label: "All open" },
   { key: "today", label: "Due today" },
@@ -31,22 +26,9 @@ function due(o: OrderRow, t: string) {
   return null;
 }
 
-export function OrdersView({
-  rows,
-  statuses,
-  initialView,
-  initialFilter,
-}: {
-  rows: OrderRow[];
-  statuses: string[];
-  initialView: "board" | "list";
-  initialFilter: string;
-}) {
-  const router = useRouter();
-  const [view, setView] = React.useState(initialView);
+export function OrdersView({ rows, initialFilter }: { rows: OrderRow[]; initialFilter: string }) {
   const [filter, setFilter] = React.useState(initialFilter);
-  const [items, setItems] = React.useState(rows);
-  React.useEffect(() => setItems(rows), [rows]);
+  const items = rows;
   const t = today();
 
   const filtered = items.filter((o) => {
@@ -60,35 +42,22 @@ export function OrdersView({
       case "balance":
         return o.balance > 0 && o.status !== "Cancelled";
       case "all":
-        return view === "board" ? true : true;
+        return true;
       default:
         return true;
     }
   });
 
-  const move = async (id: number, status: string) => {
-    const prev = items;
-    setItems((is) => is.map((o) => (o.id === id ? { ...o, status } : o)));
-    const r = await setOrderStatus(id, status);
-    if (!r.ok) {
-      setItems(prev);
-      toast.error(r.error);
-    } else {
-      toast.success(`Moved to ${status}`);
-      router.refresh();
-    }
-  };
-
   return (
     <div className="grid gap-4">
       <div className="flex flex-wrap items-center gap-2">
         <div className="inline-flex rounded-lg border bg-muted p-0.5">
-          <button onClick={() => setView("board")} className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm", view === "board" ? "bg-card font-medium shadow-sm" : "text-muted-foreground")}>
+          <Link href="/orders/board" className="inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm text-muted-foreground hover:text-foreground">
             <KanbanSquare className="size-4" /> Board
-          </button>
-          <button onClick={() => setView("list")} className={cn("inline-flex h-8 items-center gap-1.5 rounded-md px-3 text-sm", view === "list" ? "bg-card font-medium shadow-sm" : "text-muted-foreground")}>
+          </Link>
+          <span className="inline-flex h-8 items-center gap-1.5 rounded-md bg-card px-3 text-sm font-medium shadow-sm">
             <List className="size-4" /> List
-          </button>
+          </span>
         </div>
         <div className="flex flex-wrap gap-1.5">
           {FILTERS.map((f) => {
@@ -105,102 +74,7 @@ export function OrdersView({
         </div>
       </div>
 
-      {view === "board" ? (
-        <Board orders={filtered} t={t} onMove={move} statuses={statuses} />
-      ) : (
-        <OrderList orders={filtered} />
-      )}
-    </div>
-  );
-}
-
-function Board({ orders, t, onMove, statuses }: { orders: OrderRow[]; t: string; onMove: (id: number, s: string) => void; statuses: string[] }) {
-  const [over, setOver] = React.useState<string | null>(null);
-  const recentDelivered = orders.filter((o) => o.status === "Delivered").slice(0, 8);
-  const cols = [...BOARD, "Delivered"];
-  return (
-    <div className="-mx-4 overflow-x-auto px-4 pb-2 sm:mx-0 sm:px-0">
-      <div className="grid min-w-[1000px] grid-cols-5 gap-3">
-        {cols.map((col) => {
-          const list = col === "Delivered" ? recentDelivered : orders.filter((o) => o.status === col);
-          return (
-            <div
-              key={col}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setOver(col);
-              }}
-              onDragLeave={() => setOver(null)}
-              onDrop={(e) => {
-                e.preventDefault();
-                setOver(null);
-                const id = Number(e.dataTransfer.getData("text/plain"));
-                if (id) onMove(id, col);
-              }}
-              className={cn("flex min-h-64 flex-col rounded-xl border bg-muted/40 p-2 transition-colors", over === col && "border-primary bg-primary/5")}
-            >
-              <div className="mb-2 flex items-center justify-between px-1.5 pt-1">
-                <StatusBadge status={col} />
-                <span className="text-xs text-muted-foreground">{list.length}</span>
-              </div>
-              <div className="grid gap-2">
-                {list.map((o) => {
-                  const d = due(o, t);
-                  return (
-                    <div
-                      key={o.id}
-                      draggable
-                      onDragStart={(e) => e.dataTransfer.setData("text/plain", String(o.id))}
-                      className={cn(
-                        "group cursor-grab rounded-lg border bg-card p-3 shadow-xs transition-shadow hover:shadow-md active:cursor-grabbing",
-                        d === "overdue" && "border-l-4 border-l-destructive",
-                        d === "today" && "border-l-4 border-l-warning",
-                      )}
-                    >
-                      <Link href={`/orders/${o.id}`} className="block">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="font-mono text-[11px] text-muted-foreground">{o.orderNo}</span>
-                          {o.urgency === "Express" && (
-                            <Badge variant="warning">
-                              <Zap /> Express
-                            </Badge>
-                          )}
-                        </div>
-                        <p className="mt-1 truncate text-sm font-medium">{o.customerName ?? "—"}</p>
-                        <p className="truncate text-xs text-muted-foreground">{o.items}</p>
-                        <div className="mt-2 flex items-center justify-between text-xs">
-                          <span className={cn("inline-flex items-center gap-1", d === "overdue" ? "font-medium text-destructive" : d === "today" ? "font-medium text-warning" : "text-muted-foreground")}>
-                            <CalendarClock className="size-3" />
-                            {d === "today" ? "Today" : fmtDate(o.deliveryDate)}
-                          </span>
-                          {o.balance > 0 ? <span className="font-medium text-destructive">{rupees(o.balance)} due</span> : <span className="text-success">Paid</span>}
-                        </div>
-                        {o.tailorName && (
-                          <p className="mt-1.5 inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-                            <User className="size-3" /> {o.tailorName}
-                          </p>
-                        )}
-                      </Link>
-                      {/* Touch devices: quick move */}
-                      <select
-                        aria-label="Move to"
-                        value={o.status}
-                        onChange={(e) => onMove(o.id, e.target.value)}
-                        className="mt-2 w-full rounded border bg-muted/50 px-1 py-0.5 text-xs lg:hidden"
-                      >
-                        {statuses.map((s) => (
-                          <option key={s}>{s}</option>
-                        ))}
-                      </select>
-                    </div>
-                  );
-                })}
-                {list.length === 0 && <p className="px-2 py-6 text-center text-xs text-muted-foreground">Drop here</p>}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+      <OrderList orders={filtered} />
     </div>
   );
 }

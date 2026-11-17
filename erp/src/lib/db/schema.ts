@@ -533,3 +533,19 @@ export const contactImports = pgTable(
   },
   (t) => [uniqueIndex("contact_imports_phone_uq").on(t.phone), index("contact_imports_status_idx").on(t.status)],
 );
+
+/** Every stage change of a stitching order (board, order page, "mark delivered" on payment). */
+export const orderStatusChanges = pgTable(
+  "order_status_changes",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    fromStatus: text("from_status"),
+    toStatus: text("to_status").notNull(),
+    changedBy: text("changed_by"),
+    changedAt: created(),
+  },
+  (t) => [index("order_status_changes_order_idx").on(t.orderId)],
+);

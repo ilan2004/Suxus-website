@@ -28,6 +28,7 @@ export function OrderView({
   order,
   shop,
   statuses,
+  lastChange,
   paymentModes,
   measurements,
   fits,
@@ -38,6 +39,7 @@ export function OrderView({
   order: OrderFull;
   shop: ShopInfo;
   statuses: string[];
+  lastChange: { from: string | null; to: string; by: string | null; at: string } | null;
   paymentModes: string[];
   measurements: MeasurementRow[];
   fits: string[];
@@ -111,6 +113,12 @@ export function OrderView({
           </Badge>
         )}
         {overdue && <Badge variant="destructive">Overdue</Badge>}
+        {lastChange && (
+          <span className="w-full text-xs text-muted-foreground sm:order-last" title="Last stage change">
+            {lastChange.from ? `${lastChange.from} → ${lastChange.to}` : lastChange.to}, {fmtChange(lastChange.at)}
+            {lastChange.by && ` · ${lastChange.by}`}
+          </span>
+        )}
         <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" onClick={printBill}>
             <Printer /> Print
@@ -605,4 +613,14 @@ function DeleteOrderDialog({
       </DialogContent>
     </Dialog>
   );
+}
+
+/** "17-Nov 4:20 pm" in shop time */
+function fmtChange(iso: string) {
+  const p = Object.fromEntries(
+    new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "numeric", minute: "2-digit", hour12: true })
+      .formatToParts(new Date(iso))
+      .map((x) => [x.type, x.value]),
+  );
+  return `${p.day}-${p.month} ${p.hour}:${p.minute} ${String(p.dayPeriod ?? "").toLowerCase()}`;
 }

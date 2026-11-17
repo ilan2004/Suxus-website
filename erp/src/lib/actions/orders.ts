@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { getSetting } from "@/lib/settings";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -122,18 +123,27 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
   }
 }
 
-export async function setOrderStatus(id: number, status: string): Promise<Result<null>> {
+export async function setOrderStatus(id: number, status: string): Promise<Result<{ from: string; to: string }>> {
   const user = await requireUser();
+  const lists = await getSetting("lists");
+  if (!lists.status.includes(status)) return fail(`Unknown stage: ${status}`);
   const db = await getDb();
-  await db
-    .update(schema.orders)
-    .set({ status, deliveredOn: status === "Delivered" ? today() : null })
-    .where(eq(schema.orders.id, id));
-  await audit(db, user, "update", "order", id, `status → ${status}`);
+  const [o] = await db.select({ status: schema.orders.status }).from(schema.orders).where(eq(schema.orders.id, id));
+  if (!o) return fail("Order not found");
+  if (o.status === status) return ok({ from: o.status, to: status });
+  await db.transaction(async (tx) => {
+    await tx
+      .update(schema.orders)
+      .set({ status, deliveredOn: status === "Delivered" ? today() : null })
+      .where(eq(schema.orders.id, id));
+    await tx.insert(schema.orderStatusChanges).values({ orderId: id, fromStatus: o.status, toStatus: status, changedBy: user.name });
+    await audit(tx, user, "update", "order", id, `status ${o.status} → ${status}`);
+  });
   revalidatePath("/orders");
+  revalidatePath("/orders/board");
   revalidatePath(`/orders/${id}`);
   revalidatePath("/");
-  return ok(null);
+  return ok({ from: o.status, to: status });
 }
 
 const PaymentInput = z.object({
@@ -168,8 +178,9 @@ export async function addOrderPayment(input: z.input<typeof PaymentInput>): Prom
       amountIn: d.amount,
       mode: d.mode,
     });
-    if (d.markDelivered) {
+    if (d.markDelivered && o.status !== "Delivered") {
       await tx.update(schema.orders).set({ status: "Delivered", deliveredOn: d.date }).where(eq(schema.orders.id, o.id));
+      await tx.insert(schema.orderStatusChanges).values({ orderId: o.id, fromStatus: o.status, toStatus: "Delivered", changedBy: user.name });
     }
     await audit(tx, user, "create", "payment", p.id, `${o.orderNo} ₹${d.amount}`);
   });

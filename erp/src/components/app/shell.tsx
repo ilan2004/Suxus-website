@@ -25,7 +25,10 @@ import { globalSearch, type SearchHit } from "@/lib/actions/search";
 type User = { name: string; role: "partner" | "staff" };
 
 function isActive(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(href + "/");
+  if (href === "/") return pathname === "/";
+  // A more specific menu item (e.g. /orders/board) wins over its parent (/orders)
+  if (href === "/orders" && pathname.startsWith("/orders/board")) return false;
+  return pathname === href || pathname.startsWith(href + "/");
 }
 
 function NavList({ user, onNavigate }: { user: User; onNavigate?: () => void }) {

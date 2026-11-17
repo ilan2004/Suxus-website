@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { c } from "@/lib/db/sql";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
-import { AlertTriangle, CalendarClock, CircleDollarSign, Layers, PackageCheck, Plus, Scissors, ShoppingBag, Wallet } from "lucide-react";
+import { AlertTriangle, CalendarClock, KanbanSquare, CircleDollarSign, Layers, PackageCheck, Plus, Scissors, ShoppingBag, Wallet } from "lucide-react";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
@@ -115,6 +115,25 @@ export default async function Dashboard() {
           </span>
         </div>
       )}
+
+      {/* Order board strip */}
+      <div className="flex overflow-hidden rounded-xl border bg-card text-sm">
+        <Link href="/orders/board?due=today" className="flex flex-1 items-center gap-2 px-4 py-2.5 hover:bg-muted/60">
+          <CalendarClock className={dueToday.length ? "size-4 text-warning" : "size-4 text-muted-foreground"} />
+          <span>
+            Delivering today: <b className="tabular-nums">{dueToday.length}</b>
+          </span>
+        </Link>
+        <Link href="/orders/board?due=late" className="flex flex-1 items-center gap-2 border-l px-4 py-2.5 hover:bg-muted/60">
+          <AlertTriangle className={overdue.length ? "size-4 text-destructive" : "size-4 text-muted-foreground"} />
+          <span className={overdue.length ? "font-medium text-destructive" : undefined}>
+            Late: <b className="tabular-nums">{overdue.length}</b>
+          </span>
+        </Link>
+        <Link href="/orders/board" className="hidden items-center gap-1.5 border-l px-4 py-2.5 text-muted-foreground hover:bg-muted/60 sm:flex">
+          <KanbanSquare className="size-4" /> Order board
+        </Link>
+      </div>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Collected today" ml="ഇന്നത്തെ വരവ്" value={rupees(collectedToday)} sub="Fabric bills + order payments" icon={Wallet} tone="success" href={`/cash-book?from=${t}&to=${t}`} />

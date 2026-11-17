@@ -84,6 +84,8 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
   const paid = sql<number>`coalesce((select sum(${c(payments.amount)}) from ${payments} where ${c(payments.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemsSummary = sql<string>`coalesce((select string_agg(${c(orderItems.qty)} || ' × ' || ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   const tailor = sql<string | null>`(select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orders.tailorId)})`;
+  const pieces = sql<number>`coalesce((select sum(${c(orderItems.qty)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
+  const itemNames = sql<string>`coalesce((select string_agg(distinct ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   const altPhone = sql<string | null>`(select ${c(schema.customers.altPhone)} from ${schema.customers} where ${c(schema.customers.id)} = ${c(orders.customerId)})`;
   const rows = await db
     .select({
@@ -104,6 +106,9 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
       total: orders.total,
       paid,
       items: itemsSummary,
+      itemNames,
+      pieces,
+      deliveredOn: orders.deliveredOn,
     })
     .from(orders)
     .where(where)

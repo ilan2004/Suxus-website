@@ -15,6 +15,12 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const measurements = order.customerId
     ? await db.select().from(schema.measurements).where(eq(schema.measurements.customerId, order.customerId)).orderBy(desc(schema.measurements.date))
     : [];
+  const [last] = await db
+    .select()
+    .from(schema.orderStatusChanges)
+    .where(eq(schema.orderStatusChanges.orderId, order.id))
+    .orderBy(desc(schema.orderStatusChanges.id))
+    .limit(1);
   const { print } = await searchParams;
   return (
     <OrderView
@@ -27,6 +33,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       customerTypes={settings.lists.customerType}
       autoPrint={print === "1"}
       isPartner={session.role === "partner"}
+      lastChange={last ? { from: last.fromStatus, to: last.toStatus, by: last.changedBy, at: new Date(last.changedAt).toISOString() } : null}
     />
   );
 }

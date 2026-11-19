@@ -51,7 +51,7 @@ export async function saveCashEntry(input: CashInput): Promise<Result<null>> {
 }
 
 export async function deleteCashEntry(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await rememberDeleted(db, "cash_book", [id]);
   const [row] = await db

@@ -72,7 +72,7 @@ export async function savePurchase(input: PurchaseInput): Promise<Result<{ id: n
 }
 
 export async function deletePurchase(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await rememberDeleted(db, "purchase", [id]);
   await db.delete(schema.purchases).where(eq(schema.purchases.id, id));
@@ -117,7 +117,7 @@ export async function saveSupplier(input: SupplierInput): Promise<Result<{ id: n
 }
 
 export async function deleteSupplier(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   const used = await db.select({ id: schema.purchases.id }).from(schema.purchases).where(eq(schema.purchases.supplierId, id)).limit(1);
   if (used.length) return fail("This supplier has purchases, so it cannot be deleted.");
@@ -202,7 +202,7 @@ export async function undoSupplierPayment(id: number): Promise<Result<null>> {
 }
 
 export async function deleteSupplierPayment(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await rememberDeleted(db, "supplier_payment", [id]);
   const [p] = await db.delete(schema.supplierPayments).where(eq(schema.supplierPayments.id, id)).returning();
@@ -214,7 +214,7 @@ export async function deleteSupplierPayment(id: number): Promise<Result<null>> {
 
 /** Tidies "(…)" notes out of supplier names and links setup expenses to suppliers by "Paid to". */
 export async function relinkSuppliers(): Promise<Result<{ linked: number; unlinked: number; tidied: number }>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "money" });
   const db = await getDb();
   const tidied = await tidySupplierNames(db);
   const r = await linkSetupExpenses(db);

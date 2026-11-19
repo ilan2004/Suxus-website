@@ -133,7 +133,7 @@ export async function setContactStatus(ids: number[], status: "skipped" | "pendi
 
 /** Forget the whole uploaded list (customers already created are kept). */
 export async function clearContactList(): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await db.delete(schema.contactImports);
   await audit(db, user, "delete", "contact_import", null, "cleared list");

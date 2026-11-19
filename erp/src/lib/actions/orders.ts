@@ -191,7 +191,7 @@ export async function addOrderPayment(input: z.input<typeof PaymentInput>): Prom
 }
 
 export async function deletePayment(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   const [p] = await db.delete(schema.payments).where(eq(schema.payments.id, id)).returning();
   if (p) {
@@ -209,7 +209,7 @@ export async function deletePayment(id: number): Promise<Result<null>> {
  * Numbers are reused when the deleted order / bill was the latest one.
  */
 export async function deleteOrder(id: number, opts?: { withFabricBill?: boolean }): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await db.transaction(async (tx) => {
     const pays = await tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.orderId, id));

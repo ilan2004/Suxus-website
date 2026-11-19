@@ -14,7 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { fmtDate, num, resolvePeriod, rupees } from "@/lib/utils";
 
 export default async function StaffProfile({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ from?: string; to?: string }> }) {
-  await requireUser({ partner: true });
+  await requireUser({ can: "staff" });
   const id = Number((await params).id);
   const { from, to } = resolvePeriod(await searchParams);
   const db = await getDb();

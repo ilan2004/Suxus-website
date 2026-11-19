@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { can } from "@/lib/permissions";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -42,7 +43,7 @@ function sheet(wb: ExcelJS.Workbook, name: string, title: string, cols: Col[], r
 /** Full backup / report: every table as a sheet, in the same order as the original Daily Operations Book. */
 export async function GET(req: NextRequest) {
   const session = await getSession();
-  if (!session || session.role !== "partner") return NextResponse.json({ error: "Partners only" }, { status: 403 });
+  if (!session || !can(session.role, "settings")) return NextResponse.json({ error: "Not found" }, { status: 404 });
   const from = req.nextUrl.searchParams.get("from") ?? "2020-01-01";
   const to = req.nextUrl.searchParams.get("to") ?? today();
   const db = await getDb();

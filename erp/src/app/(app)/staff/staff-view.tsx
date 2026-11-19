@@ -70,7 +70,7 @@ export function StaffView({ rows, lists }: { rows: Row[]; lists: { staffRole: st
         row.original.access === "none" ? (
           <span className="text-xs text-muted-foreground">No login</span>
         ) : (
-          <Badge variant={row.original.access === "partner" ? "gold" : "secondary"}>
+          <Badge variant={row.original.access === "owner" || row.original.access === "partner" ? "gold" : "secondary"}>
             <KeyRound /> {row.original.access}
           </Badge>
         ),
@@ -92,7 +92,7 @@ export function StaffView({ rows, lists }: { rows: Row[]; lists: { staffRole: st
       <DataTable
         columns={columns}
         data={rows}
-        onRowClick={(r) => setEdit({ ...r, status: r.status === "Left" ? "Left" : "Active", access: r.access as "partner" | "staff" | "none" })}
+        onRowClick={(r) => setEdit({ ...r, status: r.status === "Left" ? "Left" : "Active", access: r.access as "owner" | "partner" | "staff" | "none" })}
         toolbar={
           <Button onClick={() => setEdit({ name: "", status: "Active", access: "none", incentive: false })}>
             <Plus /> Add staff
@@ -184,7 +184,8 @@ function StaffSheet({
                   [
                     ["none", "No login"],
                     ["staff", "Staff (daily entry)"],
-                    ["partner", "Partner (everything)"],
+                    ["partner", "Partner"],
+                    ["owner", "Owner (everything)"],
                   ] as const
                 ).map(([k, l]) => (
                   <button

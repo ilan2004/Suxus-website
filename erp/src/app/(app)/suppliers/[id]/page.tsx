@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { can } from "@/lib/permissions";
 import { desc, eq, ilike, isNull, and, or } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -23,5 +24,5 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
       .orderBy(desc(schema.setupExpenses.date)),
     getSetting("lists"),
   ]);
-  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} partners={lists.partner} isPartner={session.role === "partner"} />;
+  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} partners={lists.partner} isPartner={can(session.role, "delete")} />;
 }

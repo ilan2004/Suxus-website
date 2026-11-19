@@ -11,7 +11,7 @@ import { IncentiveView } from "./incentive-view";
 export const metadata = { title: "Incentive" };
 
 export default async function IncentivePage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
-  await requireUser({ partner: true });
+  await requireUser({ can: "staff" });
   const { from, to } = resolvePeriod(await searchParams);
   const db = await getDb();
   const [rows, settings, history] = await Promise.all([

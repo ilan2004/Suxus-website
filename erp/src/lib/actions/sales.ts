@@ -135,7 +135,7 @@ export async function createSale(input: SaleInput): Promise<Result<{ id: number;
 }
 
 export async function cancelSale(id: number, reason: string): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await db.transaction(async (tx) => {
     const [sale] = await tx
@@ -163,7 +163,7 @@ export async function cancelSale(id: number, reason: string): Promise<Result<nul
  * If it was the latest bill, the FS- counter steps back so the number is reused.
  */
 export async function deleteCancelledSale(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   const res = await db.transaction(async (tx) => {
     const [sale] = await tx.select().from(schema.sales).where(eq(schema.sales.id, id));

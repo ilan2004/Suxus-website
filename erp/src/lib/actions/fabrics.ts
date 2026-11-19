@@ -71,7 +71,7 @@ export async function saveFabric(input: FabricInput): Promise<Result<{ id: numbe
 }
 
 export async function deleteFabric(id: number): Promise<Result<"deleted" | "deactivated">> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   const used = await db.select({ id: schema.saleItems.id }).from(schema.saleItems).where(eq(schema.saleItems.fabricId, id)).limit(1);
   if (used.length) {

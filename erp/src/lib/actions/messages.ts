@@ -29,7 +29,7 @@ export async function listTemplatesForPicker(): Promise<Result<{ templates: Mess
 }
 
 export async function listTemplates(): Promise<MessageTemplate[]> {
-  await requireUser({ partner: true });
+  await requireUser({ can: "settings" });
   const db = await getDb();
   const t = schema.messageTemplates;
   return db
@@ -47,7 +47,7 @@ const TemplateInput = z.object({
 export type TemplateInput = z.input<typeof TemplateInput>;
 
 export async function saveTemplate(input: TemplateInput): Promise<Result<{ id: number }>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "settings" });
   const parsed = TemplateInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, ...d } = parsed.data;
@@ -68,7 +68,7 @@ export async function saveTemplate(input: TemplateInput): Promise<Result<{ id: n
 }
 
 export async function duplicateTemplate(id: number): Promise<Result<{ id: number }>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "settings" });
   const db = await getDb();
   const t = schema.messageTemplates;
   const [src] = await db.select().from(t).where(eq(t.id, id));
@@ -82,7 +82,7 @@ export async function duplicateTemplate(id: number): Promise<Result<{ id: number
 }
 
 export async function deleteTemplate(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "settings" });
   const db = await getDb();
   const [row] = await db.delete(schema.messageTemplates).where(eq(schema.messageTemplates.id, id)).returning();
   await audit(db, user, "delete", "message_template", id, row?.name);
@@ -92,7 +92,7 @@ export async function deleteTemplate(id: number): Promise<Result<null>> {
 
 /** Saves the order after drag/arrow reordering: ids in their new order. */
 export async function reorderTemplates(ids: number[]): Promise<Result<null>> {
-  await requireUser({ partner: true });
+  await requireUser({ can: "settings" });
   if (!ids.every((n) => Number.isInteger(n))) return fail("Bad order");
   const db = await getDb();
   await db.transaction(async (tx) => {

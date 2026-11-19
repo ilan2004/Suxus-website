@@ -33,7 +33,7 @@ export async function logoutAction() {
   redirect("/login");
 }
 
-/** First run only: creates the first partner login. */
+/** First run only: creates the first login — the Owner. */
 export async function setupAction(_: unknown, form: FormData): Promise<{ error?: string }> {
   if (await hasAnyLoginUser()) return { error: "Setup is already complete. Please sign in." };
   const required = process.env.ERP_SETUP_CODE;
@@ -53,14 +53,14 @@ export async function setupAction(_: unknown, form: FormData): Promise<{ error?:
   if (existing) {
     [user] = await db
       .update(schema.staff)
-      .set({ access: "partner", pinHash, status: "Active" })
+      .set({ access: "owner", role: "Owner", pinHash, status: "Active" })
       .where(eq(schema.staff.id, existing.id))
       .returning();
   } else {
     const n = await nextNumber(db, "staff");
     [user] = await db
       .insert(schema.staff)
-      .values({ code: `S${String(n).padStart(2, "0")}`, name, role: "Partner", payType: "Partner (No Salary)", access: "partner", pinHash })
+      .values({ code: `S${String(n).padStart(2, "0")}`, name, role: "Owner", payType: "Partner (No Salary)", access: "owner", pinHash })
       .returning();
   }
   await startSession(user);

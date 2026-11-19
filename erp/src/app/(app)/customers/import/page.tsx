@@ -1,4 +1,5 @@
 import { asc } from "drizzle-orm";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { PageHeader } from "@/components/app/page-header";
@@ -22,7 +23,7 @@ export default async function ContactImportPage() {
         ml="കോൺടാക്ട് ചേർക്കുക"
         description="Upload your phone's contacts once, then add customers from the list a few at a time. The list is saved — pick up where you left off."
       />
-      <ContactImportView contacts={contacts} customerPhones={customerPhones.flatMap((x) => [x.phone, x.alt].filter((p): p is string => !!p).map((p) => [p, x.id] as [string, number]))} canClear={session.role === "partner"} />
+      <ContactImportView contacts={contacts} customerPhones={customerPhones.flatMap((x) => [x.phone, x.alt].filter((p): p is string => !!p).map((p) => [p, x.id] as [string, number]))} canClear={can(session.role, "delete")} />
     </>
   );
 }

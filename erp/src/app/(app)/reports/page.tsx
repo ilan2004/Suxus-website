@@ -12,7 +12,7 @@ import { cn, fmtDate, num, resolvePeriod, rupees } from "@/lib/utils";
 export const metadata = { title: "Summary" };
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<{ from?: string; to?: string }> }) {
-  await requireUser({ partner: true });
+  await requireUser({ can: "money" });
   const { from, to } = resolvePeriod(await searchParams);
   const s = await summary(from, to);
   const pendingIn = s.pending.stitching + s.pending.bulk;

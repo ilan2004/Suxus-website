@@ -8,7 +8,7 @@ import { AssetsView } from "./assets-view";
 export const metadata = { title: "Opening Stock & Assets" };
 
 export default async function OpeningStockPage() {
-  await requireUser({ partner: true });
+  await requireUser({ can: "money" });
   const db = await getDb();
   const [rows, lists, cloth] = await Promise.all([
     db.select().from(schema.openingStock).orderBy(asc(schema.openingStock.id)),

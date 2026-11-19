@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { can } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { getBulkFull } from "@/lib/queries";
 import { getSettings } from "@/lib/settings";
@@ -9,5 +10,5 @@ export default async function BulkOrderPage({ params }: { params: Promise<{ id: 
   const o = await getBulkFull(Number((await params).id));
   if (!o) notFound();
   const s = await getSettings();
-  return <BulkView order={o} statuses={s.lists.status} modes={s.lists.paymentMode} shopName={s.shop.name} isPartner={session.role === "partner"} />;
+  return <BulkView order={o} statuses={s.lists.status} modes={s.lists.paymentMode} shopName={s.shop.name} isPartner={can(session.role, "delete")} />;
 }

@@ -63,7 +63,7 @@ export async function saveWages(input: WageInput): Promise<Result<null>> {
 }
 
 export async function deleteWage(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await db.delete(schema.tailorWages).where(eq(schema.tailorWages.id, id));
   await removeCash(db, "wage", id);
@@ -105,7 +105,7 @@ export async function payTailor(input: z.input<typeof PayInput>): Promise<Result
 }
 
 export async function deleteWagePayment(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await db.delete(schema.wagePayments).where(eq(schema.wagePayments.id, id));
   await removeCash(db, "wage_payment", id);

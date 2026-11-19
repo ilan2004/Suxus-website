@@ -8,7 +8,7 @@ import { SetupView } from "./setup-view";
 export const metadata = { title: "Setup Expenses" };
 
 export default async function SetupExpensesPage() {
-  await requireUser({ partner: true });
+  await requireUser({ can: "money" });
   const db = await getDb();
   const [rows, suppliers, lists] = await Promise.all([
     db.select().from(schema.setupExpenses).orderBy(desc(schema.setupExpenses.date), desc(schema.setupExpenses.id)),

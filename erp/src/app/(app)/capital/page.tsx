@@ -10,7 +10,7 @@ export const metadata = { title: "Capital Account" };
 const SHARE_COLORS = ["var(--chart-1)", "var(--chart-2)", "var(--chart-3)", "var(--chart-4)"];
 
 export default async function CapitalPage() {
-  await requireUser({ partner: true });
+  await requireUser({ can: "money" });
   const rows = await capitalAccount();
   const total = (k: "setup" | "stock" | "capital" | "total" | "withdrawn" | "net") => rows.reduce((s, r) => s + r[k], 0);
   const lines: { key: "setup" | "stock" | "capital"; en: string; ml: string; href: string }[] = [

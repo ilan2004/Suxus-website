@@ -1,4 +1,5 @@
 import { asc } from "drizzle-orm";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
@@ -21,7 +22,7 @@ export default async function PurchasesPage() {
   return (
     <>
       <PageHeader title="Purchases" ml="വാങ്ങൽ / സപ്ലയർ ബില്ലുകൾ" description="Supplier bills with GST. Amount paid at purchase goes to the cash book; pay balances from Suppliers." />
-      <PurchasesView rows={rows} suppliers={suppliers} modes={lists.paymentMode} owed={owed.map((o) => ({ id: o.id, name: o.name, balance: o.balance }))} canDelete={session.role === "partner"} />
+      <PurchasesView rows={rows} suppliers={suppliers} modes={lists.paymentMode} owed={owed.map((o) => ({ id: o.id, name: o.name, balance: o.balance }))} canDelete={can(session.role, "delete")} />
     </>
   );
 }

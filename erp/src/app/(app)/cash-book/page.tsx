@@ -1,4 +1,5 @@
 import { isNotNull, or } from "drizzle-orm";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
@@ -59,7 +60,7 @@ export default async function CashBookPage({ searchParams }: { searchParams: Pro
         categories={lists.cashCategory}
         modes={lists.paymentMode}
         partners={lists.partner}
-        canDelete={session.role === "partner"}
+        canDelete={can(session.role, "delete")}
         initial={{ from: sp.from, to: sp.to, category: sp.category, mode: sp.mode }}
       />
     </>

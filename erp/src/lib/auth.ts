@@ -1,15 +1,16 @@
 import "server-only";
 import crypto from "node:crypto";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { and, eq, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getDb, schema } from "./db";
+import { can, roleFromAccess, type Perm, type Role } from "./permissions";
 
 export const SESSION_COOKIE = "suxus_session";
 const MAX_AGE = 60 * 60 * 24 * 14; // 14 days
 
-export type Session = { id: number; name: string; role: "partner" | "staff"; exp: number };
+export type Session = { id: number; name: string; role: Role; exp: number };
 
 function secret() {
   const s = process.env.ERP_SECRET;
@@ -45,11 +46,14 @@ export async function getSession(): Promise<Session | null> {
   return decodeSession(jar.get(SESSION_COOKIE)?.value);
 }
 
-/** Use in pages and server actions. Redirects to /login when not signed in. */
-export async function requireUser(opts?: { partner?: boolean }): Promise<Session> {
+/**
+ * Use in pages and server actions. Redirects to /login when not signed in.
+ * `can`: the permission needed — without it the page answers "not found" (it is hidden, not refused).
+ */
+export async function requireUser(opts?: { can?: Perm }): Promise<Session> {
   const s = await getSession();
   if (!s) redirect("/login");
-  if (opts?.partner && s.role !== "partner") redirect("/?denied=1");
+  if (opts?.can && !can(s.role, opts.can)) notFound();
   return s;
 }
 
@@ -58,7 +62,7 @@ export async function startSession(user: { id: number; name: string; access: str
   const session: Session = {
     id: user.id,
     name: user.name,
-    role: user.access === "partner" ? "partner" : "staff",
+    role: roleFromAccess(user.access) ?? "staff",
     exp: Date.now() + MAX_AGE * 1000,
   };
   jar.set(SESSION_COOKIE, encodeSession(session), {

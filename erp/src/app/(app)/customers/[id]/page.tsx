@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { can } from "@/lib/permissions";
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -41,7 +42,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       measurements={measurements}
       messages={messages.map((m) => ({ ...m, sentAt: new Date(m.sentAt).toISOString() }))}
       lists={{ customerType: lists.customerType, fit: lists.fit }}
-      canDelete={session.role === "partner"}
+      canDelete={can(session.role, "delete")}
     />
   );
 }

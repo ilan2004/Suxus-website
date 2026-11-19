@@ -7,7 +7,7 @@ import { listTemplates } from "@/lib/actions/messages";
 export const metadata = { title: "Settings" };
 
 export default async function SettingsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
-  await requireUser({ partner: true });
+  await requireUser({ can: "settings" });
   const [settings, templates, { tab }] = await Promise.all([getSettings(), listTemplates(), searchParams]);
   return (
     <>

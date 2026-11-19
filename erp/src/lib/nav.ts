@@ -20,8 +20,9 @@ import {
   Settings,
   type LucideIcon,
 } from "lucide-react";
+import type { Perm } from "./permissions";
 
-export type NavItem = { href: string; en: string; ml: string; icon: LucideIcon; partner?: boolean; soon?: boolean };
+export type NavItem = { href: string; en: string; ml: string; icon: LucideIcon; perm?: Perm; soon?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV: NavGroup[] = [
@@ -49,19 +50,19 @@ export const NAV: NavGroup[] = [
   {
     label: "Staff",
     items: [
-      { href: "/staff", en: "Staff", ml: "ജീവനക്കാർ", icon: UserCog, partner: true },
+      { href: "/staff", en: "Staff", ml: "ജീവനക്കാർ", icon: UserCog, perm: "staff" },
       { href: "/wages", en: "Tailor Wages", ml: "തയ്യൽ കൂലി", icon: HandCoins },
-      { href: "/incentive", en: "Incentive", ml: "ഇൻസെന്റീവ്", icon: BadgePercent, partner: true },
+      { href: "/incentive", en: "Incentive", ml: "ഇൻസെന്റീവ്", icon: BadgePercent, perm: "staff" },
     ],
   },
   {
     label: "Business",
     items: [
-      { href: "/setup-expenses", en: "Setup Expenses", ml: "ഒരുക്കൽ ചെലവ്", icon: Hammer, partner: true },
-      { href: "/opening-stock", en: "Opening Stock", ml: "ആസ്തി", icon: Package, partner: true },
-      { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, partner: true },
-      { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, partner: true },
-      { href: "/settings", en: "Settings", ml: "സെറ്റിംഗ്സ്", icon: Settings, partner: true },
+      { href: "/setup-expenses", en: "Setup Expenses", ml: "ഒരുക്കൽ ചെലവ്", icon: Hammer, perm: "money" },
+      { href: "/opening-stock", en: "Opening Stock", ml: "ആസ്തി", icon: Package, perm: "money" },
+      { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, perm: "money" },
+      { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, perm: "money" },
+      { href: "/settings", en: "Settings", ml: "സെറ്റിംഗ്സ്", icon: Settings, perm: "settings" },
     ],
   },
 ];

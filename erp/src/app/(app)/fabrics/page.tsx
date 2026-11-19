@@ -1,4 +1,5 @@
 import { asc } from "drizzle-orm";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
@@ -28,7 +29,7 @@ export default async function FabricsPage() {
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Fabrics" ml="ഇനങ്ങൾ" value={active.length} icon={Layers} />
         <StatCard label="Balance metres" ml="ബാക്കി മീറ്റർ" value={num(active.reduce((s, f) => s + f.balanceMtr, 0))} icon={Ruler} />
-        {session.role === "partner" && (
+        {can(session.role, "costs") && (
           <StatCard label="Stock value (cost)" ml="സ്റ്റോക്ക് മൂല്യം" value={rupees(active.reduce((s, f) => s + f.stockValue, 0))} icon={Wallet} tone="gold" />
         )}
         <StatCard label="Low stock" ml="കുറവ്" value={low.length} sub={`≤ ${settings.shop.lowStockMtr} m left`} icon={AlertTriangle} tone={low.length ? "warning" : "success"} />
@@ -39,7 +40,7 @@ export default async function FabricsPage() {
         lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}
         compositions={settings.compositions}
         lowStock={settings.shop.lowStockMtr}
-        showCost={session.role === "partner"}
+        showCost={can(session.role, "costs")}
         photosEnabled={storageMode() !== "off"}
       />
     </>

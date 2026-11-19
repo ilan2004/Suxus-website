@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { can } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { getSaleFull } from "@/lib/queries";
 import { getSetting } from "@/lib/settings";
@@ -10,5 +11,5 @@ export default async function SalePage({ params, searchParams }: { params: Promi
   if (!sale) notFound();
   const shop = await getSetting("shop");
   const { print } = await searchParams;
-  return <SaleView sale={sale} shop={shop} autoPrint={print === "1"} canCancel={session.role === "partner"} />;
+  return <SaleView sale={sale} shop={shop} autoPrint={print === "1"} canCancel={can(session.role, "delete")} />;
 }

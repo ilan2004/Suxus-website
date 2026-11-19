@@ -36,7 +36,7 @@ const schemas = {
 } satisfies Record<keyof AppSettings, z.ZodType>;
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "settings" });
   const parsed = schemas[key].safeParse(value);
   if (!parsed.success) return fail(zodError(parsed.error));
   await saveSetting(key, parsed.data as AppSettings[K]);
@@ -46,7 +46,7 @@ export async function updateSetting<K extends keyof AppSettings>(key: K, value: 
 }
 
 export async function importExcelAction(form: FormData): Promise<Result<Record<string, string>>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "settings" });
   const file = form.get("file");
   if (!(file instanceof File) || !file.name.toLowerCase().endsWith(".xlsx")) return fail("Choose the .xlsx file");
   if (file.size > 15 * 1024 * 1024) return fail("File is too large (max 15 MB)");

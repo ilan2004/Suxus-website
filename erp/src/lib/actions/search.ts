@@ -1,6 +1,7 @@
 "use server";
 
 import { desc, ilike, or, sql } from "drizzle-orm";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 
@@ -49,7 +50,7 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
       .from(s.suppliers)
       .where(or(ilike(s.suppliers.name, like), ilike(s.suppliers.aliases, like), ilike(s.suppliers.supplies, like)))
       .limit(5),
-    user.role === "partner"
+    can(user.role, "staff")
       ? db.select({ id: s.staff.id, name: s.staff.name, role: s.staff.role }).from(s.staff).where(ilike(s.staff.name, like)).limit(4)
       : Promise.resolve([]),
   ]);

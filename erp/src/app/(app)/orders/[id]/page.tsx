@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { can } from "@/lib/permissions";
 import { desc, eq } from "drizzle-orm";
 import { requireUser } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
@@ -32,7 +33,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
       fits={settings.lists.fit}
       customerTypes={settings.lists.customerType}
       autoPrint={print === "1"}
-      isPartner={session.role === "partner"}
+      isPartner={can(session.role, "delete")}
       lastChange={last ? { from: last.fromStatus, to: last.toStatus, by: last.changedBy, at: new Date(last.changedAt).toISOString() } : null}
     />
   );

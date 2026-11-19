@@ -151,7 +151,7 @@ export async function setBulkStatus(id: number, status: string): Promise<Result<
 }
 
 export async function deleteBulkOrder(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   await db.transaction(async (tx) => {
     const pays = await tx.select({ id: schema.payments.id }).from(schema.payments).where(eq(schema.payments.bulkOrderId, id));
@@ -165,7 +165,7 @@ export async function deleteBulkOrder(id: number): Promise<Result<null>> {
 }
 
 export async function deleteBulkPayment(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   const [p] = await db.delete(schema.payments).where(eq(schema.payments.id, id)).returning();
   if (p) {

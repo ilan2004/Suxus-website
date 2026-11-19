@@ -8,7 +8,7 @@ import { StaffView } from "./staff-view";
 export const metadata = { title: "Staff" };
 
 export default async function StaffPage() {
-  await requireUser({ partner: true });
+  await requireUser({ can: "staff" });
   const db = await getDb();
   const rows = await db.select().from(schema.staff).orderBy(asc(schema.staff.code));
   const lists = await getSetting("lists");

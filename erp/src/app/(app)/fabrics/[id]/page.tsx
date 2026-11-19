@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { can } from "@/lib/permissions";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -47,7 +48,7 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}
       compositions={settings.compositions}
       lowStock={settings.shop.lowStockMtr}
-      showCost={session.role === "partner"}
+      showCost={can(session.role, "costs")}
       photosEnabled={storageMode() !== "off"}
       shopName={`${settings.shop.name} ${settings.shop.tagline}`.trim()}
     />

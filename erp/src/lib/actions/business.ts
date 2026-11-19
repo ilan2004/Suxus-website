@@ -32,7 +32,7 @@ const SetupInput = z.object({
 export type SetupInput = z.input<typeof SetupInput>;
 
 export async function saveSetupExpense(input: SetupInput): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "money" });
   const parsed = SetupInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, ...d } = parsed.data;
@@ -68,7 +68,7 @@ export async function deleteSetupExpense(id: number): Promise<Result<{ deleted: 
 
 /** Deletes one or more setup expenses. They are remembered, so a Merge import of the Excel will not add them back. */
 export async function deleteSetupExpenses(ids: number[]): Promise<Result<{ deleted: number }>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "money" });
   const clean = [...new Set(ids.filter((n) => Number.isInteger(n) && n > 0))];
   if (!clean.length) return fail("Nothing selected");
   const db = await getDb();
@@ -103,7 +103,7 @@ const AssetInput = z.object({
 export type AssetInput = z.input<typeof AssetInput>;
 
 export async function saveAsset(input: AssetInput): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "money" });
   const parsed = AssetInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, ...d } = parsed.data;
@@ -117,7 +117,7 @@ export async function saveAsset(input: AssetInput): Promise<Result<null>> {
 }
 
 export async function deleteAsset(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "money" });
   const db = await getDb();
   await rememberDeleted(db, "opening_stock", [id]);
   await db.delete(schema.openingStock).where(eq(schema.openingStock.id, id));
@@ -141,7 +141,7 @@ const IncentiveInput = z.object({
 
 /** Saves the incentive for a person & period (recomputed on the server), recording what was paid. */
 export async function recordIncentive(input: z.input<typeof IncentiveInput>): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "staff" });
   const parsed = IncentiveInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
@@ -184,7 +184,7 @@ export async function recordIncentive(input: z.input<typeof IncentiveInput>): Pr
 }
 
 export async function deleteIncentive(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "staff" });
   const db = await getDb();
   await db.delete(schema.incentivePayouts).where(eq(schema.incentivePayouts.id, id));
   await removeCash(db, "incentive", id);

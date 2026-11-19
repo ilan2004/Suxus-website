@@ -22,7 +22,7 @@ const StaffInput = z.object({
   ownIncentivePct: z.coerce.number<number>().min(0).max(100).nullable().optional(),
   status: z.enum(["Active", "Left"]).default("Active"),
   remarks: optText,
-  access: z.enum(["partner", "staff", "none"]).default("none"),
+  access: z.enum(["owner", "partner", "staff", "none"]).default("none"),
   pin: z
     .string()
     .regex(/^(\d{4,6})?$/, "PIN must be 4–6 digits")
@@ -31,7 +31,7 @@ const StaffInput = z.object({
 export type StaffInput = z.input<typeof StaffInput>;
 
 export async function saveStaff(input: StaffInput): Promise<Result<{ id: number }>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "staff" });
   const parsed = StaffInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, pin, ownIncentivePct, ...d } = parsed.data;
@@ -50,13 +50,13 @@ export async function saveStaff(input: StaffInput): Promise<Result<{ id: number 
     const [existing] = await db.select().from(schema.staff).where(eq(schema.staff.id, id));
     if (!existing) return fail("Not found");
     if (values.access !== "none" && !existing.pinHash && !pin) return fail("Set a PIN so this person can sign in");
-    // never lock out the last partner
-    if (existing.access === "partner" && (values.access !== "partner" || values.status !== "Active")) {
+    // never lock out the last owner
+    if (existing.access === "owner" && (values.access !== "owner" || values.status !== "Active")) {
       const others = await db
         .select({ id: schema.staff.id })
         .from(schema.staff)
-        .where(and(eq(schema.staff.access, "partner"), eq(schema.staff.status, "Active"), ne(schema.staff.id, id)));
-      if (!others.length) return fail("At least one active partner login is required");
+        .where(and(eq(schema.staff.access, "owner"), eq(schema.staff.status, "Active"), ne(schema.staff.id, id)));
+      if (!others.length) return fail("At least one active Owner login is required");
     }
     await db.update(schema.staff).set(values).where(eq(schema.staff.id, id));
     await audit(db, user, "update", "staff", id, d.name);

@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { c } from "@/lib/db/sql";
 import { requireUser } from "@/lib/auth";
@@ -72,7 +73,7 @@ export default async function WagesPage() {
         items={settings.lists.item}
         rates={settings.pieceRates}
         modes={settings.lists.paymentMode}
-        canDelete={session.role === "partner"}
+        canDelete={can(session.role, "delete")}
       />
     </>
   );

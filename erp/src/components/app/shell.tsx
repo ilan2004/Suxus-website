@@ -1,5 +1,6 @@
 "use client";
 
+import { can, type Role } from "@/lib/permissions";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -22,7 +23,7 @@ import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/login/actions";
 import { globalSearch, type SearchHit } from "@/lib/actions/search";
 
-type User = { name: string; role: "partner" | "staff" };
+type User = { name: string; role: Role };
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -36,7 +37,7 @@ function NavList({ user, onNavigate }: { user: User; onNavigate?: () => void }) 
   return (
     <nav className="flex flex-col gap-5 px-3 py-4">
       {NAV.map((group) => {
-        const items = group.items.filter((i) => !i.partner || user.role === "partner");
+        const items = group.items.filter((i) => !i.perm || can(user.role, i.perm));
         if (!items.length) return null;
         return (
           <div key={group.label}>
@@ -175,7 +176,7 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
             {q.trim().length < 2 && NAV.map((g) => (
               <CommandGroup key={g.label} heading={g.label}>
                 {g.items
-                  .filter((i) => !i.soon && (!i.partner || user.role === "partner"))
+                  .filter((i) => !i.soon && (!i.perm || can(user.role, i.perm)))
                   .map((i) => (
                     <CommandItem key={i.href} value={`${i.en} ${i.ml}`} onSelect={() => go(i.href)}>
                       <i.icon /> {i.en} <span className="ml">{i.ml}</span>

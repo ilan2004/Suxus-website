@@ -60,7 +60,7 @@ export async function saveCustomer(input: CustomerInput): Promise<Result<Saved>>
 }
 
 export async function deleteCustomer(id: number): Promise<Result<null>> {
-  const user = await requireUser({ partner: true });
+  const user = await requireUser({ can: "delete" });
   const db = await getDb();
   const used = await db
     .select({ id: schema.orders.id })

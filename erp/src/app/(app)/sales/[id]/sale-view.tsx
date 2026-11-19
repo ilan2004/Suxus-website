@@ -78,6 +78,7 @@ export function SaleView({ sale, shop, autoPrint, canCancel }: { sale: Sale; sho
           />
           <Info label="Phone" value={sale.phone || "—"} />
           <Info label="Sold by" value={sale.soldByName || "—"} />
+          {sale.createdBy && <Info label="Entered by" value={sale.createdBy} />}
           <Info label="Net amount" value={<span className="font-display text-xl font-semibold">{rupees(sale.net, true)}</span>} />
           <Info label="Remarks" value={sale.remarks || "—"} />
           <Info

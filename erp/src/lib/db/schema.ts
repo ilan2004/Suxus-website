@@ -69,8 +69,15 @@ export const staff = pgTable("staff", {
   status: text("status").notNull().default("Active"),
   remarks: text("remarks"),
   /** App login. none = cannot log in. */
-  access: text("access").notNull().default("none"), // partner | staff | none
+  access: text("access").notNull().default("none"), // owner | partner | staff | none
   pinHash: text("pin_hash"),
+  /** Short name shown at the top and on records ("by GK"). */
+  displayName: text("display_name"),
+  /** Wrong PINs in a row; at 5 the login locks until lockedUntil. */
+  failedPins: integer("failed_pins").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  /** Bumped on PIN reset / role change / sign-in removed: signs that user out on every device. */
+  sessionVersion: integer("session_version").notNull().default(0),
   createdAt: created(),
   updatedAt: updated(),
 });
@@ -168,6 +175,8 @@ export const sales = pgTable(
     soldById: integer("sold_by_id").references(() => staff.id),
     remarks: text("remarks"),
     cancelled: boolean("cancelled").notNull().default(false),
+    /** Who entered it (display name). */
+    createdBy: text("created_by"),
     createdAt: created(),
     updatedAt: updated(),
   },
@@ -217,6 +226,9 @@ export const orders = pgTable(
     remarks: text("remarks"),
     photoUrl: text("photo_url"),
     deliveredOn: date("delivered_on"),
+    /** Who booked it / last changed it (display names). */
+    createdBy: text("created_by"),
+    updatedBy: text("updated_by"),
     createdAt: created(),
     updatedAt: updated(),
   },
@@ -255,6 +267,8 @@ export const bulkOrders = pgTable("bulk_orders", {
   gstAmount: money("gst_amount").notNull().default(0),
   total: money("total").notNull().default(0),
   remarks: text("remarks"),
+  /** Who entered it (display name). */
+  createdBy: text("created_by"),
   createdAt: created(),
   updatedAt: updated(),
 });
@@ -286,6 +300,8 @@ export const payments = pgTable(
     mode: text("mode").notNull().default("Cash"),
     note: text("note"),
     receivedById: integer("received_by_id").references(() => staff.id),
+    /** Who entered it (display name). */
+    createdBy: text("created_by"),
     createdAt: created(),
   },
   (t) => [index("payments_order_idx").on(t.orderId), index("payments_bulk_idx").on(t.bulkOrderId)],
@@ -442,6 +458,8 @@ export const supplierPayments = pgTable(
     note: text("note"),
     /** Import key (Entry ID or Date+Supplier+Amount) for re-imports. */
     entryId: text("entry_id"),
+    /** Who entered it (display name). */
+    createdBy: text("created_by"),
     createdAt: created(),
   },
   (t) => [index("supplier_payments_supplier_idx").on(t.supplierId)],
@@ -459,6 +477,8 @@ export const wagePayments = pgTable(
     amount: money("amount").notNull(),
     mode: text("mode").notNull().default("Cash"),
     note: text("note"),
+    /** Who entered it (display name). */
+    createdBy: text("created_by"),
     createdAt: created(),
   },
   (t) => [index("wage_payments_tailor_idx").on(t.tailorId)],

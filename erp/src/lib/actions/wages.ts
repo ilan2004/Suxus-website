@@ -88,7 +88,7 @@ export async function payTailor(input: z.input<typeof PayInput>): Promise<Result
   const db = await getDb();
   await db.transaction(async (tx) => {
     const [t] = await tx.select({ name: schema.staff.name }).from(schema.staff).where(eq(schema.staff.id, d.tailorId));
-    const [p] = await tx.insert(schema.wagePayments).values(d).returning();
+    const [p] = await tx.insert(schema.wagePayments).values({ ...d, createdBy: user.name }).returning();
     await postCash(tx, {
       source: "wage_payment",
       sourceId: p.id,

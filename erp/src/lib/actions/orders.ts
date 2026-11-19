@@ -76,14 +76,14 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
       let order;
       if (d.id) {
         const [prev] = await tx.select({ saleId: schema.orders.saleId }).from(schema.orders).where(eq(schema.orders.id, d.id));
-        [order] = await tx.update(schema.orders).set(values).where(eq(schema.orders.id, d.id)).returning();
+        [order] = await tx.update(schema.orders).set({ ...values, updatedBy: user.name }).where(eq(schema.orders.id, d.id)).returning();
         if (prev?.saleId && prev.saleId !== d.saleId) {
           await tx.update(schema.sales).set({ orderId: null }).where(eq(schema.sales.id, prev.saleId));
         }
         await tx.delete(schema.orderItems).where(eq(schema.orderItems.orderId, order.id));
       } else {
         const orderNo = await nextDocNo(tx, "SO");
-        [order] = await tx.insert(schema.orders).values({ ...values, orderNo }).returning();
+        [order] = await tx.insert(schema.orders).values({ ...values, orderNo, createdBy: user.name }).returning();
       }
 
       await tx.insert(schema.orderItems).values(
@@ -100,7 +100,7 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
       if (!d.id && d.advance > 0) {
         const [p] = await tx
           .insert(schema.payments)
-          .values({ date: d.date, kind: "order", orderId: order.id, amount: d.advance, mode: d.advanceMode, note: "Advance", receivedById: user.id })
+          .values({ date: d.date, kind: "order", orderId: order.id, amount: d.advance, mode: d.advanceMode, note: "Advance", receivedById: user.id, createdBy: user.name })
           .returning();
         await postCash(tx, {
           source: "payment",
@@ -134,7 +134,7 @@ export async function setOrderStatus(id: number, status: string): Promise<Result
   await db.transaction(async (tx) => {
     await tx
       .update(schema.orders)
-      .set({ status, deliveredOn: status === "Delivered" ? today() : null })
+      .set({ status, deliveredOn: status === "Delivered" ? today() : null, updatedBy: user.name })
       .where(eq(schema.orders.id, id));
     await tx.insert(schema.orderStatusChanges).values({ orderId: id, fromStatus: o.status, toStatus: status, changedBy: user.name });
     await audit(tx, user, "update", "order", id, `status ${o.status} → ${status}`);
@@ -166,7 +166,7 @@ export async function addOrderPayment(input: z.input<typeof PaymentInput>): Prom
     if (!o) throw new Error("Order not found");
     const [p] = await tx
       .insert(schema.payments)
-      .values({ date: d.date, kind: "order", orderId: o.id, amount: d.amount, mode: d.mode, note: d.note, receivedById: user.id })
+      .values({ date: d.date, kind: "order", orderId: o.id, amount: d.amount, mode: d.mode, note: d.note, receivedById: user.id, createdBy: user.name })
       .returning();
     const category = o.workType === "Alteration" ? "Alteration Income" : "Stitching Income";
     await postCash(tx, {
@@ -179,7 +179,7 @@ export async function addOrderPayment(input: z.input<typeof PaymentInput>): Prom
       mode: d.mode,
     });
     if (d.markDelivered && o.status !== "Delivered") {
-      await tx.update(schema.orders).set({ status: "Delivered", deliveredOn: d.date }).where(eq(schema.orders.id, o.id));
+      await tx.update(schema.orders).set({ status: "Delivered", deliveredOn: d.date, updatedBy: user.name }).where(eq(schema.orders.id, o.id));
       await tx.insert(schema.orderStatusChanges).values({ orderId: o.id, fromStatus: o.status, toStatus: "Delivered", changedBy: user.name });
     }
     await audit(tx, user, "create", "payment", p.id, `${o.orderNo} ₹${d.amount}`);

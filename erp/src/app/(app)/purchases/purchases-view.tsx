@@ -23,19 +23,22 @@ export function PurchasesView({
   modes,
   owed,
   canDelete,
+  showCosts,
 }: {
   rows: PurchaseRow[];
   suppliers: { id: number; name: string; place: string | null }[];
   modes: string[];
   owed: { id: number; name: string; balance: number }[];
   canDelete: boolean;
+  /** Owner: amounts, owed list, add / edit. Others see what was bought, not what it cost. */
+  showCosts: boolean;
 }) {
   const router = useRouter();
   const [edit, setEdit] = React.useState<PurchaseInput | null>(null);
   const [range, setRange] = React.useState<"month" | "all">("all");
   const data = rows.filter((r) => range === "all" || r.date >= monthStart());
 
-  const columns: ColumnDef<PurchaseRow>[] = [
+  const allColumns: ColumnDef<PurchaseRow>[] = [
     { accessorKey: "date", header: "Date", cell: ({ row }) => fmtDate(row.original.date) },
     {
       accessorKey: "supplierName",
@@ -57,10 +60,12 @@ export function PurchasesView({
     { accessorKey: "total", header: "Total", meta: { align: "right" }, cell: ({ row }) => <span className="font-medium">{rupees(row.original.total, true)}</span> },
     { accessorKey: "paid", header: "Paid then", meta: { align: "right" }, cell: ({ row }) => rupees(row.original.paid) },
   ];
+  const COST_COLS = ["taxable", "gstAmount", "total", "paid"];
+  const columns = showCosts ? allColumns : allColumns.filter((c) => !COST_COLS.includes((c as { accessorKey?: string }).accessorKey ?? ""));
 
   return (
     <div className="grid gap-5">
-      {owed.length > 0 && (
+      {showCosts && owed.length > 0 && (
         <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card p-3 text-sm">
           <span className="text-muted-foreground">To pay · കൊടുക്കാനുള്ളത്:</span>
           {owed.slice(0, 6).map((o) => (
@@ -74,6 +79,7 @@ export function PurchasesView({
         columns={columns}
         data={data}
         onRowClick={(r) =>
+          showCosts &&
           setEdit({ id: r.id, date: r.date, supplierId: r.supplierId, invoiceNo: r.invoiceNo, description: r.description, qty: r.qty, rate: r.rate, gstPct: r.gstPct, paid: r.paid, remarks: r.remarks })
         }
         searchPlaceholder="Search supplier, bill no., description…"
@@ -85,12 +91,15 @@ export function PurchasesView({
             <Button size="sm" variant={range === "all" ? "default" : "outline"} onClick={() => setRange("all")}>
               All
             </Button>
-            <Button onClick={() => setEdit({ date: today(), qty: 0, rate: 0, gstPct: 0, paid: 0 })}>
-              <Plus /> New purchase
-            </Button>
+            {showCosts && (
+              <Button onClick={() => setEdit({ date: today(), qty: 0, rate: 0, gstPct: 0, paid: 0 })}>
+                <Plus /> New purchase
+              </Button>
+            )}
           </>
         }
         footer={(rs) => (
+          showCosts ? (
           <TableRow>
             <TableCell colSpan={5}>{rs.length} bills</TableCell>
             <TableCell className="text-right tabular-nums">{rupees(rs.reduce((s, r) => s + r.taxable, 0))}</TableCell>
@@ -98,6 +107,11 @@ export function PurchasesView({
             <TableCell className="text-right tabular-nums">{rupees(rs.reduce((s, r) => s + r.total, 0))}</TableCell>
             <TableCell className="text-right tabular-nums">{rupees(rs.reduce((s, r) => s + r.paid, 0))}</TableCell>
           </TableRow>
+          ) : (
+            <TableRow>
+              <TableCell colSpan={5}>{rs.length} bills</TableCell>
+            </TableRow>
+          )
         )}
         empty="No purchases recorded yet."
       />

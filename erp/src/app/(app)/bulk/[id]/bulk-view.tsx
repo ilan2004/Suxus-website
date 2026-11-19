@@ -172,6 +172,7 @@ export function BulkView({ order, statuses, modes, shopName, isPartner }: { orde
                       <p className="font-medium tabular-nums">{rupees(p.amount, true)}</p>
                       <p className="text-xs text-muted-foreground">
                         {fmtDate(p.date)} · {p.mode}
+                        {p.createdBy && ` · by ${p.createdBy}`}
                         {p.note && ` · ${p.note}`}
                       </p>
                     </div>

@@ -90,6 +90,7 @@ export async function createSale(input: SaleInput): Promise<Result<{ id: number;
         .insert(schema.sales)
         .values({
           billNo,
+          createdBy: user.name,
           date: d.date,
           customerId: d.customerId ?? null,
           customerName,

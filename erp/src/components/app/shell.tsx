@@ -1,10 +1,11 @@
 "use client";
 
-import { can, type Role } from "@/lib/permissions";
+import { ROLE_LABEL, can, type Role } from "@/lib/permissions";
+import { ChangePinDialog } from "@/components/app/change-pin-dialog";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, Building2, LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus } from "lucide-react";
+import { BookOpen, Building2, KeyRound, LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus } from "lucide-react";
 import { NAV, type NavItem } from "@/lib/nav";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/login/actions";
 import { globalSearch, type SearchHit } from "@/lib/actions/search";
 
-type User = { name: string; role: Role };
+type User = { name: string; fullName: string; role: Role };
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -194,6 +195,7 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
 export function Shell({ user, children }: { user: User; children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [cmdOpen, setCmdOpen] = React.useState(false);
+  const [pinOpen, setPinOpen] = React.useState(false);
   const { dark, toggle } = useTheme();
 
   return (
@@ -272,16 +274,26 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
             </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <button className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">
-                  {user.name.slice(0, 1).toUpperCase()}
+                <button className="flex items-center gap-2 rounded-full py-0.5 pr-0.5 pl-0.5 hover:bg-muted sm:pl-3" aria-label={`Signed in as ${user.name}`}>
+                  <span className="hidden text-right leading-tight sm:block">
+                    <span className="block text-sm font-medium">{user.name}</span>
+                    <span className="block text-[11px] text-muted-foreground">{ROLE_LABEL[user.role]}</span>
+                  </span>
+                  <span className="grid size-9 place-items-center rounded-full bg-primary text-sm font-semibold text-primary-foreground">{user.name.slice(0, 2).toUpperCase()}</span>
                 </button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
-                  <span className="block text-sm font-medium text-foreground">{user.name}</span>
-                  <span className="capitalize">{user.role}</span>
+                  <span className="block text-sm font-medium text-foreground">Signed in as {user.name}</span>
+                  <span className="text-xs">
+                    {user.fullName !== user.name ? `${user.fullName} · ` : ""}
+                    {ROLE_LABEL[user.role]}
+                  </span>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem onSelect={() => setPinOpen(true)}>
+                  <KeyRound /> Change my PIN
+                </DropdownMenuItem>
                 <form action={logoutAction}>
                   <DropdownMenuItem asChild>
                     <button type="submit" className="w-full">
@@ -291,6 +303,7 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
                 </form>
               </DropdownMenuContent>
             </DropdownMenu>
+            <ChangePinDialog open={pinOpen} onOpenChange={setPinOpen} />
           </div>
         </header>
         <main className="mx-auto w-full max-w-[1400px] flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>

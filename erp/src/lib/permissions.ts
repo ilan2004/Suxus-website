@@ -16,7 +16,9 @@ const ALL: Perm[] = ["money", "costs", "settings", "users", "staff", "delete"];
 
 export const ROLE_PERMS: Record<Role, Perm[]> = {
   owner: ALL,
-  partner: ALL,
+  // Work side, not the money side: no Setup Expenses, Capital, Opening Stock, cost prices, supplier balances/Pay,
+  // Summary, Settings or Import / Backup
+  partner: ["staff", "delete"],
   staff: [],
 };
 

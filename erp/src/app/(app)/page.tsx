@@ -3,6 +3,7 @@ import { c } from "@/lib/db/sql";
 import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import { AlertTriangle, CalendarClock, KanbanSquare, CircleDollarSign, Layers, PackageCheck, Plus, Scissors, ShoppingBag, Wallet } from "lucide-react";
 import { getDb, schema } from "@/lib/db";
+import { can } from "@/lib/permissions";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
 import { bulkList, fabricsWithStock, ordersWithBalance, supplierDues } from "@/lib/queries";
@@ -55,7 +56,7 @@ export default async function Dashboard() {
       .from(sales)
       .where(and(eq(sales.stitchingHere, true), isNull(sales.orderId), eq(sales.cancelled, false))),
     bulkList(),
-    supplierDues(),
+    can(session.role, "money") ? supplierDues() : Promise.resolve(null),
   ]);
 
   const open = orders.filter((o) => !["Delivered", "Cancelled"].includes(o.status));
@@ -248,6 +249,7 @@ export default async function Dashboard() {
         </Card>
       </div>
 
+      {dues && (
       <Card>
         <CardHeader>
           <CardTitle className="font-ml">കൊടുക്കാനുള്ളത്</CardTitle>
@@ -262,6 +264,7 @@ export default async function Dashboard() {
           <SupplierDuesList rows={dues.rows} total={dues.total} today={t} payers={["Business Account", ...lists.partner.filter((p) => p !== "Business Account")]} />
         </CardContent>
       </Card>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextNumber, pad } from "@/lib/numbering";
 import { rememberDeleted } from "@/lib/import-tombstone";
+import { can } from "@/lib/permissions";
 import { getSetting } from "@/lib/settings";
 import { fail, money, ok, optDate, optId, optText, zodError, type Result } from "./util";
 import { createUploadTargets, deletePhotos, isOurPhotoUrl, storageMode, type UploadTarget } from "@/lib/storage";
@@ -41,7 +42,10 @@ export async function saveFabric(input: FabricInput): Promise<Result<{ id: numbe
   const user = await requireUser();
   const parsed = FabricInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
-  const { id, photos, ...rest } = parsed.data;
+  const { id, photos, ...all } = parsed.data;
+  // Without the cost-price / money permissions those fields were never shown — keep what is stored
+  const { costPerMtr, broughtInBy, ...others } = all;
+  const rest = { ...others, ...(can(user.role, "costs") ? { costPerMtr } : {}), ...(can(user.role, "money") ? { broughtInBy } : {}) };
   if (photos?.some((p) => !isOurPhotoUrl(p.url) || !isOurPhotoUrl(p.thumb))) return fail("Photo link not recognised — please upload again");
   const d = {
     ...rest,

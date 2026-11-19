@@ -113,10 +113,17 @@ export function OrderView({
           </Badge>
         )}
         {overdue && <Badge variant="destructive">Overdue</Badge>}
-        {lastChange && (
-          <span className="w-full text-xs text-muted-foreground sm:order-last" title="Last stage change">
-            {lastChange.from ? `${lastChange.from} → ${lastChange.to}` : lastChange.to}, {fmtChange(lastChange.at)}
-            {lastChange.by && ` · ${lastChange.by}`}
+        {(lastChange || order.createdBy || order.updatedBy) && (
+          <span className="w-full text-xs text-muted-foreground sm:order-last">
+            {order.createdBy && <>Booked by {order.createdBy}</>}
+            {order.updatedBy && order.updatedBy !== order.createdBy && <> · last edited by {order.updatedBy}</>}
+            {lastChange && (
+              <span title="Last stage change">
+                {(order.createdBy || order.updatedBy) && " · "}
+                {lastChange.from ? `${lastChange.from} → ${lastChange.to}` : lastChange.to}, {fmtChange(lastChange.at)}
+                {lastChange.by && ` by ${lastChange.by}`}
+              </span>
+            )}
           </span>
         )}
         <div className="ml-auto flex flex-wrap gap-2">
@@ -367,6 +374,7 @@ export function OrderView({
                       <p className="text-xs text-muted-foreground">
                         {fmtDate(p.date)} · {p.mode}
                         {p.note && ` · ${p.note}`}
+                        {p.createdBy && ` · by ${p.createdBy}`}
                       </p>
                     </div>
                     {isPartner && (

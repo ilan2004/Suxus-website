@@ -16,7 +16,7 @@ import { deleteSupplier, deleteSupplierPayment } from "@/lib/actions/purchases";
 import type { PurchaseRow, SupplierRow } from "@/lib/queries";
 import { fmtDate, rupees } from "@/lib/utils";
 
-type Pay = { id: number; date: string; amount: number; mode: string; ref: string | null; paidBy: string | null; note: string | null };
+type Pay = { id: number; date: string; amount: number; mode: string; ref: string | null; paidBy: string | null; note: string | null; createdBy?: string | null };
 type Setup = { id: number; date: string; category: string; description: string | null; paidBy: string; amount: number; mode: string | null; billNo: string | null };
 
 export function SupplierView({
@@ -26,6 +26,8 @@ export function SupplierView({
   setup,
   partners,
   isPartner,
+  showMoney,
+  showCosts,
 }: {
   supplier: SupplierRow;
   purchases: PurchaseRow[];
@@ -33,6 +35,10 @@ export function SupplierView({
   setup: Setup[];
   partners: string[];
   isPartner: boolean;
+  /** Balance due, payments, Pay button, setup expenses (Owner). */
+  showMoney: boolean;
+  /** Purchase amounts. */
+  showCosts: boolean;
 }) {
   const router = useRouter();
   const credit = setup.filter((x) => x.mode === "Credit (Due)");
@@ -51,9 +57,11 @@ export function SupplierView({
         <h1 className="font-display text-2xl font-semibold">{s.name}</h1>
         {s.type && <Badge variant="secondary">{s.type}</Badge>}
         <div className="ml-auto flex gap-2">
-          <Button onClick={() => setPay(true)}>
-            <CircleDollarSign /> Pay supplier
-          </Button>
+          {showMoney && (
+            <Button onClick={() => setPay(true)}>
+              <CircleDollarSign /> Pay supplier
+            </Button>
+          )}
           <Button variant="outline" onClick={() => setEdit(true)}>
             <Pencil /> Edit
           </Button>
@@ -91,6 +99,7 @@ export function SupplierView({
         )}
       </div>
 
+      {showMoney && (
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard label="Taken on credit" ml="കടമായി വാങ്ങിയത്" value={rupees(s.owed)} sub={`${s.openingBalance ? `Opening ${rupees(s.openingBalance)} · ` : ""}Purchases ${rupees(s.billed)} · Setup on credit ${rupees(s.setupCredit)}`} />
         <StatCard label="Paid on account" ml="കൊടുത്തത്" value={rupees(s.paid)} sub={`${payments.length} payment(s)`} tone="success" />
@@ -111,19 +120,24 @@ export function SupplierView({
         />
         <StatCard label="Paid on the spot" ml="ഉടനെ കൊടുത്തത്" value={rupees(s.setupPaid)} sub="Setup items not on credit" tone="gold" />
       </div>
+      )}
 
-      <Tabs defaultValue={purchases.length ? "purchases" : credit.length ? "payments" : "setup"}>
+      <Tabs defaultValue={purchases.length || !showMoney ? "purchases" : credit.length ? "payments" : "setup"}>
         <TabsList>
-          <TabsTrigger value="purchases">Purchases ({purchases.length})</TabsTrigger>
-          <TabsTrigger value="payments">Payments on account ({payments.length})</TabsTrigger>
-          <TabsTrigger value="setup">Setup expenses ({setup.length}{credit.length ? ` · ${credit.length} on credit` : ""})</TabsTrigger>
+          <TabsTrigger value="purchases">{showMoney ? "Purchases" : "What was bought"} ({purchases.length})</TabsTrigger>
+          {showMoney && <TabsTrigger value="payments">Payments on account ({payments.length})</TabsTrigger>}
+          {showMoney && <TabsTrigger value="setup">Setup expenses ({setup.length}{credit.length ? ` · ${credit.length} on credit` : ""})</TabsTrigger>}
         </TabsList>
         <TabsContent value="purchases">
-          <SimpleTable
-            head={["Date", "Bill no.", "Description", "Total", "Paid then"]}
-            rows={purchases.map((p) => [fmtDate(p.date), p.invoiceNo, p.description, rupees(p.total, true), rupees(p.paid)])}
-            align={[3, 4]}
-          />
+          {showCosts ? (
+            <SimpleTable
+              head={["Date", "Bill no.", "Description", "Total", "Paid then"]}
+              rows={purchases.map((p) => [fmtDate(p.date), p.invoiceNo, p.description, rupees(p.total, true), rupees(p.paid)])}
+              align={[3, 4]}
+            />
+          ) : (
+            <SimpleTable head={["Date", "Bill no.", "Description", "Qty"]} rows={purchases.map((p) => [fmtDate(p.date), p.invoiceNo, p.description, p.qty])} align={[3]} />
+          )}
         </TabsContent>
         <TabsContent value="payments">
           <div className="overflow-hidden rounded-xl border bg-card">
@@ -152,7 +166,10 @@ export function SupplierView({
                     <TableCell>{fmtDate(p.date)}</TableCell>
                     <TableCell>{p.mode}</TableCell>
                     <TableCell className="font-mono text-xs">{p.ref}</TableCell>
-                    <TableCell>{p.paidBy ?? <span className="text-xs text-muted-foreground">from Excel</span>}</TableCell>
+                    <TableCell>
+                      {p.paidBy ?? <span className="text-xs text-muted-foreground">from Excel</span>}
+                      {p.createdBy && <span className="block text-[11px] text-muted-foreground">entered by {p.createdBy}</span>}
+                    </TableCell>
                     <TableCell className="max-w-72 truncate">{p.note}</TableCell>
                     <TableCell className="text-right font-medium tabular-nums">{rupees(p.amount, true)}</TableCell>
                     <TableCell className="text-right">
@@ -188,16 +205,19 @@ export function SupplierView({
         </TabsContent>
       </Tabs>
 
+      {showMoney && (
       <SupplierPayDialog
         supplier={{ id: s.id, name: s.name, balance: s.balance, phone: s.phone, upi: s.upi, bank: s.bank, lastMode: s.lastMode }}
         open={pay}
         onOpenChange={setPay}
         payers={["Business Account", ...partners.filter((p) => p !== "Business Account")]}
       />
+      )}
       <SupplierDialog
         value={edit ? { id: s.id, name: s.name, type: s.type, place: s.place, phone: s.phone, upi: s.upi, bank: s.bank, gstNo: s.gstNo, supplies: s.supplies, aliases: s.aliases, openingBalance: s.openingBalance, notes: s.notes } : null}
         onClose={() => setEdit(false)}
         onSaved={() => router.refresh()}
+        showMoney={showMoney}
       />
     </div>
   );

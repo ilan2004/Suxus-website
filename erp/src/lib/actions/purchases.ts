@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
+import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
@@ -32,7 +33,7 @@ const PurchaseInput = z.object({
 export type PurchaseInput = z.input<typeof PurchaseInput>;
 
 export async function savePurchase(input: PurchaseInput): Promise<Result<{ id: number }>> {
-  const user = await requireUser();
+  const user = await requireUser({ can: "costs" });
   const parsed = PurchaseInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, supplierName, paidMode, ...d } = parsed.data;
@@ -72,7 +73,7 @@ export async function savePurchase(input: PurchaseInput): Promise<Result<{ id: n
 }
 
 export async function deletePurchase(id: number): Promise<Result<null>> {
-  const user = await requireUser({ can: "delete" });
+  const user = await requireUser({ can: "costs" });
   const db = await getDb();
   await rememberDeleted(db, "purchase", [id]);
   await db.delete(schema.purchases).where(eq(schema.purchases.id, id));
@@ -104,6 +105,11 @@ export type SupplierInput = z.input<typeof SupplierInput>;
 export async function saveSupplier(input: SupplierInput): Promise<Result<{ id: number }>> {
   const user = await requireUser();
   const parsed = SupplierInput.safeParse(input);
+  // Opening balance and notes (often hold ledger figures) are money-side: only roles that can see them may change them
+  if (parsed.success && !can(user.role, "money")) {
+    delete (parsed.data as { openingBalance?: number }).openingBalance;
+    delete (parsed.data as { notes?: string | null }).notes;
+  }
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, ...d } = parsed.data;
   const db = await getDb();
@@ -146,7 +152,7 @@ async function balanceOf(id: number) {
 export type SupplierPaid = { id: number; name: string; amount: number; before: number; after: number };
 
 export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<Result<SupplierPaid>> {
-  const user = await requireUser();
+  const user = await requireUser({ can: "money" });
   const parsed = SupplierPay.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
@@ -157,7 +163,7 @@ export async function paySupplier(input: z.input<typeof SupplierPay>): Promise<R
   await db.transaction(async (tx) => {
     const [s] = await tx.select().from(schema.suppliers).where(eq(schema.suppliers.id, d.supplierId));
     if (!s) throw new Error("Supplier not found");
-    const [p] = await tx.insert(schema.supplierPayments).values(d).returning();
+    const [p] = await tx.insert(schema.supplierPayments).values({ ...d, createdBy: user.name }).returning();
     paymentId = p.id;
     name = s.name;
     // Fabric suppliers → "Fabric Purchase"; shops / tradesmen for the setup → "Setup / Renovation"
@@ -189,7 +195,7 @@ function revalidateSupplierPages(supplierId?: number) {
 
 /** "Undo" right after saving — removes the payment as if it was never entered (no import tombstone). */
 export async function undoSupplierPayment(id: number): Promise<Result<null>> {
-  const user = await requireUser();
+  const user = await requireUser({ can: "money" });
   const db = await getDb();
   const [p] = await db.select().from(schema.supplierPayments).where(eq(schema.supplierPayments.id, id));
   if (!p) return ok(null);
@@ -202,7 +208,7 @@ export async function undoSupplierPayment(id: number): Promise<Result<null>> {
 }
 
 export async function deleteSupplierPayment(id: number): Promise<Result<null>> {
-  const user = await requireUser({ can: "delete" });
+  const user = await requireUser({ can: "money" });
   const db = await getDb();
   await rememberDeleted(db, "supplier_payment", [id]);
   const [p] = await db.delete(schema.supplierPayments).where(eq(schema.supplierPayments.id, id)).returning();

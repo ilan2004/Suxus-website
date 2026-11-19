@@ -24,5 +24,20 @@ export default async function SupplierPage({ params }: { params: Promise<{ id: s
       .orderBy(desc(schema.setupExpenses.date)),
     getSetting("lists"),
   ]);
-  return <SupplierView supplier={s} purchases={purchases} payments={pays} setup={setup} partners={lists.partner} isPartner={can(session.role, "delete")} />;
+  const money = can(session.role, "money");
+  const costs = can(session.role, "costs");
+  // Money figures never leave the server for roles that may not see them
+  const supplier = money ? s : { ...s, billed: 0, paidAtBill: 0, paidLater: 0, setupPaid: 0, setupCredit: 0, openingBalance: 0, owed: 0, paid: 0, balance: 0, lastPaid: null, lastMode: null, notes: null };
+  return (
+    <SupplierView
+      supplier={supplier}
+      purchases={costs ? purchases : purchases.map((p) => ({ ...p, rate: 0, taxable: 0, gstAmount: 0, total: 0, paid: 0 }))}
+      payments={money ? pays : []}
+      setup={money ? setup : []}
+      partners={lists.partner}
+      isPartner={can(session.role, "delete")}
+      showMoney={money}
+      showCosts={costs}
+    />
+  );
 }

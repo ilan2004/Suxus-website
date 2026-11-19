@@ -4,14 +4,15 @@ import { asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
-import { fabricsWithStock } from "@/lib/queries";
+import { fabricsWithStock, withoutFabricCosts } from "@/lib/queries";
 import { FabricDetail } from "./fabric-detail";
 import { storageMode } from "@/lib/storage";
 
 export default async function FabricPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireUser();
   const id = Number((await params).id);
-  const fabric = (await fabricsWithStock()).find((f) => f.id === id);
+  const all = await fabricsWithStock();
+  const fabric = (can(session.role, "costs") ? all : withoutFabricCosts(all)).find((f) => f.id === id);
   if (!fabric) notFound();
   const db = await getDb();
   const s = schema;

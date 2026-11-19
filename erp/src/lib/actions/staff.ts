@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
-import { hashPin, requireUser } from "@/lib/auth";
+import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextNumber } from "@/lib/numbering";
 import { fail, ok, optDate, optText, zodError, type Result } from "./util";
@@ -22,11 +22,9 @@ const StaffInput = z.object({
   ownIncentivePct: z.coerce.number<number>().min(0).max(100).nullable().optional(),
   status: z.enum(["Active", "Left"]).default("Active"),
   remarks: optText,
-  access: z.enum(["owner", "partner", "staff", "none"]).default("none"),
-  pin: z
-    .string()
-    .regex(/^(\d{4,6})?$/, "PIN must be 4–6 digits")
-    .optional(),
+  // Sign-in (access / PIN) is managed only in Settings → Users; these are accepted but ignored here
+  access: z.string().optional(),
+  pin: z.string().optional(),
 });
 export type StaffInput = z.input<typeof StaffInput>;
 
@@ -34,7 +32,8 @@ export async function saveStaff(input: StaffInput): Promise<Result<{ id: number 
   const user = await requireUser({ can: "staff" });
   const parsed = StaffInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
-  const { id, pin, ownIncentivePct, ...d } = parsed.data;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { id, pin, access, ownIncentivePct, ...d } = parsed.data;
   const db = await getDb();
 
   const values = {
@@ -43,15 +42,13 @@ export async function saveStaff(input: StaffInput): Promise<Result<{ id: number 
     pieceRate: d.pieceRate ?? null,
     // entered as % (4) → stored as fraction (0.04), like the Excel
     ownIncentivePct: ownIncentivePct ? ownIncentivePct / 100 : null,
-    ...(pin ? { pinHash: await hashPin(pin) } : {}),
   };
 
   if (id) {
     const [existing] = await db.select().from(schema.staff).where(eq(schema.staff.id, id));
     if (!existing) return fail("Not found");
-    if (values.access !== "none" && !existing.pinHash && !pin) return fail("Set a PIN so this person can sign in");
-    // never lock out the last owner
-    if (existing.access === "owner" && (values.access !== "owner" || values.status !== "Active")) {
+    // never lock out the last owner (marking them "Left" would end their sign-in)
+    if (existing.access === "owner" && values.status !== "Active") {
       const others = await db
         .select({ id: schema.staff.id })
         .from(schema.staff)
@@ -61,7 +58,6 @@ export async function saveStaff(input: StaffInput): Promise<Result<{ id: number 
     await db.update(schema.staff).set(values).where(eq(schema.staff.id, id));
     await audit(db, user, "update", "staff", id, d.name);
   } else {
-    if (values.access !== "none" && !pin) return fail("Set a PIN so this person can sign in");
     const n = await nextNumber(db, "staff");
     const [row] = await db
       .insert(schema.staff)

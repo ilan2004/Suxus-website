@@ -3,7 +3,7 @@ import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
-import { fabricsWithStock } from "@/lib/queries";
+import { fabricsWithStock, withoutFabricCosts } from "@/lib/queries";
 import { PageHeader } from "@/components/app/page-header";
 import { StatCard } from "@/components/app/stat-card";
 import { FabricsView } from "./fabrics-view";
@@ -17,7 +17,7 @@ export default async function FabricsPage() {
   const session = await requireUser();
   const db = await getDb();
   const [fabrics, settings, suppliers] = await Promise.all([
-    fabricsWithStock(),
+    fabricsWithStock().then((r) => (can(session.role, "costs") ? r : withoutFabricCosts(r))),
     getSettings(),
     db.select({ id: schema.suppliers.id, name: schema.suppliers.name }).from(schema.suppliers).orderBy(asc(schema.suppliers.name)),
   ]);

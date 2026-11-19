@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/app/field";
 import { saveSupplier, type SupplierInput } from "@/lib/actions/purchases";
 
-export function SupplierDialog({ value, onClose, onSaved }: { value: SupplierInput | null; onClose: () => void; onSaved: (id: number) => void }) {
+export function SupplierDialog({ value, onClose, onSaved, showMoney = true }: { value: SupplierInput | null; onClose: () => void; onSaved: (id: number) => void; showMoney?: boolean }) {
   const [v, setV] = React.useState<SupplierInput | null>(value);
   const [pending, start] = React.useTransition();
   React.useEffect(() => setV(value), [value]);
@@ -51,6 +51,7 @@ export function SupplierDialog({ value, onClose, onSaved }: { value: SupplierInp
           <Field label="Other names (GPay name, nickname)" ml="മറ്റ് പേരുകൾ" hint="Comma separated, e.g. SEENATH, LED World — used to find this supplier's payments" className="sm:col-span-2">
             <Input value={v.aliases ?? ""} onChange={(e) => setV({ ...v, aliases: e.target.value })} placeholder="e.g. SEENATH" />
           </Field>
+          {showMoney && (
           <Field label="Opening balance" ml="മുമ്പത്തെ ബാക്കി" hint="Money owed from before the book was started. Added to the balance due." className="sm:col-span-2">
             <Input
               type="number"
@@ -62,9 +63,12 @@ export function SupplierDialog({ value, onClose, onSaved }: { value: SupplierInp
               placeholder="0"
             />
           </Field>
+          )}
+          {showMoney && (
           <Field label="Notes" ml="കുറിപ്പ്" className="sm:col-span-2">
             <Textarea value={v.notes ?? ""} onChange={(e) => setV({ ...v, notes: e.target.value })} rows={3} />
           </Field>
+          )}
           <DialogFooter className="sm:col-span-2">
             <Button type="button" variant="outline" onClick={onClose}>
               Cancel

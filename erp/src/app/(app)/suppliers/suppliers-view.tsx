@@ -13,11 +13,11 @@ import type { SupplierInput } from "@/lib/actions/purchases";
 import type { SupplierRow } from "@/lib/queries";
 import { fmtDate, rupees } from "@/lib/utils";
 
-export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
+export function SuppliersView({ rows, showMoney }: { rows: SupplierRow[]; showMoney: boolean }) {
   const router = useRouter();
   const [edit, setEdit] = React.useState<SupplierInput | null>(null);
   const [linking, startLink] = React.useTransition();
-  const columns: ColumnDef<SupplierRow>[] = [
+  const allColumns: ColumnDef<SupplierRow>[] = [
     {
       accessorKey: "name",
       header: "Supplier",
@@ -53,6 +53,8 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
     },
     { accessorKey: "lastPaid", header: "Last paid", cell: ({ row }) => fmtDate(row.original.lastPaid) },
   ];
+  const MONEY_COLS = ["owed", "paid", "setupPaid", "balance", "lastPaid"];
+  const columns = showMoney ? allColumns : allColumns.filter((c) => !MONEY_COLS.includes((c as { accessorKey?: string }).accessorKey ?? ""));
   return (
     <>
       <DataTable
@@ -62,6 +64,7 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
         searchPlaceholder="Search name, supplies, place…"
         toolbar={
           <>
+            {showMoney && (
             <Button
               variant="outline"
               disabled={linking}
@@ -77,6 +80,7 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
             >
               {linking ? <Loader2 className="animate-spin" /> : <Link2 />} Link payments
             </Button>
+            )}
             <Button onClick={() => setEdit({ name: "" })}>
               <Plus /> New supplier
             </Button>
@@ -84,7 +88,7 @@ export function SuppliersView({ rows }: { rows: SupplierRow[] }) {
         }
         empty="No suppliers yet."
       />
-      <SupplierDialog value={edit} onClose={() => setEdit(null)} onSaved={(id) => router.push(`/suppliers/${id}`)} />
+      <SupplierDialog value={edit} onClose={() => setEdit(null)} onSaved={(id) => router.push(`/suppliers/${id}`)} showMoney={showMoney} />
     </>
   );
 }

@@ -20,11 +20,11 @@ export function SetupForm({ needsCode }: { needsCode: boolean }) {
         <Input id="name" name="name" placeholder="e.g. Sahim KT" required autoFocus={!needsCode} />
       </Field>
       <div className="grid grid-cols-2 gap-3">
-        <Field label="PIN (4–6 digits)" ml="പിൻ" htmlFor="pin">
-          <Input id="pin" name="pin" type="password" inputMode="numeric" pattern="\d{4,6}" required />
+        <Field label="PIN (6 digits)" ml="പിൻ" htmlFor="pin">
+          <Input id="pin" name="pin" type="password" inputMode="numeric" pattern="\d{6}" maxLength={6} required />
         </Field>
         <Field label="Repeat PIN" htmlFor="pin2">
-          <Input id="pin2" name="pin2" type="password" inputMode="numeric" pattern="\d{4,6}" required />
+          <Input id="pin2" name="pin2" type="password" inputMode="numeric" pattern="\d{6}" maxLength={6} required />
         </Field>
       </div>
       {state?.error && <p className="text-sm text-destructive">{state.error}</p>}

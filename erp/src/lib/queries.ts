@@ -64,6 +64,11 @@ export async function fabricsWithStock() {
     return { ...r, balanceMtr: balance, stockValue: Math.round(balance * r.costPerMtr), totalCost: Math.round(r.purchaseMtr * r.costPerMtr) };
   });
 }
+
+/** For people without the "costs" permission: cost price, stock value and capital source never leave the server. */
+export function withoutFabricCosts<T extends { costPerMtr: number; stockValue: number; totalCost: number; broughtInBy?: string | null }>(rows: T[]): T[] {
+  return rows.map((r) => ({ ...r, costPerMtr: 0, stockValue: 0, totalCost: 0, broughtInBy: null }));
+}
 export type FabricRow = Awaited<ReturnType<typeof fabricsWithStock>>[number];
 
 export async function fabricBalance(fabricId: number, excludeSaleId?: number) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -175,34 +176,12 @@ function StaffSheet({
               <Textarea value={v.remarks ?? ""} onChange={(e) => set("remarks", e.target.value)} rows={2} />
             </Field>
 
-            <div className="grid gap-3 rounded-xl border bg-muted/30 p-4 sm:col-span-2">
-              <p className="flex items-center gap-2 text-sm font-medium">
-                <KeyRound className="size-4" /> App login
+            <div className="flex items-start gap-2 rounded-xl border bg-muted/30 p-4 text-sm sm:col-span-2">
+              <KeyRound className="mt-0.5 size-4 shrink-0" />
+              <p>
+                <span className="font-medium">App sign-in:</span> {v.access && v.access !== "none" ? ROLE_LABEL[v.access as Role] : "none"}.{" "}
+                <span className="text-muted-foreground">Sign-ins, roles and PINs are managed by the Owner in Settings → Users.</span>
               </p>
-              <div className="flex flex-wrap gap-1.5">
-                {(
-                  [
-                    ["none", "No login"],
-                    ["staff", "Staff (daily entry)"],
-                    ["partner", "Partner"],
-                    ["owner", "Owner (everything)"],
-                  ] as const
-                ).map(([k, l]) => (
-                  <button
-                    key={k}
-                    type="button"
-                    onClick={() => set("access", k)}
-                    className={cn("h-8 rounded-md border px-3 text-sm", v.access === k ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
-                  >
-                    {l}
-                  </button>
-                ))}
-              </div>
-              {v.access !== "none" && (
-                <Field label={v.hasPin ? "New PIN (leave empty to keep)" : "PIN (4–6 digits)"} ml="പിൻ">
-                  <Input type="password" inputMode="numeric" pattern="\d{4,6}" value={v.pin ?? ""} onChange={(e) => set("pin", e.target.value)} className="w-40" />
-                </Field>
-              )}
             </div>
           </div>
           <SheetFooter className="flex-row justify-end border-t">

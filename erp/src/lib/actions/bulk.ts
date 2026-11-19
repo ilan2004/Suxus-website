@@ -72,7 +72,7 @@ export async function saveBulkOrder(input: BulkInput): Promise<Result<{ id: numb
         await tx.delete(schema.bulkOrderItems).where(eq(schema.bulkOrderItems.bulkOrderId, id));
       } else {
         const orderNo = await nextDocNo(tx, "BO");
-        [row] = await tx.insert(schema.bulkOrders).values({ ...values, orderNo }).returning();
+        [row] = await tx.insert(schema.bulkOrders).values({ ...values, orderNo, createdBy: user.name }).returning();
       }
       await tx
         .insert(schema.bulkOrderItems)
@@ -81,7 +81,7 @@ export async function saveBulkOrder(input: BulkInput): Promise<Result<{ id: numb
       if (!id && advance > 0) {
         const [p] = await tx
           .insert(schema.payments)
-          .values({ date: d.date, kind: "bulk", bulkOrderId: row.id, amount: advance, mode: advanceMode, note: "Advance", receivedById: user.id })
+          .values({ date: d.date, kind: "bulk", bulkOrderId: row.id, amount: advance, mode: advanceMode, note: "Advance", receivedById: user.id, createdBy: user.name })
           .returning();
         await postCash(tx, {
           source: "payment",
@@ -122,7 +122,7 @@ export async function addBulkPayment(input: z.input<typeof PayInput>): Promise<R
     if (!o) throw new Error("Order not found");
     const [p] = await tx
       .insert(schema.payments)
-      .values({ date: d.date, kind: "bulk", bulkOrderId: o.id, amount: d.amount, mode: d.mode, note: d.note, receivedById: user.id })
+      .values({ date: d.date, kind: "bulk", bulkOrderId: o.id, amount: d.amount, mode: d.mode, note: d.note, receivedById: user.id, createdBy: user.name })
       .returning();
     await postCash(tx, {
       source: "payment",

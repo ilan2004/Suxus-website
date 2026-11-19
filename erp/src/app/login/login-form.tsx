@@ -7,6 +7,9 @@ import { cn } from "@/lib/utils";
 
 type U = { id: number; name: string; role: string };
 
+/** PINs are 6 digits: six dots, Enter only once all six are typed. */
+const PIN_LENGTH = 6;
+
 export function LoginForm({ users }: { users: U[] }) {
   const [userId, setUserId] = React.useState<number | null>(users.length === 1 ? users[0].id : null);
   const [pin, setPin] = React.useState("");
@@ -15,7 +18,7 @@ export function LoginForm({ users }: { users: U[] }) {
 
   const submit = React.useCallback(
     (p: string) => {
-      if (!userId || p.length < 4) return;
+      if (!userId || p.length < PIN_LENGTH) return;
       start(async () => {
         const res = await loginAction(userId, p);
         if (res?.error) {
@@ -29,14 +32,15 @@ export function LoginForm({ users }: { users: U[] }) {
 
   const press = (d: string) => {
     setError(null);
-    setPin((p) => (p.length >= 6 ? p : p + d));
+    setPin((p) => (p.length >= PIN_LENGTH ? p : p + d));
   };
 
   React.useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (/^\d$/.test(e.key)) press(e.key);
-      else if (e.key === "Backspace") setPin((p) => p.slice(0, -1));
-      else if (e.key === "Enter") submit(pin);
+      // preventDefault: a keypad button focused by an earlier tap must not also fire (Enter would add that digit again)
+      if (/^\d$/.test(e.key)) (e.preventDefault(), press(e.key));
+      else if (e.key === "Backspace") (e.preventDefault(), setPin((p) => p.slice(0, -1)));
+      else if (e.key === "Enter") (e.preventDefault(), submit(pin));
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -71,7 +75,7 @@ export function LoginForm({ users }: { users: U[] }) {
 
       <div className={cn("grid gap-4 transition-opacity", !userId && "pointer-events-none opacity-40")}>
         <div className="flex justify-center gap-3">
-          {Array.from({ length: Math.max(4, pin.length) }).map((_, i) => (
+          {Array.from({ length: PIN_LENGTH }).map((_, i) => (
             <span key={i} className={cn("size-3.5 rounded-full border-2 border-primary/40", i < pin.length && "border-primary bg-primary")} />
           ))}
         </div>
@@ -88,7 +92,7 @@ export function LoginForm({ users }: { users: U[] }) {
           <Key onClick={() => press("0")}>0</Key>
           <button
             onClick={() => submit(pin)}
-            disabled={pin.length < 4 || pending}
+            disabled={pin.length < PIN_LENGTH || pending}
             className="grid h-14 place-items-center rounded-xl bg-primary text-sm font-semibold text-primary-foreground disabled:opacity-40"
           >
             {pending ? <Loader2 className="size-5 animate-spin" /> : "Enter"}

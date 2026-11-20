@@ -54,6 +54,7 @@ export function OrderView({
   const [justBooked] = React.useState(autoPrint);
   const [deleting, setDeleting] = React.useState(false);
   const printBill = () => window.open(`/print/order/${order.id}`, "_blank", "width=420,height=760");
+  const printJobSlip = () => window.open(`/print/job/${order.id}`, "_blank", "width=420,height=760");
 
   React.useEffect(() => {
     if (autoPrint) {
@@ -129,6 +130,9 @@ export function OrderView({
         <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" onClick={printBill}>
             <Printer /> Print
+          </Button>
+          <Button variant="outline" onClick={printJobSlip}>
+            <Ruler /> Job slip
           </Button>
           <WhatsAppButtons
             phone={order.phone}

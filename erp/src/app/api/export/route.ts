@@ -1,4 +1,5 @@
 import ExcelJS from "exceljs";
+import { fieldsFor, measureText } from "@/lib/measurements";
 import { can } from "@/lib/permissions";
 import { asc, eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
@@ -135,7 +136,7 @@ export async function GET(req: NextRequest) {
   sheet(wb, "Measurements", "MEASUREMENTS (inches)", [
     { header: "Customer", key: "name", width: 20 }, { header: "Phone", key: "phone" }, { header: "Date", key: "date", date: true }, { header: "Garment Type", key: "garmentType", width: 20 },
     { header: "Size", key: "size" }, { header: "Fit", key: "fit" }, { header: "Measurements", key: "values", width: 60 }, { header: "Remarks", key: "remarks", width: 30 },
-  ], ms.map((x) => ({ ...x.m, name: x.name, phone: x.phone, values: Object.entries(x.m.values).map(([k, v]) => `${k} ${v}`).join(", ") })));
+  ], ms.map((x) => ({ ...x.m, name: x.name, phone: x.phone, values: fieldsFor(x.m.garmentType, x.m.values).filter((f) => x.m.values[f.key] != null).map((f) => `${f.part ? f.key : f.en} ${measureText(f, x.m.values[f.key])}`).join(", ") })));
 
   const bulkLines = await db
     .select({ orderNo: s.bulkOrders.orderNo, date: s.bulkOrders.date, institution: s.bulkOrders.institution, contact: s.bulkOrders.contactPerson, phone: s.bulkOrders.phone, fabricBy: s.bulkOrders.fabricBy, item: s.bulkOrderItems.item, description: s.bulkOrderItems.description, size: s.bulkOrderItems.size, qty: s.bulkOrderItems.qty, rate: s.bulkOrderItems.rate, amount: s.bulkOrderItems.amount, delivery: s.bulkOrders.deliveryDate, status: s.bulkOrders.status })

@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
 import type { CustomerLite } from "@/components/forms/customer-dialog";
 import { deleteMeasurement } from "@/lib/actions/measurements";
-import { fieldsFor } from "@/lib/measurements";
+import { fieldsFor, measureText } from "@/lib/measurements";
 import { formatPhone } from "@/lib/phone";
 import { cn, fmtDate } from "@/lib/utils";
 
@@ -179,7 +179,7 @@ function GarmentRow({ m, earlier, onEdit, onDelete }: { m: Row; earlier?: boolea
           {fields.length
             ? fields.map((f) => (
                 <span key={f.key}>
-                  <span className="text-muted-foreground">{f.en}</span> <b className="tabular-nums">{m.values[f.key]}</b>
+                  <span className="text-muted-foreground">{f.part ? "Chest" : f.en}</span> <b className="tabular-nums">{measureText(f, m.values[f.key])}</b>
                 </span>
               ))
             : "No measurements filled in"}

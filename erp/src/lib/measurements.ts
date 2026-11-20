@@ -3,7 +3,16 @@
  * key = the name stored in the record's values; en = the label shown.
  * One "Shirt" covers full and half sleeve: everything is entered once, with a separate length for each sleeve.
  */
-export type GarmentField = { key: string; en: string; ml: string };
+/**
+ * part: the figure is recorded as a part of the whole (e.g. chest measured on the folded garment, centre front
+ * to one side = a quarter). Only the typed number is stored; the whole is always worked out for display.
+ */
+export type GarmentField = { key: string; en: string; ml: string; part?: { factor: number; whole: string } };
+
+/** Measurements recorded as a part of the whole, by field key. */
+const PART_OF_WHOLE: Record<string, { factor: number; whole: string; en: string; ml: string }> = {
+  Chest: { factor: 4, whole: "full chest", en: "Chest — centre front to side", ml: "നടുവിൽ നിന്ന് ഒരു വശത്തേക്ക്" },
+};
 export const GARMENTS: Record<string, GarmentField[]> = {
   Shirt: f("Length:നീളം", "Chest:നെഞ്ച്", "Waist:അര", "Shoulder:തോൾ", "Sleeve full=Sleeve — full:ഫുൾ കൈ നീളം", "Sleeve half=Sleeve — half:ഹാഫ് കൈ നീളം", "Neck:കഴുത്ത്", "Cuff:കഫ്"),
   "Pant / Trouser": f("Length:നീളം", "Waist:അര", "Seat:സീറ്റ്", "Thigh:തുട", "Knee:മുട്ട്", "Bottom:ബോട്ടം"),
@@ -22,16 +31,31 @@ export const LEGACY_GARMENTS: Record<string, { to: string; sleeve: string }> = {
   "Shirt Half Sleeve": { to: "Shirt", sleeve: "Sleeve half" },
 };
 
-/** "key=Label:Malayalam" or "Label:Malayalam" (key = label). */
+/** "key=Label:Malayalam" or "Label:Malayalam" (key = label). Part-of-whole fields get their label and factor here. */
 function f(...defs: string[]): GarmentField[] {
   return defs.map((d) => {
     const [head, ml] = d.split(":");
     const [key, en] = head.includes("=") ? head.split("=") : [head, head];
-    return { key, en, ml };
+    const part = PART_OF_WHOLE[key];
+    return part ? { key, en: part.en, ml: part.ml, part: { factor: part.factor, whole: part.whole } } : { key, en, ml };
   });
+}
+
+const n2 = (n: number) => String(Math.round(n * 100) / 100);
+
+/** The whole measurement for a part-of-whole field (never stored). */
+export function wholeOf(field: GarmentField, value: number | null | undefined) {
+  return field.part && value != null && Number.isFinite(value) ? Math.round(value * field.part.factor * 100) / 100 : null;
+}
+
+/** "13.5 (full chest 54)" for part-of-whole fields, "30.5" for the rest — used on screen, slips and exports. */
+export function measureText(field: GarmentField, value: number | null | undefined) {
+  if (value == null) return "—";
+  const whole = wholeOf(field, value);
+  return whole != null ? `${n2(value)} (${field.part!.whole} ${n2(whole)})` : n2(value);
 }
 
 /** Fields for a record's garment; unknown garments show whatever values they have. */
 export function fieldsFor(garmentType: string, values: Record<string, unknown> = {}): GarmentField[] {
-  return GARMENTS[garmentType] ?? Object.keys(values).map((k) => ({ key: k, en: k, ml: "" }));
+  return GARMENTS[garmentType] ?? f(...Object.keys(values).map((k) => `${k}:`));
 }

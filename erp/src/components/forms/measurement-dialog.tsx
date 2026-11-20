@@ -11,7 +11,7 @@ import { Field } from "@/components/app/field";
 import { ListSelect } from "@/components/app/search-select";
 import { CustomerPicker } from "./customer-picker";
 import type { CustomerLite } from "./customer-dialog";
-import { GARMENTS, GARMENT_TYPES, fieldsFor } from "@/lib/measurements";
+import { GARMENTS, GARMENT_TYPES, fieldsFor, wholeOf } from "@/lib/measurements";
 import { saveMeasurement, type MeasurementInput } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
 
@@ -119,7 +119,14 @@ export function MeasurementDialog({
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {fields.map((f) => (
-                <Field key={f.key} label={f.en} ml={f.ml}>
+                <Field
+                  key={f.key}
+                  label={f.en}
+                  ml={f.ml}
+                  className={f.part ? "col-span-2" : undefined}
+                  // Part-of-whole (chest): show the whole as it is typed — worked out, never stored
+                  hint={f.part ? (v.values[f.key] != null ? `${v.values[f.key]} → ${f.part.whole} ${wholeOf(f, v.values[f.key])} in` : `× ${f.part.factor} = ${f.part.whole}`) : undefined}
+                >
                   <Input
                     type="number"
                     inputMode="decimal"
@@ -167,7 +174,10 @@ export function MeasurementCard({ m, onEdit }: { m: MeasurementRow; onEdit?: () 
         {fields.map((f) => (
           <div key={f.key}>
             <dt className="text-[11px] text-muted-foreground">{f.en}</dt>
-            <dd className="font-display text-base font-semibold tabular-nums">{m.values[f.key] ?? "—"}</dd>
+            <dd className="font-display text-base font-semibold tabular-nums">
+              {m.values[f.key] ?? "—"}
+              {wholeOf(f, m.values[f.key]) != null && <span className="ml-1 font-sans text-xs font-normal text-muted-foreground">({f.part!.whole} {wholeOf(f, m.values[f.key])})</span>}
+            </dd>
           </div>
         ))}
       </dl>

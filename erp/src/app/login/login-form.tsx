@@ -5,7 +5,8 @@ import { Delete, Loader2 } from "lucide-react";
 import { loginAction } from "./actions";
 import { cn } from "@/lib/utils";
 
-type U = { id: number; name: string; role: string };
+type U = { id: number; code: string; name: string; role: string };
+const norm = (n: string) => n.trim().toLowerCase().replace(/\s+/g, " ");
 
 /** PINs are 6 digits: six dots, Enter only once all six are typed. */
 const PIN_LENGTH = 6;
@@ -67,7 +68,11 @@ export function LoginForm({ users }: { users: U[] }) {
             </span>
             <span className="min-w-0">
               <span className="block truncate text-sm font-medium">{u.name}</span>
-              <span className="block truncate text-xs text-muted-foreground">{u.role}</span>
+              <span className="block truncate text-xs text-muted-foreground">
+                {u.role}
+                {/* Two sign-ins with the same name (e.g. during a staff merge): show the staff code to tell them apart */}
+                {users.some((x) => x.id !== u.id && norm(x.name) === norm(u.name)) && <span className="font-mono"> · {u.code}</span>}
+              </span>
             </span>
           </button>
         ))}

@@ -12,6 +12,7 @@ import { Field } from "@/components/app/field";
 import { addUser, removeUserAccess, resetUserPin, unlockUser, updateUser, type UserRow } from "@/lib/actions/users";
 import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
+import { MergeStaff } from "./merge-staff";
 
 const ROLES: { key: Role; label: string; hint: string }[] = [
   { key: "owner", label: "Owner", hint: "Everything" },
@@ -95,6 +96,8 @@ export function UsersTab({ users, meId }: { users: UserRow[]; meId: number }) {
           </li>
         ))}
       </ul>
+
+      <MergeStaff users={users} meId={meId} />
 
       {dlg?.kind === "add" && <AddDialog staffWithoutLogin={users.filter((u) => !u.role && u.status === "Active").map((u) => u.name)} onClose={() => setDlg(null)} onDone={done} />}
       {dlg?.kind === "edit" && <EditDialog u={dlg.u} onClose={() => setDlg(null)} onDone={done} />}

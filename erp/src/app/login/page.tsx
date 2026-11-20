@@ -34,7 +34,7 @@ export default async function LoginPage() {
           <p className="mt-1 text-sm text-muted-foreground">
             Choose your name and enter your PIN <span className="ml">പേര് തിരഞ്ഞെടുത്ത് പിൻ നൽകുക</span>
           </p>
-          <LoginForm users={users.map((u) => ({ id: u.id, name: u.name, role: u.role ?? "" }))} />
+          <LoginForm users={users.map((u) => ({ id: u.id, code: u.code, name: u.name, role: u.role ?? "" }))} />
         </div>
       </div>
     </div>

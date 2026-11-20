@@ -125,7 +125,12 @@ function StaffSheet({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const r = await saveStaff(v);
+      let r = await saveStaff(v);
+      // Add staff: same name or phone already in Staff → ask before creating a second record
+      if (!r.ok && r.error.startsWith("DUPLICATE: ")) {
+        if (!confirm(r.error.slice("DUPLICATE: ".length))) return;
+        r = await saveStaff({ ...v, allowDuplicate: true });
+      }
       if (!r.ok) return void toast.error(r.error);
       toast.success("Saved");
       onSaved();

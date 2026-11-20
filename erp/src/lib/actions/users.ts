@@ -15,6 +15,8 @@ const Pin = z.string().regex(PIN_RE, "PIN must be exactly 6 digits");
 
 export type UserRow = {
   id: number;
+  code: string;
+  phone: string | null;
   name: string;
   displayName: string | null;
   role: Role | null;
@@ -31,6 +33,8 @@ export async function listUsers(): Promise<UserRow[]> {
   const rows = await db
     .select({
       id: schema.staff.id,
+      code: schema.staff.code,
+      phone: schema.staff.phone,
       name: schema.staff.name,
       displayName: schema.staff.displayName,
       access: schema.staff.access,
@@ -43,6 +47,8 @@ export async function listUsers(): Promise<UserRow[]> {
     .orderBy(schema.staff.code);
   return rows.map((r) => ({
     id: r.id,
+    code: r.code,
+    phone: r.phone,
     name: r.name,
     displayName: r.displayName,
     role: r.access === "owner" || r.access === "partner" || r.access === "staff" ? r.access : null,
@@ -200,4 +206,154 @@ export async function changeMyPin(input: z.input<typeof ChangeMyPin>): Promise<R
   await startSession({ id: me.id, sessionVersion: row.v });
   await audit(db, me, "update", "user", me.id, "changed own PIN");
   return ok(null);
+}
+
+/* ───────────── Merging duplicate staff records ───────────── */
+
+type RefCount = { label: string; count: number };
+
+/** postgres-js returns an array (with .count); PGlite returns { rows, affectedRows }. */
+const rowsOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? (res as T[]) : ((res as { rows?: T[] }).rows ?? []));
+const changedOf = (res: unknown) => Number((res as { count?: number }).count ?? (res as { affectedRows?: number }).affectedRows ?? 0);
+
+/** Every place a staff record is referenced: by id, and by name (text fields hold the name as it was written). */
+async function staffRefs(db: Awaited<ReturnType<typeof getDb>>, src: { id: number; name: string; displayName: string | null }) {
+  const s = schema;
+  const names = [...new Set([src.name, src.displayName].filter((n): n is string => !!n))];
+  const byId: { label: string; table: typeof s.sales | typeof s.orders | typeof s.bulkOrders | typeof s.payments | typeof s.tailorWages | typeof s.wagePayments | typeof s.incentivePayouts | typeof s.auditLog; col: string }[] = [
+    { label: "Bills — Sold by", table: s.sales, col: "sold_by_id" },
+    { label: "Orders — Tailor", table: s.orders, col: "tailor_id" },
+    { label: "Orders — Brought by", table: s.orders, col: "brought_by_id" },
+    { label: "Bulk orders — Brought by", table: s.bulkOrders, col: "brought_by_id" },
+    { label: "Payments — Received by", table: s.payments, col: "received_by_id" },
+    { label: "Tailor wages", table: s.tailorWages, col: "tailor_id" },
+    { label: "Wage payouts", table: s.wagePayments, col: "tailor_id" },
+    { label: "Incentive payouts", table: s.incentivePayouts, col: "staff_id" },
+    { label: "Change log — user", table: s.auditLog, col: "staff_id" },
+  ];
+  const byName: { label: string; table: string; col: string; use: "name" | "display" }[] = [
+    { label: "Setup Expenses — Paid by", table: "setup_expenses", col: "paid_by", use: "name" },
+    { label: "Opening Stock — Owned by", table: "opening_stock", col: "owned_by", use: "name" },
+    { label: "Cash Book — Partner", table: "cash_book", col: "partner", use: "name" },
+    { label: "Fabric — Brought in by", table: "fabrics", col: "brought_in_by", use: "name" },
+    { label: "Supplier payments — Paid by", table: "supplier_payments", col: "paid_by", use: "name" },
+    { label: "Bills — Entered by", table: "sales", col: "created_by", use: "display" },
+    { label: "Orders — Booked by", table: "orders", col: "created_by", use: "display" },
+    { label: "Orders — Last edited by", table: "orders", col: "updated_by", use: "display" },
+    { label: "Bulk orders — Entered by", table: "bulk_orders", col: "created_by", use: "display" },
+    { label: "Payments — Entered by", table: "payments", col: "created_by", use: "display" },
+    { label: "Supplier payments — Entered by", table: "supplier_payments", col: "created_by", use: "display" },
+    { label: "Wage payouts — Entered by", table: "wage_payments", col: "created_by", use: "display" },
+    { label: "Order stage changes — by", table: "order_status_changes", col: "changed_by", use: "display" },
+    { label: "WhatsApp messages — Sent by", table: "customer_messages", col: "sent_by", use: "display" },
+    { label: "Contact import — Reviewed by", table: "contact_imports", col: "reviewed_by", use: "display" },
+    { label: "Change log — name", table: "audit_log", col: "staff_name", use: "display" },
+  ];
+  return { byId, byName, names };
+}
+
+async function countRefs(db: Awaited<ReturnType<typeof getDb>>, src: { id: number; name: string; displayName: string | null }): Promise<RefCount[]> {
+  const { byId, byName, names } = await staffRefs(db, src);
+  const out: RefCount[] = [];
+  for (const r of byId) {
+    const [row] = rowsOf<{ n: number }>(await db.execute(sql`select count(*)::int as n from ${r.table} where ${sql.identifier(r.col)} = ${src.id}`));
+    out.push({ label: r.label, count: Number(row?.n ?? 0) });
+  }
+  for (const r of byName) {
+    const [row] = rowsOf<{ n: number }>(await db.execute(sql`select count(*)::int as n from ${sql.identifier(r.table)} where ${sql.identifier(r.col)} in ${names}`));
+    out.push({ label: r.label, count: Number(row?.n ?? 0) });
+  }
+  return out;
+}
+
+const MergeIds = z.object({ sourceId: z.number().int().positive(), targetId: z.number().int().positive() }).refine((v) => v.sourceId !== v.targetId, "Choose two different records");
+
+async function loadPair(db: Awaited<ReturnType<typeof getDb>>, sourceId: number, targetId: number) {
+  const [src] = await db.select().from(schema.staff).where(eq(schema.staff.id, sourceId));
+  const [dst] = await db.select().from(schema.staff).where(eq(schema.staff.id, targetId));
+  return { src, dst };
+}
+
+/** What a merge would move — shown before anything changes. */
+export async function previewStaffMerge(input: z.input<typeof MergeIds>): Promise<Result<{ refs: RefCount[]; total: number; sourceHasLogin: boolean; targetHasLogin: boolean }>> {
+  await requireUser({ can: "users" });
+  const parsed = MergeIds.safeParse(input);
+  if (!parsed.success) return fail(zodError(parsed.error));
+  const db = await getDb();
+  const { src, dst } = await loadPair(db, parsed.data.sourceId, parsed.data.targetId);
+  if (!src || !dst) return fail("Record not found");
+  const refs = await countRefs(db, src);
+  return ok({ refs, total: refs.reduce((s, r) => s + r.count, 0), sourceHasLogin: src.access !== "none" && !!src.pinHash, targetHasLogin: dst.access !== "none" && !!dst.pinHash });
+}
+
+/**
+ * Step 1: copy the sign-in (role + the same PIN hash) to the record being kept. The old record keeps its
+ * sign-in for now, so nobody is signed out; the next step happens after signing in as the kept record.
+ */
+export async function moveSignIn(input: z.input<typeof MergeIds>): Promise<Result<{ name: string }>> {
+  const me = await requireUser({ can: "users" });
+  const parsed = MergeIds.safeParse(input);
+  if (!parsed.success) return fail(zodError(parsed.error));
+  const db = await getDb();
+  const { src, dst } = await loadPair(db, parsed.data.sourceId, parsed.data.targetId);
+  if (!src || !dst) return fail("Record not found");
+  if (src.access === "none" || !src.pinHash) return fail(`${src.name} (${src.code}) has no sign-in to move.`);
+  if (dst.access !== "none" && dst.pinHash) return fail(`${dst.name} (${dst.code}) already has a sign-in.`);
+  await db
+    .update(schema.staff)
+    .set({
+      access: src.access,
+      pinHash: src.pinHash, // the same PIN works — the hash is copied, never the PIN
+      displayName: dst.displayName ?? src.displayName,
+      role: src.access === "owner" ? "Owner" : dst.role,
+      status: "Active",
+      failedPins: 0,
+      lockedUntil: null,
+      updatedAt: new Date(),
+    })
+    .where(eq(schema.staff.id, dst.id));
+  await audit(db, me, "update", "user", dst.id, `sign-in copied from ${src.code} ${src.name} to ${dst.code} ${dst.name} (merge step 1)`);
+  revalidatePath("/settings");
+  revalidatePath("/staff");
+  return ok({ name: dst.name });
+}
+
+/**
+ * Steps 2–3: move every reference from the duplicate to the kept record, then delete the duplicate — all in
+ * one transaction (all or nothing). Refused while signed in as the duplicate, so nobody can lock themselves out.
+ */
+export async function mergeStaff(input: z.input<typeof MergeIds>): Promise<Result<{ moved: RefCount[]; total: number }>> {
+  const me = await requireUser({ can: "users" });
+  const parsed = MergeIds.safeParse(input);
+  if (!parsed.success) return fail(zodError(parsed.error));
+  const { sourceId, targetId } = parsed.data;
+  if (me.id === sourceId) return fail("You are signed in as the record being removed. Sign out, sign in as the record you are keeping (same PIN), then run this step.");
+  const db = await getDb();
+  const { src, dst } = await loadPair(db, sourceId, targetId);
+  if (!src || !dst) return fail("Record not found");
+  const srcLogin = src.access !== "none" && !!src.pinHash;
+  if (srcLogin && !(dst.access !== "none" && dst.pinHash)) return fail(`Do step 1 first: move the sign-in to ${dst.name} (${dst.code}).`);
+  const { byId, byName, names } = await staffRefs(db, src);
+  const dstDisplay = dst.displayName?.trim() || dst.name;
+  const moved: RefCount[] = [];
+  await db.transaction(async (tx) => {
+    for (const r of byId) {
+      const res = await tx.execute(sql`update ${r.table} set ${sql.identifier(r.col)} = ${dst.id} where ${sql.identifier(r.col)} = ${src.id}`);
+      moved.push({ label: r.label, count: changedOf(res) });
+    }
+    for (const r of byName) {
+      const res = await tx.execute(sql`update ${sql.identifier(r.table)} set ${sql.identifier(r.col)} = ${r.use === "name" ? dst.name : dstDisplay} where ${sql.identifier(r.col)} in ${names}`);
+      moved.push({ label: r.label, count: changedOf(res) });
+    }
+    // Keep useful details the kept record lacks
+    await tx
+      .update(schema.staff)
+      .set({ phone: dst.phone ?? src.phone, joinDate: dst.joinDate ?? src.joinDate, updatedAt: new Date() })
+      .where(eq(schema.staff.id, dst.id));
+    await tx.delete(schema.staff).where(eq(schema.staff.id, src.id));
+  });
+  const total = moved.reduce((s, r) => s + r.count, 0);
+  await audit(db, me, "delete", "staff", src.id, `merged ${src.code} ${src.name} into ${dst.code} ${dst.name} — ${total} reference(s) moved`);
+  revalidatePath("/", "layout");
+  return ok({ moved: moved.filter((m) => m.count > 0), total });
 }

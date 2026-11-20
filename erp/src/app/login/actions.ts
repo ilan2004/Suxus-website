@@ -63,7 +63,13 @@ export async function setupAction(_: unknown, form: FormData): Promise<{ error?:
 
   const db = await getDb();
   const pinHash = await hashPin(pin);
-  const [existing] = await db.select().from(schema.staff).where(eq(schema.staff.name, name));
+  // Match an existing staff record ignoring capitals and extra spaces ("sahim kt" = "Sahim KT"), so the login
+  // is added to that record instead of creating a second one
+  const [existing] = await db
+    .select()
+    .from(schema.staff)
+    .where(sql`lower(regexp_replace(trim(${schema.staff.name}), '[[:space:]]+', ' ', 'g')) = ${name.toLowerCase().replace(/\s+/g, " ")}`)
+    .limit(1);
   let user;
   if (existing) {
     [user] = await db

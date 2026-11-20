@@ -102,7 +102,7 @@ export const checkPin = (pin: string, hash: string) => bcrypt.compare(pin, hash)
 export async function loginUsers() {
   const db = await getDb();
   return db
-    .select({ id: schema.staff.id, name: schema.staff.name, displayName: schema.staff.displayName, role: schema.staff.role, access: schema.staff.access })
+    .select({ id: schema.staff.id, code: schema.staff.code, name: schema.staff.name, displayName: schema.staff.displayName, role: schema.staff.role, access: schema.staff.access })
     .from(schema.staff)
     .where(and(ne(schema.staff.access, "none"), eq(schema.staff.status, "Active")))
     .orderBy(schema.staff.code);

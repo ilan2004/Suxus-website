@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -25,16 +25,37 @@ const StaffInput = z.object({
   // Sign-in (access / PIN) is managed only in Settings → Users; these are accepted but ignored here
   access: z.string().optional(),
   pin: z.string().optional(),
+  /** Set after the user confirmed the "already exists" warning on Add staff. */
+  allowDuplicate: z.boolean().optional(),
 });
 export type StaffInput = z.input<typeof StaffInput>;
+const DUPLICATE_PREFIX = "DUPLICATE: ";
 
 export async function saveStaff(input: StaffInput): Promise<Result<{ id: number }>> {
   const user = await requireUser({ can: "staff" });
   const parsed = StaffInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { id, pin, access, ownIncentivePct, ...d } = parsed.data;
+  const { id, pin, access, allowDuplicate, ownIncentivePct, ...d } = parsed.data;
   const db = await getDb();
+
+  // Add staff: warn when the name (ignoring capitals/spaces) or the phone number is already in Staff
+  if (!id && !allowDuplicate) {
+    const digits = (d.phone ?? "").replace(/\D/g, "").slice(-10);
+    const dupes = await db
+      .select({ code: schema.staff.code, name: schema.staff.name, phone: schema.staff.phone })
+      .from(schema.staff)
+      .where(
+        or(
+          sql`lower(regexp_replace(trim(${schema.staff.name}), '[[:space:]]+', ' ', 'g')) = ${d.name.trim().toLowerCase().replace(/\s+/g, " ")}`,
+          digits.length === 10 ? sql`right(regexp_replace(coalesce(${schema.staff.phone}, ''), '[^0-9]', '', 'g'), 10) = ${digits}` : sql`false`,
+        ),
+      );
+    if (dupes.length) {
+      const list = dupes.map((x) => `${x.code} ${x.name}${x.phone ? ` (${x.phone})` : ""}`).join(", ");
+      return fail(`${DUPLICATE_PREFIX}Already in Staff: ${list}. Open that record instead, or add anyway if this is a different person.`);
+    }
+  }
 
   const values = {
     ...d,

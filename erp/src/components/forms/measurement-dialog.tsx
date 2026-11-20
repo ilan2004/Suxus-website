@@ -11,7 +11,7 @@ import { Field } from "@/components/app/field";
 import { ListSelect } from "@/components/app/search-select";
 import { CustomerPicker } from "./customer-picker";
 import type { CustomerLite } from "./customer-dialog";
-import { GARMENTS, GARMENT_TYPES } from "@/lib/measurements";
+import { GARMENTS, GARMENT_TYPES, fieldsFor } from "@/lib/measurements";
 import { saveMeasurement, type MeasurementInput } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
 
@@ -46,7 +46,7 @@ export function MeasurementDialog({
   const blank = (): MeasurementInput => ({
     customerId: 0,
     date: today(),
-    garmentType: "Shirt Full Sleeve",
+    garmentType: "Shirt",
     fit: "Regular",
     values: {},
     ...initial,
@@ -119,15 +119,15 @@ export function MeasurementDialog({
             </div>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
               {fields.map((f) => (
-                <Field key={f.en} label={f.en} ml={f.ml}>
+                <Field key={f.key} label={f.en} ml={f.ml}>
                   <Input
                     type="number"
                     inputMode="decimal"
                     step="0.25"
                     min={0}
-                    value={v.values[f.en] ?? ""}
+                    value={v.values[f.key] ?? ""}
                     onChange={(e) =>
-                      setV((s) => ({ ...s, values: { ...s.values, [f.en]: e.target.value === "" ? null : Number(e.target.value) } }))
+                      setV((s) => ({ ...s, values: { ...s.values, [f.key]: e.target.value === "" ? null : Number(e.target.value) } }))
                     }
                     className="text-right font-medium tabular-nums"
                   />
@@ -154,7 +154,7 @@ export function MeasurementDialog({
 }
 
 export function MeasurementCard({ m, onEdit }: { m: MeasurementRow; onEdit?: () => void }) {
-  const fields = GARMENTS[m.garmentType] ?? Object.keys(m.values).map((en) => ({ en, ml: "" }));
+  const fields = fieldsFor(m.garmentType, m.values);
   return (
     <button onClick={onEdit} className="w-full rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/40">
       <div className="mb-3 flex items-baseline justify-between gap-2">
@@ -165,9 +165,9 @@ export function MeasurementCard({ m, onEdit }: { m: MeasurementRow; onEdit?: () 
       </div>
       <dl className="grid grid-cols-3 gap-x-4 gap-y-2 sm:grid-cols-4">
         {fields.map((f) => (
-          <div key={f.en}>
+          <div key={f.key}>
             <dt className="text-[11px] text-muted-foreground">{f.en}</dt>
-            <dd className="font-display text-base font-semibold tabular-nums">{m.values[f.en] ?? "—"}</dd>
+            <dd className="font-display text-base font-semibold tabular-nums">{m.values[f.key] ?? "—"}</dd>
           </div>
         ))}
       </dl>

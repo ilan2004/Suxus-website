@@ -6,6 +6,7 @@ import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
+import { LEGACY_GARMENTS } from "@/lib/measurements";
 import { fail, ok, optText, reqDate, zodError, type Result } from "./util";
 
 const MeasurementInput = z.object({
@@ -24,9 +25,16 @@ export async function saveMeasurement(input: MeasurementInput): Promise<Result<{
   const user = await requireUser();
   const parsed = MeasurementInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
-  const { id, ...d } = parsed.data;
+  const { id, ...rest } = parsed.data;
   const db = await getDb();
-  const values = Object.fromEntries(Object.entries(d.values).filter(([, v]) => v != null && !Number.isNaN(v)));
+  let values = Object.fromEntries(Object.entries(rest.values).filter(([, v]) => v != null && !Number.isNaN(v)));
+  // An old "Shirt Full/Half Sleeve" record (e.g. from an old link) is saved as the one Shirt garment
+  const legacy = LEGACY_GARMENTS[rest.garmentType];
+  if (legacy && values.Sleeve != null) {
+    const { Sleeve, ...others } = values;
+    values = { ...others, [legacy.sleeve]: Sleeve };
+  }
+  const d = { ...rest, garmentType: legacy?.to ?? rest.garmentType };
   let row;
   if (id) {
     [row] = await db.update(schema.measurements).set({ ...d, values }).where(eq(schema.measurements.id, id)).returning();

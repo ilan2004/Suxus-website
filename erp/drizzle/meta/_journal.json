@@ -113,6 +113,13 @@
       "when": 1795098398814,
       "tag": "0015_users_and_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1795152978816,
+      "tag": "0016_merge_shirt_measurements",
+      "breakpoints": true
     }
   ]
 }

@@ -9,9 +9,16 @@
  */
 export type GarmentField = { key: string; en: string; ml: string; part?: { factor: number; whole: string } };
 
-/** Measurements recorded as a part of the whole, by field key. */
-const PART_OF_WHOLE: Record<string, { factor: number; whole: string; en: string; ml: string }> = {
-  Chest: { factor: 4, whole: "full chest", en: "Chest — centre front to side", ml: "നടുവിൽ നിന്ന് ഒരു വശത്തേക്ക്" },
+/**
+ * Measurements recorded as a part of the whole — by garment, then field. ONLY these carry a multiplier; every
+ * other field on every garment is the full measurement and shows as a plain number. (Confirmed with the cutting
+ * master: Shirt chest and waist are taken on the folded garment, centre front to side = a quarter.)
+ */
+const PART_OF_WHOLE: Record<string, Record<string, { factor: number; whole: string; en: string; ml: string }>> = {
+  Shirt: {
+    Chest: { factor: 4, whole: "full chest", en: "Chest — centre front to side", ml: "നടുവിൽ നിന്ന് ഒരു വശത്തേക്ക്" },
+    Waist: { factor: 4, whole: "full waist", en: "Waist — centre front to side", ml: "നടുവിൽ നിന്ന് ഒരു വശത്തേക്ക്" },
+  },
 };
 export const GARMENTS: Record<string, GarmentField[]> = {
   Shirt: f("Length:നീളം", "Chest:നെഞ്ച്", "Waist:അര", "Shoulder:തോൾ", "Sleeve full=Sleeve — full:ഫുൾ കൈ നീളം", "Sleeve half=Sleeve — half:ഹാഫ് കൈ നീളം", "Neck:കഴുത്ത്", "Cuff:കഫ്"),
@@ -31,13 +38,20 @@ export const LEGACY_GARMENTS: Record<string, { to: string; sleeve: string }> = {
   "Shirt Half Sleeve": { to: "Shirt", sleeve: "Sleeve half" },
 };
 
-/** "key=Label:Malayalam" or "Label:Malayalam" (key = label). Part-of-whole fields get their label and factor here. */
+/** "key=Label:Malayalam" or "Label:Malayalam" (key = label). */
 function f(...defs: string[]): GarmentField[] {
   return defs.map((d) => {
     const [head, ml] = d.split(":");
     const [key, en] = head.includes("=") ? head.split("=") : [head, head];
-    const part = PART_OF_WHOLE[key];
-    return part ? { key, en: part.en, ml: part.ml, part: { factor: part.factor, whole: part.whole } } : { key, en, ml };
+    return { key, en, ml };
+  });
+}
+
+// Part-of-whole fields get their label and factor here — only for the garment they are listed under
+for (const [garment, parts] of Object.entries(PART_OF_WHOLE)) {
+  GARMENTS[garment] = GARMENTS[garment].map((fl) => {
+    const part = parts[fl.key];
+    return part ? { key: fl.key, en: part.en, ml: part.ml, part: { factor: part.factor, whole: part.whole } } : fl;
   });
 }
 

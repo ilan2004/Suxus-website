@@ -179,7 +179,7 @@ function GarmentRow({ m, earlier, onEdit, onDelete }: { m: Row; earlier?: boolea
           {fields.length
             ? fields.map((f) => (
                 <span key={f.key}>
-                  <span className="text-muted-foreground">{f.part ? "Chest" : f.en}</span> <b className="tabular-nums">{measureText(f, m.values[f.key])}</b>
+                  <span className="text-muted-foreground">{f.part ? f.key : f.en}</span> <b className="tabular-nums">{measureText(f, m.values[f.key])}</b>
                 </span>
               ))
             : "No measurements filled in"}

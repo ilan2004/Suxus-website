@@ -54,6 +54,13 @@ export async function fabricsWithStock() {
       broughtInBy: fabrics.broughtInBy,
       photoUrls: fabrics.photoUrls,
       thumbUrls: fabrics.thumbUrls,
+      photoOriginalUrls: fabrics.photoOriginalUrls,
+      pattern: fabrics.pattern,
+      patternMm: fabrics.patternMm,
+      patternMmSource: fabrics.patternMmSource,
+      dominantHex: fabrics.dominantHex,
+      secondaryHexes: fabrics.secondaryHexes,
+      colourSources: fabrics.colourSources,
       thumbnailUrl: fabrics.thumbnailUrl,
       soldMtr: sold,
     })

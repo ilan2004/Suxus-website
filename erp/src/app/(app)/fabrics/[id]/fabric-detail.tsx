@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { StatCard } from "@/components/app/stat-card";
-import { FabricSheet } from "../fabrics-view";
+import { fabricToInput, FabricSheet } from "../fabrics-view";
 import type { FabricInput } from "@/lib/actions/fabrics";
 import type { FabricRow } from "@/lib/queries";
 import { cn, fmtDate, num, rupees } from "@/lib/utils";
@@ -93,7 +93,7 @@ export function FabricDetail({
           <Button variant="outline" onClick={() => window.open(`/print/labels?ids=${f.id}`, "_blank")}>
             <Tag /> Label
           </Button>
-          <Button onClick={() => setEdit({ ...f, composition: f.composition ?? "Other" })}>
+          <Button onClick={() => setEdit(fabricToInput(f))}>
             <Pencil /> Edit
           </Button>
         </div>

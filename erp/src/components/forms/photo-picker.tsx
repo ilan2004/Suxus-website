@@ -6,6 +6,7 @@ import { getPhotoUploadTargets } from "@/lib/actions/fabrics";
 import { processPhoto, putWithProgress } from "@/lib/image-client";
 import { cn } from "@/lib/utils";
 import type { ColourSuggestion } from "@/lib/colour-detect";
+import type { FabricAnalysis } from "@/lib/fabric-analysis";
 
 export const MAX_PHOTOS = 4;
 
@@ -14,14 +15,18 @@ export type PhotoItem = {
   preview: string;
   url?: string;
   thumb?: string;
+  /** Original WITH the scale card (measurement only, never shown). */
+  original?: string | null;
+  /** What the photo analysis found (scale card, repeat, colours) — only for photos added now. */
+  analysis?: FabricAnalysis | null;
   status: "processing" | "uploading" | "done" | "error";
   progress: number;
   error?: string;
   file?: File;
 };
 
-export const photosFrom = (urls: string[], thumbs: string[]): PhotoItem[] =>
-  urls.map((url, i) => ({ key: url, url, thumb: thumbs[i] ?? url, preview: thumbs[i] ?? url, status: "done", progress: 1 }));
+export const photosFrom = (urls: string[], thumbs: string[], originals: (string | null)[] = []): PhotoItem[] =>
+  urls.map((url, i) => ({ key: url, url, thumb: thumbs[i] ?? url, original: originals[i] ?? null, preview: thumbs[i] ?? url, status: "done", progress: 1 }));
 
 /** Up to 4 fabric photos: camera or gallery, resized + uploaded straight away, reorder, set main, remove, retry. */
 export function PhotoPicker({
@@ -29,12 +34,18 @@ export function PhotoPicker({
   onChange,
   disabled,
   onColour,
+  onAnalysis,
+  hint,
 }: {
   value: PhotoItem[];
   onChange: React.Dispatch<React.SetStateAction<PhotoItem[]>>;
   disabled?: boolean;
   /** Called with the colour found in each newly added photo (free, worked out on the phone). */
   onColour?: (c: ColourSuggestion) => void;
+  /** Called when a newly added photo has been analysed (key of the photo, result). */
+  onAnalysis?: (key: string, a: FabricAnalysis | null) => void;
+  /** Instruction shown above the camera / gallery buttons. */
+  hint?: React.ReactNode;
 }) {
   const cameraRef = React.useRef<HTMLInputElement>(null);
   const galleryRef = React.useRef<HTMLInputElement>(null);
@@ -46,19 +57,28 @@ export function PhotoPicker({
       if (!item.file) return;
       try {
         update(item.key, { status: "processing", progress: 0, error: undefined });
-        const { photo, thumb, ext, colour } = await processPhoto(item.file);
+        const { photo, thumb, original, ext, colour, analysis } = await processPhoto(item.file);
         if (colour) onColour?.(colour);
-        update(item.key, { status: "uploading", progress: 0.05 });
-        const t = await getPhotoUploadTargets(ext);
+        // Show the customer-facing (card cropped out) version straight away
+        update(item.key, { status: "uploading", progress: 0.05, preview: URL.createObjectURL(photo), analysis });
+        onAnalysis?.(item.key, analysis);
+        const t = await getPhotoUploadTargets(ext, !!original);
         if (!t.ok) throw new Error(t.error);
-        await putWithProgress(t.data.photo.uploadUrl, photo, t.data.photo.contentType, (f) => update(item.key, { progress: 0.05 + f * 0.8 }));
+        await putWithProgress(t.data.photo.uploadUrl, photo, t.data.photo.contentType, (f) => update(item.key, { progress: 0.05 + f * (original ? 0.5 : 0.8) }));
+        // The original (with the scale card) is for measuring only — if it fails to upload, keep the photo anyway
+        let originalUrl: string | null = null;
+        if (original && t.data.original)
+          originalUrl = await putWithProgress(t.data.original.uploadUrl, original, t.data.original.contentType, (f) => update(item.key, { progress: 0.55 + f * 0.3 })).then(
+            () => t.data.original!.publicUrl,
+            () => null,
+          );
         await putWithProgress(t.data.thumb.uploadUrl, thumb, t.data.thumb.contentType, (f) => update(item.key, { progress: 0.85 + f * 0.15 }));
-        update(item.key, { status: "done", progress: 1, url: t.data.photo.publicUrl, thumb: t.data.thumb.publicUrl });
+        update(item.key, { status: "done", progress: 1, url: t.data.photo.publicUrl, thumb: t.data.thumb.publicUrl, original: originalUrl });
       } catch (e) {
         update(item.key, { status: "error", error: (e as Error).message });
       }
     },
-    [update, onColour],
+    [update, onColour, onAnalysis],
   );
 
   const add = (files: FileList | null) => {
@@ -144,6 +164,7 @@ export function PhotoPicker({
           ))}
         </ul>
       )}
+      {!full && hint}
       {!full && (
         <div className="grid grid-cols-2 gap-2">
           <button

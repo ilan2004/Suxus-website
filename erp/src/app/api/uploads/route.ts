@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 /** Local-development stand-in for Supabase Storage (disabled in production). */
 function safePath(p: string | null) {
-  if (!p || !/^fabrics\/\d{4}-\d{2}\/[a-f0-9-]+(-thumb)?\.(webp|jpg)$/.test(p)) return null;
+  if (!p || !/^fabrics\/\d{4}-\d{2}\/[a-f0-9-]+(-thumb|-orig)?\.(webp|jpg)$/.test(p)) return null;
   return path.join(LOCAL_DIR, p);
 }
 

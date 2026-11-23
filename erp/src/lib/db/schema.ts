@@ -149,6 +149,19 @@ export const fabrics = pgTable(
     thumbUrls: jsonb("thumb_urls").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     /** Thumbnail of the main photo, for list views. */
     thumbnailUrl: text("thumbnail_url"),
+    /** Originals WITH the scale card (measurement only — never shown). Same order as photoUrls; null = no card. */
+    photoOriginalUrls: jsonb("photo_original_urls").$type<(string | null)[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Plain / Solid · Check · Stripe · Print · Dobby / Self design · Other (empty on older records). */
+    pattern: text("pattern"),
+    /** Check / stripe repeat in mm — measured from the scale card, or typed. */
+    patternMm: numeric("pattern_mm", { precision: 6, scale: 1, mode: "number" }),
+    /** "card" = measured from the scale card · "hand" = typed (never overwritten automatically). */
+    patternMmSource: text("pattern_mm_source"),
+    /** Sampled from the main photo (cloth area, away from the card). */
+    dominantHex: text("dominant_hex"),
+    secondaryHexes: jsonb("secondary_hexes").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /** Per swatch [dominant, secondary 1, secondary 2]: "auto" or "hand" (hand = never overwritten). */
+    colourSources: jsonb("colour_sources").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     createdAt: created(),
     updatedAt: updated(),
   },
@@ -570,4 +583,30 @@ export const orderStatusChanges = pgTable(
     changedAt: created(),
   },
   (t) => [index("order_status_changes_order_idx").on(t.orderId)],
+);
+
+/** One row per fabric photo analysed (scale card, repeat, colours) — to check how reliable the measurement is. */
+export const fabricPhotoLog = pgTable(
+  "fabric_photo_log",
+  {
+    id: serial("id").primaryKey(),
+    fabricId: integer("fabric_id").references(() => fabrics.id, { onDelete: "set null" }),
+    photoUrl: text("photo_url"),
+    originalUrl: text("original_url"),
+    imageWidth: integer("image_width"),
+    imageHeight: integer("image_height"),
+    cardFound: boolean("card_found").notNull(),
+    cardLongPx: numeric("card_long_px", { precision: 8, scale: 1, mode: "number" }),
+    cardShortPx: numeric("card_short_px", { precision: 8, scale: 1, mode: "number" }),
+    mmPerPx: numeric("mm_per_px", { precision: 10, scale: 5, mode: "number" }),
+    periodPx: numeric("period_px", { precision: 8, scale: 2, mode: "number" }),
+    repeatAxis: text("repeat_axis"),
+    repeatCount: numeric("repeat_count", { precision: 8, scale: 1, mode: "number" }),
+    repeatStrength: numeric("repeat_strength", { precision: 4, scale: 2, mode: "number" }),
+    patternMm: numeric("pattern_mm", { precision: 6, scale: 1, mode: "number" }),
+    colours: jsonb("colours").$type<{ hex: string; share: number }[]>().notNull().default(sql`'[]'::jsonb`),
+    createdBy: text("created_by"),
+    createdAt: created(),
+  },
+  (t) => [index("fabric_photo_log_fabric_idx").on(t.fabricId)],
 );

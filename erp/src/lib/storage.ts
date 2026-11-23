@@ -66,18 +66,19 @@ export function isOurPhotoUrl(url: string) {
 export type UploadTarget = { uploadUrl: string; publicUrl: string; contentType: string };
 
 /** Signed upload URLs for one photo + its thumbnail. */
-export async function createUploadTargets(ext: "webp" | "jpg"): Promise<{ photo: UploadTarget; thumb: UploadTarget }> {
+export async function createUploadTargets(ext: "webp" | "jpg", withOriginal = false): Promise<{ photo: UploadTarget; thumb: UploadTarget; original?: UploadTarget }> {
   const mode = storageMode();
   if (mode === "off") throw new Error("Photo storage is not set up (SUPABASE_SERVICE_ROLE_KEY missing).");
   const month = new Date().toISOString().slice(0, 7);
   const id = crypto.randomUUID();
   const contentType = ext === "webp" ? "image/webp" : "image/jpeg";
-  const paths = { photo: `fabrics/${month}/${id}.${ext}`, thumb: `fabrics/${month}/${id}-thumb.${ext}` };
+  // original = the photo WITH the scale card (measurement only; the customer-facing photo has the card cropped out)
+  const paths = { photo: `fabrics/${month}/${id}.${ext}`, thumb: `fabrics/${month}/${id}-thumb.${ext}`, original: `fabrics/${month}/${id}-orig.${ext}` };
 
   if (mode === "local") {
     const sign = (p: string) => crypto.createHmac("sha256", process.env.ERP_SECRET || "suxus-dev-secret-change-me").update(p).digest("hex").slice(0, 24);
     const t = (p: string) => ({ uploadUrl: `/api/uploads?path=${p}&sig=${sign(p)}`, publicUrl: `/api/uploads?path=${p}`, contentType });
-    return { photo: t(paths.photo), thumb: t(paths.thumb) };
+    return { photo: t(paths.photo), thumb: t(paths.thumb), ...(withOriginal ? { original: t(paths.original) } : {}) };
   }
 
   await ensureBucket();
@@ -87,7 +88,7 @@ export async function createUploadTargets(ext: "webp" | "jpg"): Promise<{ photo:
     const { url } = (await res.json()) as { url: string };
     return { uploadUrl: `${supabaseUrl()}/storage/v1${url}`, publicUrl: `${publicBase()}${p}`, contentType };
   };
-  return { photo: await sign(paths.photo), thumb: await sign(paths.thumb) };
+  return { photo: await sign(paths.photo), thumb: await sign(paths.thumb), ...(withOriginal ? { original: await sign(paths.original) } : {}) };
 }
 
 /** Deletes stored files by their public URLs (ignores anything that isn't ours). */

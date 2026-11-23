@@ -1,10 +1,13 @@
 /**
- * Browser-side photo processing: phone photos (3–5 MB, often HEIC) → WebP ≤ 1600 px (~300 KB) + 300 px square thumbnail.
+ * Browser-side photo processing: phone / gallery / DSLR photos (often 3–20 MB, HEIC) → WebP ≤ 1500 px + 300 px thumbnail.
+ * Each photo is analysed for a SUXUS scale card: if found, the customer-facing photo has the card cropped out and the
+ * original (with the card) is kept separately for measurement only.
  * Falls back to JPEG where the browser cannot encode WebP (older Safari).
  */
 import { detectColour, type ColourSuggestion } from "./colour-detect";
+import { analyseFabric, type FabricAnalysis } from "./fabric-analysis";
 
-const MAX_SIDE = 1600;
+const MAX_SIDE = 1500;
 const THUMB = 300;
 const TARGET_BYTES = 300 * 1024;
 
@@ -45,7 +48,27 @@ function toBlob(canvas: HTMLCanvasElement, type: string, quality: number) {
   return new Promise<Blob>((resolve, reject) => canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Could not process the photo"))), type, quality));
 }
 
-export async function processPhoto(file: File): Promise<{ photo: Blob; thumb: Blob; ext: "webp" | "jpg"; colour: ColourSuggestion | null }> {
+async function encode(canvas: HTMLCanvasElement, type: string) {
+  let out = await toBlob(canvas, type, 0.8);
+  for (const q of [0.72, 0.64, 0.56]) {
+    if (out.size <= TARGET_BYTES) break;
+    out = await toBlob(canvas, type, q);
+  }
+  return out;
+}
+
+export type ProcessedPhoto = {
+  /** Customer-facing photo: the scale card cropped out. */
+  photo: Blob;
+  thumb: Blob;
+  /** Original WITH the card (only when a card was found) — measurement only, never shown. */
+  original: Blob | null;
+  ext: "webp" | "jpg";
+  colour: ColourSuggestion | null;
+  analysis: FabricAnalysis | null;
+};
+
+export async function processPhoto(file: File): Promise<ProcessedPhoto> {
   if (!/^image\//.test(file.type) && !isHeic(file)) throw new Error("Please choose a photo (JPG, PNG, HEIC or WebP).");
   const img = await decode(file);
   const w = img.width;
@@ -53,34 +76,53 @@ export async function processPhoto(file: File): Promise<{ photo: Blob; thumb: Bl
   const webp = canEncodeWebp();
   const type = webp ? "image/webp" : "image/jpeg";
 
+  // Whole photo at ≤ 1500 px (longest side, aspect kept) — analysed at this size
   const scale = Math.min(1, MAX_SIDE / Math.max(w, h));
   const big = document.createElement("canvas");
   big.width = Math.round(w * scale);
   big.height = Math.round(h * scale);
-  const bctx = big.getContext("2d")!;
+  const bctx = big.getContext("2d", { willReadFrequently: true })!;
   bctx.imageSmoothingQuality = "high";
   bctx.drawImage(img, 0, 0, big.width, big.height);
-  let photo = await toBlob(big, type, 0.8);
-  for (const q of [0.72, 0.64, 0.56]) {
-    if (photo.size <= TARGET_BYTES) break;
-    photo = await toBlob(big, type, q);
+  if ("close" in img) img.close();
+
+  let analysis: FabricAnalysis | null = null;
+  try {
+    analysis = analyseFabric(bctx.getImageData(0, 0, big.width, big.height));
+  } catch (e) {
+    console.warn("fabric analysis failed", e);
   }
 
-  const side = Math.min(w, h);
+  // Customer-facing version: the card cropped out (whole photo when there is no card)
+  let shown = big;
+  if (analysis?.card) {
+    const c = analysis.crop;
+    const cut = document.createElement("canvas");
+    // same pixels as the ≤ 1500 px photo, never enlarged
+    cut.width = c.w;
+    cut.height = c.h;
+    const cctx = cut.getContext("2d")!;
+    cctx.imageSmoothingQuality = "high";
+    cctx.drawImage(big, c.x, c.y, c.w, c.h, 0, 0, cut.width, cut.height);
+    shown = cut;
+  }
+  const photo = await encode(shown, type);
+  const original = analysis?.card ? await encode(big, type) : null;
+
+  const side = Math.min(shown.width, shown.height);
   const t = document.createElement("canvas");
   t.width = t.height = THUMB;
   const tctx = t.getContext("2d")!;
   tctx.imageSmoothingQuality = "high";
-  tctx.drawImage(img, (w - side) / 2, (h - side) / 2, side, side, 0, 0, THUMB, THUMB);
+  tctx.drawImage(shown, (shown.width - side) / 2, (shown.height - side) / 2, side, side, 0, 0, THUMB, THUMB);
   const thumb = await toBlob(t, type, 0.75);
   let colour: ColourSuggestion | null = null;
   try {
-    colour = detectColour(big);
+    colour = detectColour(shown);
   } catch {
     /* suggestion is optional */
   }
-  if ("close" in img) img.close();
-  return { photo, thumb, ext: webp ? "webp" : "jpg", colour };
+  return { photo, thumb, original, ext: webp ? "webp" : "jpg", colour, analysis };
 }
 
 /** PUT with upload progress (fetch has no upload progress). */

@@ -127,6 +127,13 @@
       "when": 1795419077348,
       "tag": "0017_tailor_per_item",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1795442792182,
+      "tag": "0018_fabric_pattern_colour",
+      "breakpoints": true
     }
   ]
 }

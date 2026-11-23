@@ -20,6 +20,39 @@ import { cn, fmtDate, num, rupees, today } from "@/lib/utils";
 import type { FabricRow } from "@/lib/queries";
 import { PhotoPicker, photosFrom, type PhotoItem } from "@/components/forms/photo-picker";
 import type { ColourSuggestion } from "@/lib/colour-detect";
+import type { FabricAnalysis } from "@/lib/fabric-analysis";
+import { PatternColourFields } from "@/components/forms/fabric-colour-fields";
+import { PATTERNS, hasRepeat } from "@/lib/fabric-patterns";
+
+/** A fabric row → the edit form's values. */
+export function fabricToInput(f: FabricRow): FabricInput {
+  return {
+    ...f,
+    composition: f.composition ?? "Other",
+    pattern: (PATTERNS as readonly string[]).includes(f.pattern ?? "") ? (f.pattern as FabricInput["pattern"]) : null,
+    patternMmSource: f.patternMmSource === "card" || f.patternMmSource === "hand" ? f.patternMmSource : null,
+    colourSources: (f.colourSources ?? []).map((x) => (x === "hand" ? "hand" : "auto")),
+    photos: undefined,
+  };
+}
+
+/** What goes into the measurement log for one analysed photo. */
+function logOf(a: FabricAnalysis) {
+  return {
+    imageWidth: a.width,
+    imageHeight: a.height,
+    cardFound: !!a.card,
+    cardLongPx: a.card ? Math.round(a.card.longPx * 10) / 10 : null,
+    cardShortPx: a.card ? Math.round(a.card.shortPx * 10) / 10 : null,
+    mmPerPx: a.mmPerPx,
+    periodPx: a.pattern?.periodPx ?? null,
+    repeatAxis: a.pattern?.axis ?? null,
+    repeatCount: a.pattern?.repeatCount ?? null,
+    repeatStrength: a.pattern?.strength ?? null,
+    patternMm: a.pattern?.mm ?? null,
+    colours: a.colours,
+  };
+}
 
 export function FabricsView({
   rows,
@@ -44,7 +77,10 @@ export function FabricsView({
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
   const [camera, setCamera] = React.useState(false);
 
-  const data = rows.filter((r) => showInactive || r.active);
+  const [patternFilter, setPatternFilter] = React.useState<string>("all");
+  const data = rows.filter((r) => (showInactive || r.active) && (patternFilter === "all" || (patternFilter === "none" ? !r.pattern : r.pattern === patternFilter)));
+  /** Older records without the new pattern / colour details — filled in over time, nothing is blocked. */
+  const incomplete = (r: FabricRow) => !r.pattern || !r.dominantHex || (hasRepeat(r.pattern) && r.patternMm == null);
   const toggle = (id: number) =>
     setSelected((s) => {
       const n = new Set(s);
@@ -105,7 +141,21 @@ export function FabricsView({
       header: "Fabric",
       cell: ({ row }) => (
         <div>
-          <div className="font-medium">{row.original.brand}</div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {row.original.dominantHex && <span className="size-3 shrink-0 rounded-full border" style={{ background: row.original.dominantHex }} title={`Dominant colour ${row.original.dominantHex}`} />}
+            <span className="font-medium">{row.original.brand}</span>
+            {row.original.pattern && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                {row.original.pattern}
+                {hasRepeat(row.original.pattern) && row.original.patternMm != null ? ` · ${row.original.patternMm} mm` : ""}
+              </span>
+            )}
+            {incomplete(row.original) && (
+              <span className="rounded-full border border-warning/50 px-1.5 py-0.5 text-[10px] text-warning" title="Pattern / colour details not filled in yet">
+                incomplete
+              </span>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">{[row.original.type, row.original.shade].filter(Boolean).join(" · ")}</div>
         </div>
       ),
@@ -146,6 +196,20 @@ export function FabricsView({
         rowHref={(r) => `/fabrics/${r.id}`}
         toolbar={
           <>
+            <select
+              aria-label="Filter by pattern"
+              value={patternFilter}
+              onChange={(e) => setPatternFilter(e.target.value)}
+              className="h-9 rounded-md border border-input bg-card px-2 text-sm"
+            >
+              <option value="all">All patterns</option>
+              {PATTERNS.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+              <option value="none">Pattern not set</option>
+            </select>
             <Label className="mr-2 text-xs text-muted-foreground">
               <Switch checked={showInactive} onCheckedChange={setShowInactive} /> Show inactive
             </Label>
@@ -221,7 +285,34 @@ export function FabricSheet({
   const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
   const [scanBarcode, setScanBarcode] = React.useState(false);
   const [suggestion, setSuggestion] = React.useState<(ColourSuggestion & { applied: string[] }) | null>(null);
+  const [cardStatus, setCardStatus] = React.useState<"found" | "not-found" | null>(null);
   const [pending, start] = React.useTransition();
+  const photosRef = React.useRef(photos);
+  photosRef.current = photos;
+  /**
+   * The main photo was analysed: fill pattern size and colours — except values set by hand, which are never
+   * overwritten. No scale card → size left empty (colours are still sampled).
+   */
+  const applyAnalysis = React.useCallback((key: string, a: FabricAnalysis | null) => {
+    const isMain = (photosRef.current[0]?.key ?? key) === key;
+    if (!isMain || !a) return;
+    setCardStatus(a.card ? "found" : "not-found");
+    setV((cur) => {
+      if (!cur) return cur;
+      const next = { ...cur };
+      if (cur.patternMmSource !== "hand") {
+        next.patternMm = a.card && a.pattern?.mm ? a.pattern.mm : null;
+        next.patternMmSource = next.patternMm != null ? "card" : null;
+      }
+      const src = cur.colourSources ?? [];
+      const now = [cur.dominantHex ?? null, cur.secondaryHexes?.[0] ?? null, cur.secondaryHexes?.[1] ?? null];
+      const hex = now.map((h, i) => (src[i] === "hand" ? h : (a.colours[i]?.hex ?? null)));
+      next.dominantHex = hex[0];
+      next.secondaryHexes = [hex[1], hex[2]].filter((x): x is string => !!x);
+      next.colourSources = [0, 1, 2].map((i) => (src[i] === "hand" ? "hand" : "auto")) as ("auto" | "hand")[];
+      return next;
+    });
+  }, []);
   /** Fill Colour family / Shade from the photo — only fields that are still empty, so nothing typed is overwritten. */
   const applyColour = React.useCallback(
     (c: ColourSuggestion) => {
@@ -246,8 +337,9 @@ export function FabricSheet({
   );
   React.useEffect(() => {
     setV(value);
-    setPhotos(value?.id && row ? photosFrom(row.photoUrls ?? [], row.thumbUrls ?? []) : []);
+    setPhotos(value?.id && row ? photosFrom(row.photoUrls ?? [], row.thumbUrls ?? [], row.photoOriginalUrls ?? []) : []);
     setSuggestion(null);
+    setCardStatus(null);
   }, [value]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!v) return <Sheet open={false} />;
   const busy = photos.some((p) => p.status === "processing" || p.status === "uploading");
@@ -260,8 +352,12 @@ export function FabricSheet({
     e.preventDefault();
     if (busy) return void toast.info("Photos are still uploading — one moment");
     if (failed) return void toast.error("A photo did not upload. Tap Retry on it, or remove it, then save.");
+    if (!v.id && !v.pattern) return void toast.error("Choose the pattern · പാറ്റേൺ തിരഞ്ഞെടുക്കുക");
     start(async () => {
-      const r = await saveFabric({ ...v, photos: photosEnabled ? photos.map((p) => ({ url: p.url!, thumb: p.thumb! })) : undefined });
+      const r = await saveFabric({
+        ...v,
+        photos: photosEnabled ? photos.map((p) => ({ url: p.url!, thumb: p.thumb!, original: p.original ?? null, log: p.analysis ? logOf(p.analysis) : null })) : undefined,
+      });
       if (!r.ok) return void toast.error(r.error);
       toast.success(v.id ? "Fabric updated" : `Fabric ${r.data.code} added`);
       onSaved();
@@ -283,7 +379,19 @@ export function FabricSheet({
             <Field label="Photos" ml="ഫോട്ടോ" className="sm:col-span-2">
               {photosEnabled ? (
                 <>
-                  <PhotoPicker value={photos} onChange={setPhotos} disabled={pending} onColour={applyColour} />
+                  <PhotoPicker
+                    value={photos}
+                    onChange={setPhotos}
+                    disabled={pending}
+                    onColour={applyColour}
+                    onAnalysis={applyAnalysis}
+                    hint={
+                      <p className="rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-xs">
+                        Lay the cloth flat and place a SUXUS scale card in one corner. Then take the photo.
+                        <span className="ml block">തുണി നിവർത്തി വെച്ച്, ഒരു മൂലയിൽ SUXUS സ്കെയിൽ കാർഡ് വെക്കുക. എന്നിട്ട് ഫോട്ടോ എടുക്കുക.</span>
+                      </p>
+                    }
+                  />
                   {suggestion && (
                     <div className="flex items-center gap-2.5 rounded-lg border border-gold/50 bg-gold/10 px-3 py-2 text-xs">
                       <span className="size-7 shrink-0 rounded-md border" style={{ background: suggestion.hex }} />
@@ -333,6 +441,13 @@ export function FabricSheet({
             <Field label="Colour family" ml="കളർ വിഭാഗം">
               <ListSelect items={lists.colourFamily} value={v.colourFamily} onChange={(c) => set("colourFamily", c)} allowClear />
             </Field>
+            <PatternColourFields
+              v={v}
+              required={!v.id}
+              cardStatus={cardStatus}
+              photo={photos[0]?.status === "done" || photos[0]?.preview ? (photos[0]?.preview ?? photos[0]?.url ?? null) : null}
+              onChange={(patch) => setV((cur) => (cur ? ({ ...cur, ...patch } as FabricInput) : cur))}
+            />
             <Field label="Barcode no." ml="ബാർകോഡ്" hint="Leave empty to use the fabric code on labels">
               <div className="flex gap-2">
                 <Input value={v.barcode ?? ""} onChange={(e) => set("barcode", e.target.value)} placeholder="Scan or type" className="flex-1" />

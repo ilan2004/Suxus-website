@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils";
 import type { MessageTemplate } from "@/lib/actions/messages";
 import { TemplatesTab } from "./templates-tab";
 import { UsersTab } from "./users-tab";
+import { FabricPhotosTab, type PhotoLogRow } from "./fabric-photos-tab";
 import type { UserRow } from "@/lib/actions/users";
 
 function useSave() {
@@ -31,9 +32,23 @@ function useSave() {
   return { pending, save };
 }
 
-const TABS = ["shop", "lists", "rates", "codes", "slabs", "templates", "users", "import"];
+const TABS = ["shop", "lists", "rates", "codes", "slabs", "templates", "photos", "users", "import"];
 
-export function SettingsView({ settings, templates, tab, users, meId }: { settings: AppSettings; templates: MessageTemplate[]; tab?: string; users: UserRow[] | null; meId: number }) {
+export function SettingsView({
+  settings,
+  templates,
+  tab,
+  users,
+  meId,
+  photoLog,
+}: {
+  settings: AppSettings;
+  templates: MessageTemplate[];
+  tab?: string;
+  users: UserRow[] | null;
+  meId: number;
+  photoLog: PhotoLogRow[];
+}) {
   return (
     <Tabs defaultValue={tab && TABS.includes(tab) ? tab : "shop"}>
       <TabsList className="h-auto flex-wrap">
@@ -44,6 +59,9 @@ export function SettingsView({ settings, templates, tab, users, meId }: { settin
         <TabsTrigger value="slabs">Incentive slabs</TabsTrigger>
         <TabsTrigger value="templates">
           Message templates <span className="ml ml-1">സന്ദേശങ്ങൾ</span>
+        </TabsTrigger>
+        <TabsTrigger value="photos">
+          Fabric photos <span className="ml ml-1">തുണി ഫോട്ടോ</span>
         </TabsTrigger>
         {users && (
           <TabsTrigger value="users">
@@ -69,6 +87,9 @@ export function SettingsView({ settings, templates, tab, users, meId }: { settin
       </TabsContent>
       <TabsContent value="templates">
         <TemplatesTab templates={templates} />
+      </TabsContent>
+      <TabsContent value="photos">
+        <FabricPhotosTab log={photoLog} />
       </TabsContent>
       {users && (
         <TabsContent value="users">

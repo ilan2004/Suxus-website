@@ -15,9 +15,9 @@ import type { CustomerLite } from "./customer-dialog";
 import { saveOrder, type OrderInput } from "@/lib/actions/orders";
 import { addDays, cn, fmtDate, num, round2, rupees, today } from "@/lib/utils";
 
-type Item = { key: string; item: string; qty: string; rate: string };
+type Item = { key: string; item: string; qty: string; rate: string; tailorId: number | null };
 export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null };
-export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { item: string; qty: number; rate: number }[] };
+export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { item: string; qty: number; rate: number; tailorId?: number | null }[] };
 
 export function OrderForm({
   initial,
@@ -51,7 +51,6 @@ export function OrderForm({
   const [deliveryTouched, setDeliveryTouched] = React.useState(editing);
   const [trialDate, setTrialDate] = React.useState(initial?.trialDate ?? "");
   const [status, setStatus] = React.useState(initial?.status ?? "Booked");
-  const [tailorId, setTailorId] = React.useState<number | null>(initial?.tailorId ?? null);
   const [broughtById, setBroughtById] = React.useState<number | null>(initial?.broughtById ?? null);
   const [linked, setLinked] = React.useState<LinkedSale | null>(sale ?? null);
   const [discount, setDiscount] = React.useState(initial?.discount ? String(initial.discount) : "");
@@ -60,8 +59,8 @@ export function OrderForm({
   const [remarks, setRemarks] = React.useState(initial?.remarks ?? "");
   const [items, setItems] = React.useState<Item[]>(
     initial?.items?.length
-      ? initial.items.map((i) => ({ key: crypto.randomUUID(), item: i.item, qty: String(i.qty), rate: String(i.rate) }))
-      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "" }],
+      ? initial.items.map((i) => ({ key: crypto.randomUUID(), item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null }))
+      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null }],
   );
   const [pending, start] = React.useTransition();
 
@@ -77,6 +76,18 @@ export function OrderForm({
 
   const updateItem = (key: string, patch: Partial<Item>) => setItems((is) => is.map((i) => (i.key === key ? { ...i, ...patch } : i)));
   const tailors = staff;
+  const tailorName = (id: number | null) => (id ? (staff.find((x) => x.id === id)?.name ?? "?") : null);
+  // A new item takes the tailor picked last — one tap for the usual "same tailor for everything"
+  const lastTailor = React.useRef<number | null>(initial?.items?.findLast?.((i) => i.tailorId)?.tailorId ?? null);
+  // "With: Shamshu (shirt), Mujeeb (pant)" — read only, from the item rows
+  const withSummary = (() => {
+    const by = new Map<string, string[]>();
+    for (const i of items) {
+      const n = tailorName(i.tailorId) ?? "Not assigned";
+      by.set(n, [...(by.get(n) ?? []), (i.item || "item").toLowerCase()]);
+    }
+    return [...by.entries()].map(([n, its]) => `${n} (${[...new Set(its)].join(", ")})`).join(", ");
+  })();
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -93,12 +104,11 @@ export function OrderForm({
         trialDate: trialDate || null,
         deliveryDate: deliveryDate || null,
         status,
-        tailorId,
         broughtById,
         saleId: linked?.id ?? null,
         discount: Number(discount) || 0,
         remarks: remarks || null,
-        items: items.map((i) => ({ item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0 })),
+        items: items.map((i) => ({ item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId })),
         advance: editing ? 0 : adv,
         advanceMode,
       });
@@ -185,23 +195,41 @@ export function OrderForm({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "" }])}
+              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null }])}
             >
               <Plus /> Add item
             </Button>
           </div>
-          <div className="hidden grid-cols-[1fr_80px_110px_110px_36px] gap-2 px-1 text-xs text-muted-foreground sm:grid">
+          <div className="hidden grid-cols-[1fr_70px_100px_150px_100px_36px] gap-2 px-1 text-xs text-muted-foreground sm:grid">
             <span>Item</span>
             <span className="text-right">Qty</span>
             <span className="text-right">Rate (₹)</span>
+            <span>Tailor</span>
             <span className="text-right">Amount</span>
             <span />
           </div>
           {items.map((i) => (
-            <div key={i.key} className="grid grid-cols-[1fr_70px_90px] gap-2 sm:grid-cols-[1fr_80px_110px_110px_36px] sm:items-center">
+            <div key={i.key} className="grid grid-cols-[1fr_70px_90px] gap-2 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_70px_100px_150px_100px_36px] sm:items-center sm:border-0 sm:pb-0">
               <ListSelect items={lists.item} value={i.item} onChange={(v) => updateItem(i.key, { item: v ?? "" })} className="col-span-3 sm:col-span-1" />
               <Input type="number" min={1} step={1} value={i.qty} onChange={(e) => updateItem(i.key, { qty: e.target.value })} className="text-right" />
               <Input type="number" min={0} step={10} value={i.rate} onChange={(e) => updateItem(i.key, { rate: e.target.value })} className="text-right" placeholder="0" />
+              <select
+                aria-label="Tailor"
+                value={i.tailorId ?? ""}
+                onChange={(e) => {
+                  const id = e.target.value ? Number(e.target.value) : null;
+                  if (id) lastTailor.current = id;
+                  updateItem(i.key, { tailorId: id });
+                }}
+                className={cn("col-span-2 h-9 min-w-0 rounded-md border border-input bg-card px-2 text-sm sm:col-span-1 sm:order-none", !i.tailorId && "text-muted-foreground")}
+              >
+                <option value="">Tailor: not assigned</option>
+                {tailors.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    Tailor: {t.name}
+                  </option>
+                ))}
+              </select>
               <span className="self-center text-right font-medium tabular-nums">{rupees((Number(i.qty) || 0) * (Number(i.rate) || 0))}</span>
               <Button
                 type="button"
@@ -260,14 +288,8 @@ export function OrderForm({
         )}
 
         <section className="grid gap-4 rounded-xl border bg-card p-5 shadow-xs sm:grid-cols-3">
-          <Field label="Tailor" ml="തയ്യൽക്കാരൻ">
-            <SearchSelect
-              options={tailors.map((s) => ({ value: String(s.id), label: s.name, sub: s.role ?? "" }))}
-              value={tailorId ? String(tailorId) : null}
-              onChange={(v) => setTailorId(v ? Number(v) : null)}
-              allowClear
-              placeholder="Assign later"
-            />
+          <Field label="With" ml="ആരുടെ കയ്യിൽ" hint="Set the tailor on each item above">
+            <p className="min-h-9 rounded-md border bg-muted/40 px-3 py-2 text-sm">{withSummary}</p>
           </Field>
           <Field label="Brought by" ml="ആര് കൊണ്ടുവന്നു" hint="Used for incentive">
             <SearchSelect

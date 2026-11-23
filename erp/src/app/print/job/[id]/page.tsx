@@ -49,12 +49,14 @@ export default async function JobSlip({ params, searchParams }: { params: Promis
             <div className="text-[13px] font-bold">Delivery: {order.deliveryDate ? fmtDate(order.deliveryDate) : "—"}</div>
             <div>Customer: {order.customerName ?? "—"}</div>
             {order.phone && <div>Phone: {formatPhone(order.phone)}</div>}
-            {order.tailorName && <div>Tailor: {order.tailorName}</div>}
             {hr}
-            <div className="font-bold">Items</div>
+            <div className="font-bold">Items · Tailor</div>
             {order.items.map((i) => (
-              <div key={i.id}>
-                {i.qty} × {i.item}
+              <div key={i.id} className="flex justify-between gap-2">
+                <span>
+                  {i.qty} × {i.item}
+                </span>
+                <span className={i.tailor ? "font-bold" : ""}>{i.tailor ?? "Not assigned"}</span>
               </div>
             ))}
             {order.remarks && <div className="mt-1 whitespace-pre-line">Note: {order.remarks}</div>}

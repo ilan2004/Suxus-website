@@ -29,6 +29,8 @@ export default async function WagesPage() {
       .select({ id: staff.id, name: staff.name, role: staff.role, pieceRate: staff.pieceRate, status: staff.status })
       .from(staff)
       .orderBy(asc(staff.code)),
+    // Finished items with a tailor and no wage entry yet for that order + tailor (tailor is per item, so one
+    // order can wait for several tailors). Grouped below into one entry per order and tailor.
     db
       .select({
         id: orders.id,
@@ -36,19 +38,21 @@ export default async function WagesPage() {
         date: orders.date,
         status: orders.status,
         customerName: orders.customerName,
-        tailorId: orders.tailorId,
-        items: sql<{ item: string; qty: number }[]>`coalesce((select json_agg(json_build_object('item', ${c(orderItems.item)}, 'qty', ${c(orderItems.qty)})) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}), '[]'::json)`,
+        tailorId: orderItems.tailorId,
+        item: orderItems.item,
+        qty: orderItems.qty,
       })
-      .from(orders)
+      .from(orderItems)
+      .innerJoin(orders, eq(orders.id, orderItems.orderId))
       .where(
         and(
-          isNotNull(orders.tailorId),
+          isNotNull(orderItems.tailorId),
           inArray(orders.status, ["Ready", "Delivered"]),
-          sql`not exists (select 1 from ${tailorWages} where ${c(tailorWages.orderNo)} = ${c(orders.orderNo)})`,
+          sql`not exists (select 1 from ${tailorWages} where ${c(tailorWages.orderNo)} = ${c(orders.orderNo)} and ${c(tailorWages.tailorId)} = ${c(orderItems.tailorId)})`,
         ),
       )
-      .orderBy(desc(orders.id))
-      .limit(50),
+      .orderBy(desc(orders.id), asc(orderItems.id))
+      .limit(300),
   ]);
 
   const tailors = people
@@ -69,7 +73,7 @@ export default async function WagesPage() {
         payments={pays.map((p) => ({ ...p.p, tailorName: p.tailorName }))}
         tailors={tailors}
         allStaff={people.filter((p) => p.status === "Active").map((p) => ({ id: p.id, name: p.name, pieceRate: p.pieceRate }))}
-        pending={pending}
+        pending={groupPending(pending).slice(0, 50)}
         items={settings.lists.item}
         rates={settings.pieceRates}
         modes={settings.lists.paymentMode}
@@ -77,4 +81,17 @@ export default async function WagesPage() {
       />
     </>
   );
+}
+
+type PendingLine = { id: number; orderNo: string; date: string; status: string; customerName: string | null; tailorId: number | null; item: string; qty: number };
+
+/** One entry per order + tailor, with that tailor's items. */
+function groupPending(lines: PendingLine[]) {
+  const out: { id: number; orderNo: string; date: string; status: string; customerName: string | null; tailorId: number | null; items: { item: string; qty: number }[] }[] = [];
+  for (const l of lines) {
+    let g = out.find((x) => x.id === l.id && x.tailorId === l.tailorId);
+    if (!g) out.push((g = { id: l.id, orderNo: l.orderNo, date: l.date, status: l.status, customerName: l.customerName, tailorId: l.tailorId, items: [] }));
+    g.items.push({ item: l.item, qty: l.qty });
+  }
+  return out;
 }

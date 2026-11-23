@@ -88,7 +88,8 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
   const db = await getDb();
   const paid = sql<number>`coalesce((select sum(${c(payments.amount)}) from ${payments} where ${c(payments.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemsSummary = sql<string>`coalesce((select string_agg(${c(orderItems.qty)} || ' × ' || ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
-  const tailor = sql<string | null>`(select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orders.tailorId)})`;
+  // Tailor is per item: each line with who has it (null = not given out yet)
+  const itemTailors = sql<{ item: string; qty: number; tailorId: number | null; tailor: string | null }[]>`coalesce((select json_agg(json_build_object('item', ${c(orderItems.item)}, 'qty', ${c(orderItems.qty)}, 'tailorId', ${c(orderItems.tailorId)}, 'tailor', (select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orderItems.tailorId)})) order by ${c(orderItems.id)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}), '[]'::json)`;
   const pieces = sql<number>`coalesce((select sum(${c(orderItems.qty)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemNames = sql<string>`coalesce((select string_agg(distinct ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   const altPhone = sql<string | null>`(select ${c(schema.customers.altPhone)} from ${schema.customers} where ${c(schema.customers.id)} = ${c(orders.customerId)})`;
@@ -106,8 +107,7 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
       trialDate: orders.trialDate,
       deliveryDate: orders.deliveryDate,
       status: orders.status,
-      tailorId: orders.tailorId,
-      tailorName: tailor,
+      itemTailors,
       total: orders.total,
       paid,
       items: itemsSummary,
@@ -118,7 +118,18 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
     .from(orders)
     .where(where)
     .orderBy(desc(orders.id));
-  return rows.map((r) => ({ ...r, balance: Math.round((r.total - r.paid) * 100) / 100 }));
+  return rows.map((r) => {
+    const lines = (typeof r.itemTailors === "string" ? JSON.parse(r.itemTailors) : r.itemTailors) as { item: string; qty: number; tailorId: number | null; tailor: string | null }[];
+    return { ...r, itemTailors: lines, tailorName: tailorSummary(lines), balance: Math.round((r.total - r.paid) * 100) / 100 };
+  });
+}
+
+/** "Shamshu (Shirt), Mujeeb (Pant)" — who has which items; null when no item is given out yet. */
+export function tailorSummary(lines: { item: string; tailor: string | null }[]) {
+  const by = new Map<string, string[]>();
+  for (const l of lines) by.set(l.tailor ?? "Not assigned", [...new Set([...(by.get(l.tailor ?? "Not assigned") ?? []), l.item])]);
+  if (![...by.keys()].some((k) => k !== "Not assigned")) return null;
+  return [...by.entries()].map(([t, its]) => `${t} (${its.join(", ")})`).join(", ");
 }
 export type OrderRow = Awaited<ReturnType<typeof ordersWithBalance>>[number];
 
@@ -186,16 +197,19 @@ export async function getOrderFull(id: number) {
   if (!order) return null;
   const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id)).orderBy(asc(orderItems.id));
   const pays = await db.select().from(payments).where(eq(payments.orderId, id)).orderBy(asc(payments.id));
+  const itemTailorIds = [...new Set(items.map((i) => i.tailorId).filter((x): x is number => !!x))];
+  const itemPeople = itemTailorIds.length ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, itemTailorIds)) : [];
+  const itemsWithTailor = items.map((i) => ({ ...i, tailor: itemPeople.find((p) => p.id === i.tailorId)?.name ?? null }));
   const ids = [order.tailorId, order.broughtById].filter(Boolean) as number[];
   const people = ids.length ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, ids)) : [];
   const sale = order.saleId ? await getSaleFull(order.saleId) : null;
   const paid = pays.reduce((s, p) => s + p.amount, 0);
   return {
     ...order,
-    items,
+    items: itemsWithTailor,
     payments: pays,
     sale,
-    tailorName: people.find((p) => p.id === order.tailorId)?.name ?? null,
+    tailorName: tailorSummary(itemsWithTailor),
     broughtByName: people.find((p) => p.id === order.broughtById)?.name ?? null,
     paid,
     balance: Math.round((order.total - paid) * 100) / 100,

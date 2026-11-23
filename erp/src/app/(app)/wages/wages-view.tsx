@@ -137,7 +137,7 @@ export function WagesView({
           </p>
           <div className="flex flex-wrap gap-2">
             {pending.map((o) => (
-              <button key={o.id} onClick={() => fromOrder(o)} className="rounded-lg border bg-card px-3 py-2 text-left text-sm hover:border-primary/50">
+              <button key={`${o.id}-${o.tailorId}`} onClick={() => fromOrder(o)} className="rounded-lg border bg-card px-3 py-2 text-left text-sm hover:border-primary/50">
                 <span className="font-mono text-xs text-muted-foreground">{o.orderNo}</span> · {allStaff.find((s) => s.id === o.tailorId)?.name}{" "}
                 <Link href={`/orders/${o.id}`} onClick={(e) => e.stopPropagation()} className="text-xs text-primary underline">
                   open

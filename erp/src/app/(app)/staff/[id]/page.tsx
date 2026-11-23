@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { and, desc, eq, gte, lte, ne } from "drizzle-orm";
+import { and, desc, eq, gte, lte, ne, sql } from "drizzle-orm";
 import { ArrowLeft, BadgePercent, HandCoins, Scissors, ShoppingBag } from "lucide-react";
 import { getDb, schema } from "@/lib/db";
+import { c } from "@/lib/db/sql";
 import { requireUser } from "@/lib/auth";
 import { incentiveFor } from "@/lib/reports";
 import { PageHeader } from "@/components/app/page-header";
@@ -26,7 +27,8 @@ export default async function StaffProfile({ params, searchParams }: { params: P
     db
       .select({ id: s.orders.id, orderNo: s.orders.orderNo, date: s.orders.date, customer: s.orders.customerName, status: s.orders.status, total: s.orders.total, delivery: s.orders.deliveryDate })
       .from(s.orders)
-      .where(and(eq(s.orders.tailorId, id), gte(s.orders.date, from), lte(s.orders.date, to)))
+      // Orders where this person has at least one item (tailor is per item)
+      .where(and(sql`exists (select 1 from ${s.orderItems} where ${c(s.orderItems.orderId)} = ${c(s.orders.id)} and ${c(s.orderItems.tailorId)} = ${id})`, gte(s.orders.date, from), lte(s.orders.date, to)))
       .orderBy(desc(s.orders.date)),
     db
       .select({ id: s.orders.id, orderNo: s.orders.orderNo, date: s.orders.date, customer: s.orders.customerName, status: s.orders.status, total: s.orders.total })

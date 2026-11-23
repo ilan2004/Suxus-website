@@ -29,11 +29,10 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
           trialDate: order.trialDate,
           deliveryDate: order.deliveryDate,
           status: order.status,
-          tailorId: order.tailorId,
           broughtById: order.broughtById,
           discount: order.discount,
           remarks: order.remarks,
-          items: order.items.map((i) => ({ item: i.item, qty: i.qty, rate: i.rate })),
+          items: order.items.map((i) => ({ item: i.item, qty: i.qty, rate: i.rate, tailorId: i.tailorId })),
         }}
       />
     </>

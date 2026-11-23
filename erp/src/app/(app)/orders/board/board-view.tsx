@@ -20,7 +20,8 @@ export type BoardOrder = {
   itemNames: string;
   items: string;
   pieces: number;
-  tailorName: string | null;
+  /** Item lines with who has each (tailor is per item). */
+  lines: { item: string; qty: number; tailor: string | null }[];
   deliveryDate: string | null;
   deliveredOn: string | null;
   status: string;
@@ -75,7 +76,10 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
     } catch {}
   };
 
-  const mine = items.filter((o) => tailor === "all" || (tailor === "none" ? !o.tailorName : o.tailorName === tailor));
+  // A tailor sees an order when they have at least one item on it; "Not assigned" = orders with an item not given out
+  const linesFor = (o: BoardOrder) => (tailor === "all" ? o.lines : o.lines.filter((l) => (tailor === "none" ? !l.tailor : l.tailor === tailor)));
+  const mine = items.filter((o) => linesFor(o).length > 0);
+  const unassigned = items.filter((o) => RUNNING.includes(o.status)).reduce((n, o) => n + o.lines.filter((l) => !l.tailor).reduce((q, l) => q + l.qty, 0), 0);
   const running = mine.filter((o) => RUNNING.includes(o.status));
   const late = running.filter((o) => o.deliveryDate && o.deliveryDate < t);
   const dueToday = running.filter((o) => o.deliveryDate === t);
@@ -113,6 +117,10 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
           <span className="font-semibold">{running.length} orders running</span>
           <span className="text-muted-foreground"> · </span>
           <span className={cn(late.length ? "font-semibold text-destructive" : "text-muted-foreground")}>{late.length} late</span>
+          <span className="text-muted-foreground"> · </span>
+          <button type="button" onClick={() => pickTailor("none")} className={cn(unassigned ? "font-semibold text-warning hover:underline" : "text-muted-foreground")}>
+            {unassigned} piece{unassigned === 1 ? "" : "s"} not assigned
+          </button>
         </p>
         {due && (
           <button type="button" onClick={() => setDue(null)} className="inline-flex h-7 items-center gap-1.5 rounded-full bg-primary px-3 text-xs text-primary-foreground">
@@ -121,7 +129,7 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
         )}
       </div>
       <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:px-0">
-        {[{ v: "all", l: "All" }, ...tailors.map((n) => ({ v: n, l: n })), ...(items.some((o) => !o.tailorName) ? [{ v: "none", l: "Not assigned" }] : [])].map((f) => (
+        {[{ v: "all", l: "All" }, ...tailors.map((n) => ({ v: n, l: n })), ...(items.some((o) => o.lines.some((l) => !l.tailor)) ? [{ v: "none", l: "Not assigned" }] : [])].map((f) => (
           <button
             key={f.v}
             type="button"
@@ -150,7 +158,7 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
                 </h2>
                 <div className="grid gap-2 px-2 pb-2">
                   {list.map((o) => (
-                    <Card key={o.id} o={o} t={t} onMove={(to) => move(o, to)} />
+                    <Card key={o.id} o={o} lines={linesFor(o)} filtered={tailor !== "all"} t={t} onMove={(to) => move(o, to)} />
                   ))}
                   {!list.length && <p className="px-2 py-8 text-center text-xs text-muted-foreground">—</p>}
                 </div>
@@ -179,14 +187,24 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
   );
 }
 
-function Card({ o, t, onMove }: { o: BoardOrder; t: string; onMove: (to: string) => void }) {
+function Card({ o, lines, filtered, t, onMove }: { o: BoardOrder; lines: BoardOrder["lines"]; filtered: boolean; t: string; onMove: (to: string) => void }) {
   const router = useRouter();
   const [menu, setMenu] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressed = React.useRef(false);
   const openedAt = React.useRef(0);
   const d = dueState(o, t);
-  const what = [o.itemNames || "—", `${o.pieces} pc${o.pieces === 1 ? "" : "s"}`, o.tailorName].filter(Boolean).join(" · ");
+  // "Shirt · 2 pcs · Mujeeb" per tailor; when filtered to one tailor, only that tailor's items
+  const byTailor = new Map<string, { items: Set<string>; pcs: number }>();
+  for (const l of lines) {
+    const k = l.tailor ?? "Not assigned";
+    const g = byTailor.get(k) ?? { items: new Set<string>(), pcs: 0 };
+    g.items.add(l.item);
+    g.pcs += l.qty;
+    byTailor.set(k, g);
+  }
+  const whatLines = [...byTailor.entries()].map(([k, g]) => `${[...g.items].join(", ")} · ${g.pcs} pc${g.pcs === 1 ? "" : "s"} · ${k}`);
+  const others = filtered ? o.lines.length - lines.length : 0;
 
   // Press and hold (~0.5 s) opens the stage menu instead of opening the order
   const down = () => {
@@ -229,7 +247,12 @@ function Card({ o, t, onMove }: { o: BoardOrder; t: string; onMove: (to: string)
           <span className={cn("shrink-0 text-xs tabular-nums", d.kind === "late" ? "font-semibold text-destructive" : d.kind === "soon" ? "font-semibold text-warning" : "text-muted-foreground")}>{d.label}</span>
         </div>
         <p className="mt-0.5 truncate text-sm font-semibold">{o.customerName ?? "—"}</p>
-        <p className="truncate text-xs text-muted-foreground">{what}</p>
+        {whatLines.map((w) => (
+          <p key={w} className={cn("truncate text-xs", w.endsWith("Not assigned") ? "text-warning" : "text-muted-foreground")}>
+            {w}
+          </p>
+        ))}
+        {others > 0 && <p className="text-[11px] text-muted-foreground/70">+ {others} item{others === 1 ? "" : "s"} with others</p>}
       </Link>
       <DropdownMenu open={menu} onOpenChange={setMenu}>
         <DropdownMenuTrigger asChild>

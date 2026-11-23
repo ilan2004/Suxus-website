@@ -220,9 +220,10 @@ const changedOf = (res: unknown) => Number((res as { count?: number }).count ?? 
 async function staffRefs(db: Awaited<ReturnType<typeof getDb>>, src: { id: number; name: string; displayName: string | null }) {
   const s = schema;
   const names = [...new Set([src.name, src.displayName].filter((n): n is string => !!n))];
-  const byId: { label: string; table: typeof s.sales | typeof s.orders | typeof s.bulkOrders | typeof s.payments | typeof s.tailorWages | typeof s.wagePayments | typeof s.incentivePayouts | typeof s.auditLog; col: string }[] = [
+  const byId: { label: string; table: typeof s.sales | typeof s.orders | typeof s.orderItems | typeof s.bulkOrders | typeof s.payments | typeof s.tailorWages | typeof s.wagePayments | typeof s.incentivePayouts | typeof s.auditLog; col: string }[] = [
     { label: "Bills — Sold by", table: s.sales, col: "sold_by_id" },
     { label: "Orders — Tailor", table: s.orders, col: "tailor_id" },
+    { label: "Order items — Tailor", table: s.orderItems, col: "tailor_id" },
     { label: "Orders — Brought by", table: s.orders, col: "brought_by_id" },
     { label: "Bulk orders — Brought by", table: s.bulkOrders, col: "brought_by_id" },
     { label: "Payments — Received by", table: s.payments, col: "received_by_id" },

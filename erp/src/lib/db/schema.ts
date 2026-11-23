@@ -244,6 +244,8 @@ export const orderItems = pgTable("order_items", {
   qty: integer("qty").notNull().default(1),
   rate: money("rate").notNull().default(0),
   amount: money("amount").notNull().default(0),
+  /** Who stitches this item (piece-rate wages follow the item). Null = not given out yet. */
+  tailorId: integer("tailor_id").references(() => staff.id),
 });
 
 /* ───────────────────────── Bulk / institution orders ───────────────────────── */

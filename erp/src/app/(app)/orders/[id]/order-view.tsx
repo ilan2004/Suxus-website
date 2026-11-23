@@ -235,22 +235,7 @@ export function OrderView({
             <Info label="Order date" value={fmtDate(order.date)} />
             <Info label="Trial" value={fmtDate(order.trialDate) || "—"} />
             <Info label="Delivery" value={<span className={cn(overdue && "text-destructive")}>{fmtDate(order.deliveryDate) || "—"}</span>} />
-            <Info
-              label="Tailor"
-              value={
-                order.tailorName ? (
-                  isPartner ? (
-                    <Link href={`/staff/${order.tailorId}`} className="hover:underline">
-                      {order.tailorName}
-                    </Link>
-                  ) : (
-                    order.tailorName
-                  )
-                ) : (
-                  <span className="text-muted-foreground">Not assigned</span>
-                )
-              }
-            />
+            <Info label="With" value={order.tailorName ?? <span className="text-muted-foreground">Not assigned</span>} />
             <Info label="Brought by" value={order.broughtByName ? (isPartner ? <Link href={`/staff/${order.broughtById}`} className="hover:underline">{order.broughtByName}</Link> : order.broughtByName) : "—"} />
             <Info label="Delivered on" value={fmtDate(order.deliveredOn) || "—"} />
             {order.remarks && <Info label="Remarks" value={order.remarks} className="sm:col-span-3" />}
@@ -261,6 +246,7 @@ export function OrderView({
               <TableHeader>
                 <TableRow>
                   <TableHead>Item</TableHead>
+                  <TableHead>Tailor</TableHead>
                   <TableHead className="text-right">Qty</TableHead>
                   <TableHead className="text-right">Rate</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -270,6 +256,19 @@ export function OrderView({
                 {order.items.map((i) => (
                   <TableRow key={i.id}>
                     <TableCell className="font-medium">{i.item}</TableCell>
+                    <TableCell className="text-sm">
+                      {i.tailor ? (
+                        isPartner && i.tailorId ? (
+                          <Link href={`/staff/${i.tailorId}`} className="hover:underline">
+                            {i.tailor}
+                          </Link>
+                        ) : (
+                          i.tailor
+                        )
+                      ) : (
+                        <span className="text-warning">Not assigned</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">{i.qty}</TableCell>
                     <TableCell className="text-right tabular-nums">{rupees(i.rate)}</TableCell>
                     <TableCell className="text-right tabular-nums">{rupees(i.amount)}</TableCell>
@@ -277,7 +276,7 @@ export function OrderView({
                 ))}
                 {order.sale && (
                   <TableRow>
-                    <TableCell colSpan={3}>
+                    <TableCell colSpan={4}>
                       <Link href={`/sales/${order.sale.id}`} className="inline-flex items-center gap-2 hover:underline">
                         <ShoppingBag className="size-4 text-[#8a6a2a] dark:text-gold" /> Fabric · {order.sale.billNo}
                         <span className="text-xs text-muted-foreground">
@@ -292,12 +291,12 @@ export function OrderView({
               <TableFooter>
                 {order.discount > 0 && (
                   <TableRow>
-                    <TableCell colSpan={3}>Discount</TableCell>
+                    <TableCell colSpan={4}>Discount</TableCell>
                     <TableCell className="text-right tabular-nums">−{rupees(order.discount)}</TableCell>
                   </TableRow>
                 )}
                 <TableRow>
-                  <TableCell colSpan={3} className="font-semibold">
+                  <TableCell colSpan={4} className="font-semibold">
                     Total
                   </TableCell>
                   <TableCell className="text-right font-semibold tabular-nums">{rupees(order.total, true)}</TableCell>

@@ -20,7 +20,7 @@ export default async function OrderBoardPage({ searchParams }: { searchParams: P
   ]);
   const orders = all.filter((o) => o.status !== "Cancelled" && (o.status !== "Delivered" || (o.deliveredOn ?? o.date) >= weekAgo));
   // Tailor filter: everyone who stitches, plus anyone an order is assigned to
-  const tailors = [...new Set([...staff.filter((s) => /tailor|cutting|stitch/i.test(s.role ?? "")).map((s) => s.name), ...orders.map((o) => o.tailorName).filter((n): n is string => !!n)])].sort();
+  const tailors = [...new Set([...staff.filter((s) => /tailor|cutting|stitch/i.test(s.role ?? "")).map((s) => s.name), ...orders.flatMap((o) => o.itemTailors.map((l) => l.tailor)).filter((n): n is string => !!n)])].sort();
   return (
     <>
       <PageHeader title="Order board" ml="ഓർഡർ ബോർഡ്" description="Every stitching order and the stage it is at. Tap ⋯ (or press and hold a card) to move it." />
@@ -35,7 +35,7 @@ export default async function OrderBoardPage({ searchParams }: { searchParams: P
           itemNames: o.itemNames,
           items: o.items,
           pieces: o.pieces,
-          tailorName: o.tailorName,
+          lines: o.itemTailors.map((l) => ({ item: l.item, qty: l.qty, tailor: l.tailor })),
           deliveryDate: o.deliveryDate,
           deliveredOn: o.deliveredOn,
           status: o.status,

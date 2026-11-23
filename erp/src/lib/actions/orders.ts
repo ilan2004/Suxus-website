@@ -25,13 +25,13 @@ const OrderInput = z.object({
   trialDate: optDate,
   deliveryDate: optDate,
   status: z.string().default("Booked"),
-  tailorId: optId,
   broughtById: optId,
   saleId: optId,
   discount: money,
   remarks: optText,
   items: z
-    .array(z.object({ item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0) }))
+    // Each item has its own tailor (piece-rate wages follow the item); empty = not given out yet
+    .array(z.object({ item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId }))
     .min(1, "Add at least one item"),
   advance: money,
   advanceMode: z.string().default("Cash"),
@@ -65,7 +65,8 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
         trialDate: d.trialDate,
         deliveryDate: d.deliveryDate,
         status: d.status,
-        tailorId: d.tailorId ?? null,
+        // Legacy order-level column: kept as the first item's tailor; everything reads the item tailors
+        tailorId: d.items.find((i) => i.tailorId)?.tailorId ?? null,
         broughtById: d.broughtById ?? null,
         saleId: d.saleId ?? null,
         discount: d.discount,
@@ -87,7 +88,7 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
       }
 
       await tx.insert(schema.orderItems).values(
-        d.items.map((i) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate) })),
+        d.items.map((i) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null })),
       );
 
       if (d.saleId) {

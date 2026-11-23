@@ -1,4 +1,5 @@
-import { and, desc, eq, gte, like } from "drizzle-orm";
+import Link from "next/link";
+import { and, desc, eq, gte, like, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -21,7 +22,9 @@ export default async function MeasurementsPage() {
     .from(schema.measurements)
     .innerJoin(schema.customers, eq(schema.customers.id, schema.measurements.customerId))
     .orderBy(desc(schema.measurements.date), desc(schema.measurements.id));
-  const [customers, lists, merged] = await Promise.all([
+  const owner = can(session.role, "settings");
+  const since = new Date(Date.now() - 30 * 86400_000);
+  const [customers, lists, merged, sleeveNote, toCheck] = await Promise.all([
     customerOptions(),
     getSetting("lists"),
     // What the one-time shirt merge did (shown to the Owner for a month)
@@ -33,6 +36,24 @@ export default async function MeasurementsPage() {
           .orderBy(desc(schema.auditLog.at))
           .limit(1)
       : Promise.resolve([]),
+    // Sleeve notes moved out of Remarks, and the ones left for a person to check
+    owner
+      ? db
+          .select({ summary: schema.auditLog.summary })
+          .from(schema.auditLog)
+          .where(and(eq(schema.auditLog.entity, "measurement"), like(schema.auditLog.summary, "Sleeve notes:%"), gte(schema.auditLog.at, since)))
+          .orderBy(desc(schema.auditLog.at))
+          .limit(1)
+      : Promise.resolve([]),
+    owner
+      ? db
+          .select({ id: schema.auditLog.entityId, summary: schema.auditLog.summary, customerId: schema.customers.id, customer: schema.customers.name, garment: schema.measurements.garmentType })
+          .from(schema.auditLog)
+          .innerJoin(schema.measurements, sql`${schema.measurements.id}::text = ${schema.auditLog.entityId}`)
+          .innerJoin(schema.customers, eq(schema.customers.id, schema.measurements.customerId))
+          .where(and(eq(schema.auditLog.entity, "measurement-check"), gte(schema.auditLog.at, since)))
+          .orderBy(schema.customers.name)
+      : Promise.resolve([]),
   ]);
   return (
     <>
@@ -41,6 +62,26 @@ export default async function MeasurementsPage() {
         <p className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
           Shirt now holds both sleeve lengths in one record — {merged[0].summary?.replace("Shirt merge: ", "")}.
         </p>
+      )}
+      {sleeveNote[0] && (
+        <div className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
+          <p>{sleeveNote[0].summary}.</p>
+          {toCheck.length > 0 && (
+            <details className="mt-1">
+              <summary className="cursor-pointer font-medium text-foreground">Left in Remarks for you to check ({toCheck.length})</summary>
+              <ul className="mt-1 grid gap-0.5">
+                {toCheck.map((c, i) => (
+                  <li key={i}>
+                    <Link href={`/customers/${c.customerId}`} className="font-medium text-foreground hover:underline">
+                      {c.customer}
+                    </Link>{" "}
+                    · {c.garment} · {c.summary}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          )}
+        </div>
       )}
       <MeasurementsView
         rows={rows.map((r) => ({ ...r.m, customerName: r.customerName, phone: r.phone }))}

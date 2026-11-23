@@ -21,7 +21,7 @@ const PART_OF_WHOLE: Record<string, Record<string, { factor: number; whole: stri
   },
 };
 export const GARMENTS: Record<string, GarmentField[]> = {
-  Shirt: f("Length:നീളം", "Chest:നെഞ്ച്", "Waist:അര", "Shoulder:തോൾ", "Sleeve full=Sleeve — full:ഫുൾ കൈ നീളം", "Sleeve half=Sleeve — half:ഹാഫ് കൈ നീളം", "Neck:കഴുത്ത്", "Cuff:കഫ്"),
+  Shirt: f("Length:നീളം", "Chest:നെഞ്ച്", "Waist:അര", "Shoulder:തോൾ", "Sleeve full=Sleeve — full:ഫുൾ കൈ നീളം", "Sleeve half=Sleeve — half:ഹാഫ് കൈ നീളം", "Sleeve armpit=Sleeve at armpit:കക്ഷം", "Sleeve elbow=Sleeve at elbow:കൈമുട്ട്", "Neck:കഴുത്ത്", "Cuff:കഫ്"),
   "Pant / Trouser": f("Length:നീളം", "Waist:അര", "Seat:സീറ്റ്", "Thigh:തുട", "Knee:മുട്ട്", "Bottom:ബോട്ടം"),
   "School Uniform Trouser": f("Length:നീളം", "Waist:അര", "Seat:സീറ്റ്", "Thigh:തുട", "Knee:മുട്ട്", "Bottom:ബോട്ടം"),
   "Churidar Top": f("Length:നീളം", "Chest:നെഞ്ച്", "Waist:അര", "Hip:ഇടുപ്പ്", "Shoulder:തോൾ", "Sleeve:കൈ നീളം", "Armhole:കൈക്കുഴി", "Neck-F:കഴുത്ത് മുൻ", "Neck-B:കഴുത്ത് പിൻ"),

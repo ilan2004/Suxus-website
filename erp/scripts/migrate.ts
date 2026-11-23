@@ -3,6 +3,7 @@ import path from "node:path";
 import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
+import { runDataFixes } from "../src/lib/data-fixes";
 
 async function main() {
   const url = process.env.DATABASE_URL;
@@ -12,7 +13,10 @@ async function main() {
   }
   // Migrations need a session connection: use the direct / session pooler URL if provided.
   const client = postgres(process.env.DATABASE_URL_DIRECT || url, { max: 1, prepare: false });
-  await migrate(drizzle(client), { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  const db = drizzle(client);
+  await migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  // One-time data fixes that need code (each runs once, recorded in counters)
+  await runDataFixes(db, (s) => console.log(s));
   await client.end();
   console.log("[migrate] done");
 }

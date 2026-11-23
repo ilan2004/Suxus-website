@@ -38,6 +38,8 @@ async function create(): Promise<DB> {
   const db = drizzle(client, { schema });
   await migrate(db, { migrationsFolder });
   const typed = db as unknown as DB;
+  const { runDataFixes } = await import("../data-fixes");
+  await runDataFixes(typed, (s) => console.log(s));
   await seedDefaults(typed);
   return typed;
 }

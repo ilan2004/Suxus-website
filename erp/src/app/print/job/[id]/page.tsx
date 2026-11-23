@@ -13,7 +13,7 @@ export const metadata = { title: "Job slip" };
 
 /**
  * 80 mm job slip for the cutting table / tailor: what to stitch, by when, and the customer's latest measurements
- * per garment. No prices. Shirt chest and waist print as recorded with the full figure beside it, e.g. "13.5 (full chest 54)".
+ * per garment. No prices. Shirt chest and waist print as recorded with the full figure beside it, e.g. "11.5 (shirt round 48)".
  */
 export default async function JobSlip({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ auto?: string }> }) {
   await requireUser();
@@ -88,7 +88,7 @@ export default async function JobSlip({ params, searchParams }: { params: Promis
             })}
             {hr}
             {latest.some((m) => fieldsFor(m.garmentType, m.values).some((f) => f.part && m.values[f.key] != null)) && (
-              <div className="text-center text-[10px]">¼ = measured on the folded garment, centre front to side — full = × 4</div>
+              <div className="text-center text-[10px]">¼ = centre front to side on the folded garment · shirt round = × 4 + 2 (back panel 2″ wider)</div>
             )}
           </div>
         </div>

@@ -125,7 +125,7 @@ export function MeasurementDialog({
                   ml={f.ml}
                   className={f.part ? "col-span-2" : undefined}
                   // Part-of-whole (chest): show the whole as it is typed — worked out, never stored
-                  hint={f.part ? (v.values[f.key] != null ? `${v.values[f.key]} → ${f.part.whole} ${wholeOf(f, v.values[f.key])} in` : `× ${f.part.factor} = ${f.part.whole}`) : undefined}
+                  hint={f.part ? (v.values[f.key] != null ? `${v.values[f.key]} → ${f.part.whole} ${wholeOf(f, v.values[f.key])} in` : `× ${f.part.factor}${f.part.add ? ` + ${f.part.add}` : ""} = ${f.part.whole}`) : undefined}
                 >
                   <Input
                     type="number"

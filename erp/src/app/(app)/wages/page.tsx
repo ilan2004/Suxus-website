@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, isNotNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, like, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { c } from "@/lib/db/sql";
@@ -14,6 +14,14 @@ export default async function WagesPage() {
   const db = await getDb();
   const { tailorWages, wagePayments, staff, orders, orderItems } = schema;
   const settings = await getSettings();
+  // What the "tailor per item" migration did (Owner, 30 days): orders migrated, wage total before and after
+  const migrationNotes = can(session.role, "settings")
+    ? await db
+        .select({ summary: schema.auditLog.summary })
+        .from(schema.auditLog)
+        .where(and(eq(schema.auditLog.entity, "order"), like(schema.auditLog.summary, "Tailor per item%"), gte(schema.auditLog.at, new Date(Date.now() - 30 * 86400_000))))
+        .orderBy(asc(schema.auditLog.id))
+    : [];
   const [wages, pays, people, pending] = await Promise.all([
     db
       .select({ w: tailorWages, tailorName: staff.name })
@@ -68,6 +76,13 @@ export default async function WagesPage() {
   return (
     <>
       <PageHeader title="Tailor Wages" ml="തയ്യൽ കൂലി (പീസ് റേറ്റ്)" description="Pieces stitched × piece rate. Pay tailors from here — every payout goes to the cash book." />
+      {migrationNotes.length > 0 && (
+        <div className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
+          {migrationNotes.map((n, i) => (
+            <p key={i}>{n.summary}</p>
+          ))}
+        </div>
+      )}
       <WagesView
         wages={wages.map((w) => ({ ...w.w, tailorName: w.tailorName }))}
         payments={pays.map((p) => ({ ...p.p, tailorName: p.tailorName }))}

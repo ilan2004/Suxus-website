@@ -63,6 +63,7 @@ export function SimpleMeasurements({
   tailors,
   sizeChart,
   order,
+  autoAdvance = false,
   customerTypes,
 }: {
   rows: SimpleRow[];
@@ -72,6 +73,7 @@ export function SimpleMeasurements({
   tailors: TailorLine[];
   sizeChart: { sizes: string[]; rows: { label: string; values: number[] }[] };
   order: Record<string, string[]>;
+  autoAdvance?: boolean;
   customerTypes: string[];
 }) {
   const router = useRouter();
@@ -446,7 +448,7 @@ export function SimpleMeasurements({
         />
       )}
 
-      {entry && <SimpleEntry key={entry.state.draftId ?? entry.who} initial={entry.state} who={entry.who} order={order} onClose={() => (setEntry(null), router.refresh())} onSaved={saved(entry.who)} />}
+      {entry && <SimpleEntry key={entry.state.draftId ?? entry.who} initial={entry.state} who={entry.who} order={order} autoAdvance={autoAdvance} onClose={() => (setEntry(null), router.refresh())} onSaved={saved(entry.who)} />}
 
       <BarcodeScanner open={scan} onClose={() => setScan(false)} title="Scan the customer's slip" onResult={scanned} />
       <CustomerDialog

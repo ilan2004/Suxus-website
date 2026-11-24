@@ -96,6 +96,21 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
     updatedAt: new Date(d.updatedAt).toISOString(),
   }));
 
+  // Owner: live check of the move to wearers (read before going live)
+  const wearerCheck = owner
+    ? (
+        await db.execute(sql`select
+          (select count(*) from ${schema.measurements})::int as total,
+          (select count(*) from ${schema.measurements} m join ${schema.wearers} w on w.id = m.wearer_id where w.is_self)::int as on_self,
+          (select count(*) from ${schema.measurements} m join ${schema.wearers} w on w.id = m.wearer_id where not w.is_self)::int as on_others,
+          (select count(*) from ${schema.measurements} where wearer_id is null)::int as no_wearer,
+          (select count(*) from ${schema.customers})::int as customers,
+          (select count(*) from ${schema.customers} c where exists (select 1 from ${schema.wearers} w where w.customer_id = c.id and w.is_self))::int as with_self,
+          (select count(*) from (select customer_id from ${schema.wearers} group by customer_id having count(*) > 1) x)::int as multi`)
+      )
+    : null;
+  const wc = wearerCheck ? ((Array.isArray(wearerCheck) ? wearerCheck : (wearerCheck as { rows: unknown[] }).rows)[0] as Record<string, number>) : null;
+
   if (session.simple && view !== "detailed") {
     const settings = await getSettings();
     // Who was last given each person's garments (shown on the big cards)
@@ -120,6 +135,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
           tailors={tailors.map((t) => ({ ...t, wearerId: t.wearerId! }))}
           sizeChart={settings.sizeChart}
           order={settings.measureOrder}
+          autoAdvance={settings.measureOptions?.autoAdvance ?? false}
           customerTypes={settings.lists.customerType}
         />
       </>
@@ -136,6 +152,20 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
         </p>
       )}
       {wearerNote[0] && <p className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">{wearerNote[0].summary}.</p>}
+      {wc && (
+        <details className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground" open={!!wearerNote[0]}>
+          <summary className="cursor-pointer font-medium text-foreground">Wearer check (live)</summary>
+          <ul className="mt-1 grid gap-0.5 tabular-nums">
+            <li>
+              Measurement records: {wc.total} — on a customer&apos;s Self: <b className="text-foreground">{wc.on_self}</b>, on another person: {wc.on_others}, with no wearer:{" "}
+              <b className={wc.no_wearer ? "text-destructive" : "text-foreground"}>{wc.no_wearer}</b>
+            </li>
+            <li>
+              Customers: {wc.customers} — with a Self wearer: {wc.with_self} — with more than one wearer: <b className="text-foreground">{wc.multi}</b>
+            </li>
+          </ul>
+        </details>
+      )}
       {sleeveNote[0] && (
         <div className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
           <p>{sleeveNote[0].summary}.</p>

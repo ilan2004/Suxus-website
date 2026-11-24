@@ -21,6 +21,8 @@ export type AppSettings = {
   sizeChart: typeof DEFAULT_SIZE_CHART;
   /** Simple mode: the order fields are measured in, per garment type (field keys). Empty = stored order. */
   measureOrder: Record<string, string[]>;
+  /** Simple mode options. autoAdvance: move to the next field by itself after a pause (OFF — Next only). */
+  measureOptions: { autoAdvance: boolean };
 };
 
 const DEFAULTS: AppSettings = {
@@ -31,6 +33,7 @@ const DEFAULTS: AppSettings = {
   slabs: DEFAULT_SLABS,
   sizeChart: DEFAULT_SIZE_CHART,
   measureOrder: {},
+  measureOptions: { autoAdvance: false },
 };
 
 export async function getSettings(): Promise<AppSettings> {

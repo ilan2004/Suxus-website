@@ -73,6 +73,7 @@ export function SimpleEntry({
   initial,
   who,
   order,
+  autoAdvance = false,
   onClose,
   onSaved,
 }: {
@@ -80,6 +81,8 @@ export function SimpleEntry({
   /** "Anas · Shirt" — whose and what, shown at the top. */
   who: string;
   order: Record<string, string[]>;
+  /** Settings → Measuring order: move on by itself after a pause. Off by default — only Next moves forward. */
+  autoAdvance?: boolean;
   onClose: () => void;
   /** After saving: the record id, and how to undo it. */
   onSaved: (r: { id: number; undo: () => Promise<EntryState | null> }) => void;
@@ -145,10 +148,11 @@ export function SimpleEntry({
     setS((x) => ({ ...x, step: Math.max(0, Math.min(total, step)) }));
   };
   const setValue = (v: number | null) => setS((x) => ({ ...x, values: { ...x.values, [field.key]: v } }));
-  /** After a change: move on by itself, unless another tap comes first. */
+  /** After a change (only when auto-advance is on in Settings): move on by itself, unless another tap comes first. */
   const arm = (ms: number, hasValue: boolean) => {
     stopTimer();
-    if (!hasValue) return;
+    // Off unless switched on in Settings: a pause to read the tape must never record "1" for "11"
+    if (!autoAdvance || !hasValue) return;
     setCountdown({ ms, at: Date.now() });
     timer.current = setTimeout(() => go(s.step + 1), ms);
   };

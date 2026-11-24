@@ -8,12 +8,13 @@ import { Button } from "@/components/ui/button";
 import { updateSetting } from "@/lib/actions/settings";
 import { GARMENT_TYPES, measuringOrder } from "@/lib/measurements";
 import { cn } from "@/lib/utils";
+import { Switch } from "@/components/ui/switch";
 
 /**
  * Settings → Measuring order: the order the tape goes, per garment, set once by dragging. Simple measurement mode
  * asks the fields in this order (the detailed form and the stored data are unchanged).
  */
-export function MeasureOrderTab({ value }: { value: Record<string, string[]> }) {
+export function MeasureOrderTab({ value, options }: { value: Record<string, string[]>; options: { autoAdvance: boolean } }) {
   const router = useRouter();
   const [garment, setGarment] = React.useState(GARMENT_TYPES[0]);
   const [all, setAll] = React.useState(value);
@@ -38,6 +39,24 @@ export function MeasureOrderTab({ value }: { value: Record<string, string[]> }) 
         </p>
         <p className="text-sm text-muted-foreground">Drag the fields into the order the tape goes. Simple measurement mode asks them in this order, for everyone.</p>
       </div>
+      <label className="flex cursor-pointer items-start gap-3 rounded-lg border p-3">
+        <Switch
+          checked={options.autoAdvance}
+          aria-label="Move to the next field by itself"
+          onCheckedChange={(on) =>
+            start(async () => {
+              const r = await updateSetting("measureOptions", { ...options, autoAdvance: on });
+              if (!r.ok) return void toast.error(r.error);
+              toast.success(on ? "Auto-advance on" : "Auto-advance off — only Next moves forward");
+              router.refresh();
+            })
+          }
+        />
+        <span className="text-sm">
+          <span className="block font-medium">Move to the next field by itself after a pause</span>
+          <span className="block text-muted-foreground">Off: the screen moves forward only when Next is tapped (safer — a pause to read the tape never records a half-typed number).</span>
+        </span>
+      </label>
       <select value={garment} onChange={(e) => setGarment(e.target.value)} aria-label="Garment" className="h-10 rounded-md border border-input bg-card px-2 text-sm font-medium">
         {GARMENT_TYPES.map((g) => (
           <option key={g}>{g}</option>

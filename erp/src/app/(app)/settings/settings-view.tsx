@@ -93,7 +93,7 @@ export function SettingsView({
         <TemplatesTab templates={templates} />
       </TabsContent>
       <TabsContent value="measure">
-        <MeasureOrderTab value={settings.measureOrder ?? {}} />
+        <MeasureOrderTab value={settings.measureOrder ?? {}} options={settings.measureOptions ?? { autoAdvance: false }} />
       </TabsContent>
       <TabsContent value="photos">
         <FabricPhotosTab log={photoLog} />

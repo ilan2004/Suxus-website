@@ -34,6 +34,7 @@ const schemas = {
     rows: z.array(z.object({ label: z.string(), values: z.array(z.coerce.number<number>()) })),
   }),
   measureOrder: z.record(z.string(), z.array(z.string())),
+  measureOptions: z.object({ autoAdvance: z.boolean() }),
 } satisfies Record<keyof AppSettings, z.ZodType>;
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<Result<null>> {

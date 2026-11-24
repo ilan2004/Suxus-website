@@ -143,7 +143,8 @@ export function WearerField({
 }) {
   const [adding, setAdding] = React.useState(false);
   React.useEffect(() => setAdding(false), [customerId]);
-  if (!customerId) return null;
+  // No list at all = the database does not have Wearers yet (with it, every customer has at least Self)
+  if (!customerId || hook.loading || !hook.wearers.length) return null;
   const { wearers, many, add } = hook;
   return (
     <div className="grid gap-2 sm:col-span-2">

@@ -41,6 +41,7 @@ export function FabricDetail({
   lines,
   moves,
   canAdjust,
+  stockEnabled = false,
   supplier,
   suppliers,
   lists,
@@ -57,6 +58,8 @@ export function FabricDetail({
   moves: StockMove[];
   /** Owner / Partner: corrections (Adjust stock) and undoing older entries. */
   canAdjust: boolean;
+  /** Add stock / Adjust stock available (the database has them) */
+  stockEnabled?: boolean;
   supplier: { id: number; name: string } | null;
   suppliers: { id: number; name: string }[];
   lists: { fabricType: string[]; colourFamily: string[]; partner: string[] };
@@ -121,9 +124,9 @@ export function FabricDetail({
           <Button variant="outline" onClick={() => setEdit(fabricToInput(f))}>
             <Pencil /> Edit
           </Button>
-          <Button onClick={() => setStock("add")}>
+          {stockEnabled && <Button onClick={() => setStock("add")}>
             <Plus /> Add stock <span className="ml text-primary-foreground/80">സ്റ്റോക്ക് ചേർക്കുക</span>
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -152,7 +155,7 @@ export function FabricDetail({
       </div>
       </div>
 
-      <StockHistory f={f} moves={moves} showCost={showCost} canAdjust={canAdjust} onAdjust={() => setStock("adjust")} onChanged={() => router.refresh()} />
+      {stockEnabled && <StockHistory f={f} moves={moves} showCost={showCost} canAdjust={canAdjust} onAdjust={() => setStock("adjust")} onChanged={() => router.refresh()} />}
 
       <div className="overflow-hidden rounded-xl border bg-card">
         <p className="border-b px-4 py-3 text-sm font-medium">
@@ -214,7 +217,7 @@ export function FabricDetail({
       </div>
 
       {stock && <StockDialog mode={stock} fabric={f} onClose={() => setStock(null)} suppliers={suppliers} showCost={showCost} />}
-      <FabricSheet value={edit} onClose={() => setEdit(null)} suppliers={suppliers} lists={lists} compositions={compositions} showCost={showCost} photosEnabled={photosEnabled} onSaved={() => router.refresh()} row={f} />
+      <FabricSheet value={edit} onClose={() => setEdit(null)} suppliers={suppliers} lists={lists} compositions={compositions} showCost={showCost} photosEnabled={photosEnabled} onSaved={() => router.refresh()} row={f} stockEnabled={stockEnabled} />
     </div>
   );
 }

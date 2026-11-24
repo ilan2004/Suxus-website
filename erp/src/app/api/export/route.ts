@@ -1,7 +1,9 @@
 import ExcelJS from "exceljs";
 import { fieldsFor, measureText } from "@/lib/measurements";
+import { when } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { can } from "@/lib/permissions";
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, sql } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSession } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
@@ -132,11 +134,13 @@ export async function GET(req: NextRequest) {
     { header: "Tailor", key: "tailorName" }, { header: "Urgency", key: "urgency" },
   ], [...orders].reverse());
 
+  // Whose measurements (Wearers) — "Self" for every row until the database has it
+  const hasWearers = (await features()).wearers;
+  const w = (c: string) => when(hasWearers, sql<string | null>`(select ${sql.raw(`"wearers"."${c}"`)} from "wearers" where "wearers"."id" = "measurements"."wearer_id")`);
   const ms = await db
-    .select({ m: s.measurements, name: s.customers.name, phone: s.customers.phone, wearer: s.wearers.name, relation: s.wearers.relation, school: s.wearers.school, isSelf: s.wearers.isSelf })
+    .select({ m: s.measurements, name: s.customers.name, phone: s.customers.phone, wearer: w("name"), relation: w("relation"), school: w("school"), isSelf: when(hasWearers, sql<boolean | null>`(select "wearers"."is_self" from "wearers" where "wearers"."id" = "measurements"."wearer_id")`) })
     .from(s.measurements)
-    .innerJoin(s.customers, eq(s.customers.id, s.measurements.customerId))
-    .leftJoin(s.wearers, eq(s.wearers.id, s.measurements.wearerId));
+    .innerJoin(s.customers, eq(s.customers.id, s.measurements.customerId));
   sheet(wb, "Measurements", "MEASUREMENTS (inches)", [
     { header: "Customer", key: "name", width: 20 }, { header: "Phone", key: "phone" }, { header: "Wearer", key: "wearer", width: 24 }, { header: "Date", key: "date", date: true }, { header: "Garment Type", key: "garmentType", width: 20 },
     { header: "Size", key: "size" }, { header: "Fit", key: "fit" }, { header: "Measurements", key: "values", width: 60 }, { header: "Remarks", key: "remarks", width: 30 },

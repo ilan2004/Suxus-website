@@ -92,7 +92,7 @@ export function PeopleMeasurements({
             </section>
           ))
       )}
-      {form !== "new" && (
+      {form !== "new" && wearers.length > 0 && (
         <Button variant="ghost" size="sm" className="w-fit" onClick={() => setForm("new")}>
           <UserPlus /> Add another person <span className="ml">മറ്റൊരാളെ ചേർക്കുക</span>
         </Button>

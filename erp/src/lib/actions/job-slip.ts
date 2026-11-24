@@ -2,6 +2,7 @@
 
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { jobSlipFileName, jobSlipPages, jobSlipToken, logJobSlip, parseItemCode } from "@/lib/job-slip";
 import { fail, ok, type Result } from "./util";
@@ -34,6 +35,7 @@ export async function jobSlipByCode(code: string): Promise<Result<{ url: string;
   await requireUser();
   const itemId = parseItemCode(code);
   if (!itemId) return fail("Not a bundle label");
+  if (!(await features()).jobSlip) return fail("Job slips are not available yet — the database update for them has not run");
   const db = await getDb();
   const [it] = await db.select({ orderId: schema.orderItems.orderId }).from(schema.orderItems).where(eq(schema.orderItems.id, itemId));
   if (!it) return fail(`No order item ${itemId} — the label may belong to an item that was removed`);

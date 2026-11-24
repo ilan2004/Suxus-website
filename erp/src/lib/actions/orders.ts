@@ -14,6 +14,8 @@ import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 import { recalcOrder } from "@/lib/order-calc";
 import { wearerFor } from "@/lib/wearer-db";
+import { orderItemsExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 
 const OrderInput = z.object({
   id: z.number().int().optional(),
@@ -88,8 +90,11 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
       }
 
       // Each item is someone's garment: one of the customer's wearers (empty = Self). Walk-ins without a customer have none.
-      const wearerIds = await Promise.all(d.items.map((i) => (d.customerId ? wearerFor(tx, d.customerId, i.wearerId) : null)));
-      const rows = d.items.map((i, n) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null, wearerId: wearerIds[n] }));
+      // Whose garment each item is (Wearers) — only once the database has it
+      const hasWearers = (await features()).wearers;
+      const wearerIds = await Promise.all(d.items.map((i) => (d.customerId && hasWearers ? wearerFor(tx, d.customerId, i.wearerId) : null)));
+      const rows = d.items.map((i) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null }));
+      const savedIds: number[] = [];
       // Items keep their id when an order is edited: a printed bundle label (barcode = item id) and a shared
       // job slip link stay valid. Changed items are updated, new ones added, removed ones deleted.
       const existing = d.id ? (await tx.select({ id: schema.orderItems.id }).from(schema.orderItems).where(eq(schema.orderItems.orderId, order.id))).map((r) => r.id) : [];
@@ -98,8 +103,10 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
         if (i.id && existing.includes(i.id) && !keep.has(i.id)) {
           keep.add(i.id);
           await tx.update(schema.orderItems).set(rows[n]).where(eq(schema.orderItems.id, i.id));
-        } else await tx.insert(schema.orderItems).values(rows[n]);
+          savedIds.push(i.id);
+        } else savedIds.push((await tx.insert(schema.orderItems).values(rows[n]).returning({ id: schema.orderItems.id }))[0].id);
       }
+      if (hasWearers) for (const [n, itemId] of savedIds.entries()) await tx.update(orderItemsExt).set({ wearerId: wearerIds[n] }).where(eq(orderItemsExt.id, itemId));
       const gone = existing.filter((x) => !keep.has(x));
       if (gone.length) await tx.delete(schema.orderItems).where(inArray(schema.orderItems.id, gone));
 

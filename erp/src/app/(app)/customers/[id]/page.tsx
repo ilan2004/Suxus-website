@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { can } from "@/lib/permissions";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, getTableColumns } from "drizzle-orm";
+import { col, when } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
@@ -15,10 +17,15 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const db = await getDb();
   const [customer] = await db.select().from(schema.customers).where(eq(schema.customers.id, id));
   if (!customer) notFound();
+  const hasWearers = (await features()).wearers;
   const [orders, bills, measurements, lists, messages, wearers] = await Promise.all([
     ordersWithBalance(eq(schema.orders.customerId, id)),
     db.select().from(schema.sales).where(eq(schema.sales.customerId, id)).orderBy(desc(schema.sales.id)),
-    db.select().from(schema.measurements).where(eq(schema.measurements.customerId, id)).orderBy(desc(schema.measurements.date), desc(schema.measurements.id)),
+    db
+      .select({ ...getTableColumns(schema.measurements), wearerId: when(hasWearers, col.measurementWearer) })
+      .from(schema.measurements)
+      .where(eq(schema.measurements.customerId, id))
+      .orderBy(desc(schema.measurements.date), desc(schema.measurements.id)),
     getSetting("lists"),
     db
       .select({

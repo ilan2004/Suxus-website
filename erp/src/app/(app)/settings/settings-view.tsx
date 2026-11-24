@@ -42,6 +42,7 @@ export function SettingsView({
   users,
   meId,
   photoLog,
+  simpleAvailable = false,
 }: {
   settings: AppSettings;
   templates: MessageTemplate[];
@@ -49,6 +50,7 @@ export function SettingsView({
   users: UserRow[] | null;
   meId: number;
   photoLog: PhotoLogRow[];
+  simpleAvailable?: boolean;
 }) {
   return (
     <Tabs defaultValue={tab && TABS.includes(tab) ? tab : "shop"}>
@@ -100,7 +102,7 @@ export function SettingsView({
       </TabsContent>
       {users && (
         <TabsContent value="users">
-          <UsersTab users={users} meId={meId} />
+          <UsersTab users={users} meId={meId} simpleAvailable={simpleAvailable} />
         </TabsContent>
       )}
       <TabsContent value="import">

@@ -240,7 +240,7 @@ export function MeasurementsView({
                           <Plus /> Add garment
                         </Button>
                       )}
-                      {adding !== g.customerId && (
+                      {adding !== g.customerId && wearers.length > 0 && (
                         <Button size="sm" variant="ghost" onClick={() => setAdding(g.customerId)}>
                           <UserPlus /> Add another person
                         </Button>

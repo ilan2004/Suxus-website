@@ -25,14 +25,15 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     .limit(1);
   const { print } = await searchParams;
   // Job slip PDF links (made once, kept): one per item, one for the whole order
+  // (null when the database does not have job slips yet — the order page then shows no label / PDF buttons)
   const pages = (await jobSlipPages(order.id)) ?? [];
   const slips = {
-    order: { url: `/j/${await jobSlipToken(order.id, null)}`, fileName: pages.length ? jobSlipFileName(pages, true) : "" },
+    order: { url: pages.length ? `/j/${await jobSlipToken(order.id, null)}` : "", fileName: pages.length ? jobSlipFileName(pages, true) : "" },
     items: Object.fromEntries(
       await Promise.all(pages.map(async (pg) => [pg.itemId, { url: `/j/${await jobSlipToken(order.id, pg.itemId)}`, fileName: jobSlipFileName([pg], false) }] as const)),
     ),
   };
-  const slipLog = await db
+  const slipLog = !pages.length ? [] : await db
     .select({ id: schema.jobSlipEvents.id, action: schema.jobSlipEvents.action, via: schema.jobSlipEvents.via, staffName: schema.jobSlipEvents.staffName, detail: schema.jobSlipEvents.detail, at: schema.jobSlipEvents.at })
     .from(schema.jobSlipEvents)
     .where(eq(schema.jobSlipEvents.orderId, order.id))

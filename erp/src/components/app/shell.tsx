@@ -26,7 +26,7 @@ import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/login/actions";
 import { globalSearch, type SearchHit } from "@/lib/actions/search";
 
-type User = { name: string; fullName: string; role: Role; simple?: boolean };
+type User = { name: string; fullName: string; role: Role; simple?: boolean; /** the database has simple mode */ simpleAvailable?: boolean };
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -309,7 +309,7 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
                 <DropdownMenuItem onSelect={() => setPinOpen(true)}>
                   <KeyRound /> Change my PIN
                 </DropdownMenuItem>
-                <DropdownMenuItem
+                {user.simpleAvailable && <DropdownMenuItem
                   onSelect={async () => {
                     await setSimpleMode(!user.simple);
                     router.push("/measurements");
@@ -318,7 +318,7 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
                 >
                   <Ruler /> {user.simple ? "Detailed measurement form" : "Simple measurement mode"}
                   <span className="ml-auto font-[family-name:var(--font-ml)] text-[10px] text-muted-foreground">{user.simple ? "വിശദമായ" : "ലളിതമായ"}</span>
-                </DropdownMenuItem>
+                </DropdownMenuItem>}
                 <form action={logoutAction}>
                   <DropdownMenuItem asChild>
                     <button type="submit" className="w-full">

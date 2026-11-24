@@ -1,5 +1,14 @@
 import { sql } from "drizzle-orm";
+
+/*
+ * App schema. staff, fabrics, order_items and measurements are defined here WITHOUT the columns the newer features
+ * added (simple_mode, opening_mtr / opening_cost_per_mtr, wearer_id). Whole-row reads and inserts list every
+ * column a table defines, so a column missing from the database would break signing in, saving an order, etc.
+ * Those columns are read and written only through the guarded definitions in ./ext.ts. The complete tables, which
+ * the migration tool (drizzle-kit) compares against, are in ./schema-kit.ts.
+ */
 import {
+  type AnyPgColumn,
   boolean,
   date,
   integer,
@@ -54,7 +63,7 @@ export const auditLog = pgTable(
 
 /* ───────────────────────── People ───────────────────────── */
 
-export const staff = pgTable("staff", {
+export const staffColumns = () => ({
   id: serial("id").primaryKey(),
   code: text("code").notNull().unique(), // S01
   name: text("name").notNull(),
@@ -78,11 +87,10 @@ export const staff = pgTable("staff", {
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   /** Bumped on PIN reset / role change / sign-in removed: signs that user out on every device. */
   sessionVersion: integer("session_version").notNull().default(0),
-  /** Simple measurement mode (ലളിതമായ അളവ് രീതി): one field at a time, big keypad, opens on Measurements. */
-  simpleMode: boolean("simple_mode").notNull().default(false),
   createdAt: created(),
   updatedAt: updated(),
 });
+export const staff = pgTable("staff", staffColumns());
 
 export const customers = pgTable(
   "customers",
@@ -125,9 +133,7 @@ export const suppliers = pgTable("suppliers", {
 
 /* ───────────────────────── Fabric ───────────────────────── */
 
-export const fabrics = pgTable(
-  "fabrics",
-  {
+export const fabricsColumns = () => ({
     id: serial("id").primaryKey(),
     code: text("code").notNull().unique(), // LIN-001
     barcode: text("barcode"),
@@ -164,18 +170,11 @@ export const fabrics = pgTable(
     secondaryHexes: jsonb("secondary_hexes").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     /** Per swatch [dominant, secondary 1, secondary 2]: "auto" or "hand" (hand = never overwritten). */
     colourSources: jsonb("colour_sources").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
-    /**
-     * Snapshot of the first entry (metres + cost/m) taken before the first "Add stock" / "Adjust stock".
-     * Empty = no stock movement yet (then purchaseMtr / costPerMtr ARE the first entry).
-     * A partner's opening-stock capital is valued from this, so later business purchases never inflate it.
-     */
-    openingMtr: money("opening_mtr"),
-    openingCostPerMtr: money("opening_cost_per_mtr"),
     createdAt: created(),
     updatedAt: updated(),
-  },
-  (t) => [index("fabrics_barcode_idx").on(t.barcode)],
-);
+});
+export const fabricsIndexes = (t: { barcode: AnyPgColumn }) => [index("fabrics_barcode_idx").on(t.barcode)];
+export const fabrics = pgTable("fabrics", fabricsColumns(), fabricsIndexes);
 
 /* ───────────────────────── Fabric sales (bills) ───────────────────────── */
 
@@ -257,7 +256,7 @@ export const orders = pgTable(
   (t) => [index("orders_date_idx").on(t.date), index("orders_status_idx").on(t.status)],
 );
 
-export const orderItems = pgTable("order_items", {
+export const orderItemsColumns = () => ({
   id: serial("id").primaryKey(),
   orderId: integer("order_id")
     .notNull()
@@ -268,9 +267,8 @@ export const orderItems = pgTable("order_items", {
   amount: money("amount").notNull().default(0),
   /** Who stitches this item (piece-rate wages follow the item). Null = not given out yet. */
   tailorId: integer("tailor_id").references(() => staff.id),
-  /** Whose garment this is (one of the order customer's wearers). Null = walk-in order without a customer. */
-  wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
 });
+export const orderItems = pgTable("order_items", orderItemsColumns());
 
 /**
  * Job slip PDF links: one long random token per order item (its own page) or per order (all pages). Opening
@@ -401,15 +399,11 @@ export const wearers = pgTable(
   (t) => [index("wearers_customer_idx").on(t.customerId), uniqueIndex("wearers_one_self_idx").on(t.customerId).where(sql`${t.isSelf}`)],
 );
 
-export const measurements = pgTable(
-  "measurements",
-  {
+export const measurementsColumns = () => ({
     id: serial("id").primaryKey(),
     customerId: integer("customer_id")
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
-    /** Whose measurements these are (always one of the customer's wearers; the Self wearer for one-person work). */
-    wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
     date: date("date").notNull(),
     garmentType: text("garment_type").notNull(),
     size: text("size"),
@@ -418,9 +412,9 @@ export const measurements = pgTable(
     remarks: text("remarks"),
     createdAt: created(),
     updatedAt: updated(),
-  },
-  (t) => [index("measurements_customer_idx").on(t.customerId)],
-);
+});
+export const measurementsIndexes = (t: { customerId: AnyPgColumn }) => [index("measurements_customer_idx").on(t.customerId)];
+export const measurements = pgTable("measurements", measurementsColumns(), measurementsIndexes);
 
 /**
  * A half-finished measurement in simple mode, saved after every field so a locked phone, a call or a closed

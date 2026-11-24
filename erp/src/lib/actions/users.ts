@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { staffExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { PIN_RE, checkPin, hashPin, requireUser, startSession } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextNumber } from "@/lib/numbering";
@@ -44,10 +46,13 @@ export async function listUsers(): Promise<UserRow[]> {
       status: schema.staff.status,
       lockedUntil: schema.staff.lockedUntil,
       failedPins: schema.staff.failedPins,
-      simple: schema.staff.simpleMode,
     })
     .from(schema.staff)
     .orderBy(schema.staff.code);
+  // Simple measurement mode per user (none until the database has the column)
+  const simpleIds = new Set<number>();
+  if ((await features()).simple)
+    for (const r of await db.select({ id: staffExt.id }).from(staffExt).where(eq(staffExt.simpleMode, true))) simpleIds.add(r.id);
   return rows.map((r) => ({
     id: r.id,
     code: r.code,
@@ -59,7 +64,7 @@ export async function listUsers(): Promise<UserRow[]> {
     status: r.status,
     lockedUntil: r.lockedUntil && r.lockedUntil.getTime() > Date.now() ? r.lockedUntil.toISOString() : null,
     failedPins: r.failedPins,
-    simple: r.simple,
+    simple: simpleIds.has(r.id),
   }));
 }
 

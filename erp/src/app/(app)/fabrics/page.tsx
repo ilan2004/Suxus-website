@@ -1,5 +1,6 @@
 import { asc } from "drizzle-orm";
 import { can } from "@/lib/permissions";
+import { features } from "@/lib/db/features";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
@@ -41,6 +42,7 @@ export default async function FabricsPage() {
         compositions={settings.compositions}
         lowStock={settings.shop.lowStockMtr}
         showCost={can(session.role, "costs")}
+        stockEnabled={(await features()).stock}
         photosEnabled={storageMode() !== "off"}
       />
     </>

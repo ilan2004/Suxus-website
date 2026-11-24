@@ -24,7 +24,7 @@ const ROLES: { key: Role; label: string; hint: string }[] = [
 
 type Dlg = { kind: "add" } | { kind: "edit"; u: UserRow } | { kind: "pin"; u: UserRow } | null;
 
-export function UsersTab({ users, meId }: { users: UserRow[]; meId: number }) {
+export function UsersTab({ users, meId, simpleAvailable = false }: { users: UserRow[]; meId: number; /** the database has simple mode */ simpleAvailable?: boolean }) {
   const router = useRouter();
   const [dlg, setDlg] = React.useState<Dlg>(null);
   const withLogin = users.filter((u) => u.role);
@@ -66,7 +66,7 @@ export function UsersTab({ users, meId }: { users: UserRow[]; meId: number }) {
                 )}
               </div>
               {u.job && u.job !== ROLE_LABEL[u.role!] && <p className="text-xs text-muted-foreground">{u.job}</p>}
-              <label className="mt-1.5 flex w-fit cursor-pointer items-center gap-2 text-xs">
+              {simpleAvailable && <label className="mt-1.5 flex w-fit cursor-pointer items-center gap-2 text-xs">
                 <Switch
                   checked={u.simple}
                   aria-label={`Simple measurement mode for ${u.name}`}
@@ -77,7 +77,7 @@ export function UsersTab({ users, meId }: { users: UserRow[]; meId: number }) {
                   }}
                 />
                 Simple measurement mode <span className="ml">ലളിതമായ അളവ് രീതി</span>
-              </label>
+              </label>}
             </div>
             <div className="flex flex-wrap gap-1">
               {u.lockedUntil && (

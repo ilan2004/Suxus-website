@@ -6,6 +6,8 @@ import { notFound, redirect } from "next/navigation";
 import { and, eq, ne } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { getDb, schema } from "./db";
+import { staffExt } from "./db/ext";
+import { features } from "./db/features";
 import { can, roleFromAccess, type Perm, type Role } from "./permissions";
 
 export const SESSION_COOKIE = "suxus_session";
@@ -57,12 +59,12 @@ export const getSession = cache(async (): Promise<Session | null> => {
   if (!t) return null;
   const db = await getDb();
   const [u] = await db
-    .select({ id: schema.staff.id, name: schema.staff.name, displayName: schema.staff.displayName, access: schema.staff.access, status: schema.staff.status, v: schema.staff.sessionVersion, simple: schema.staff.simpleMode })
+    .select({ id: schema.staff.id, name: schema.staff.name, displayName: schema.staff.displayName, access: schema.staff.access, status: schema.staff.status, v: schema.staff.sessionVersion })
     .from(schema.staff)
     .where(eq(schema.staff.id, t.id));
   const role = roleFromAccess(u?.access);
   if (!u || !role || u.status !== "Active" || u.v !== t.v) return null;
-  return { id: u.id, name: displayNameOf(u), fullName: u.name, role, v: u.v, exp: t.exp, simple: u.simple };
+  return { id: u.id, name: displayNameOf(u), fullName: u.name, role, v: u.v, exp: t.exp, simple: await simpleModeOf(u.id) };
 });
 
 /**
@@ -112,4 +114,16 @@ export async function hasAnyLoginUser() {
   const db = await getDb();
   const rows = await db.select({ id: schema.staff.id }).from(schema.staff).where(ne(schema.staff.access, "none")).limit(1);
   return rows.length > 0;
+}
+
+/** Simple measurement mode for a user — false (never an error) when the database does not have it yet. */
+export async function simpleModeOf(staffId: number): Promise<boolean> {
+  try {
+    if (!(await features()).simple) return false;
+    const db = await getDb();
+    const [r] = await db.select({ on: staffExt.simpleMode }).from(staffExt).where(eq(staffExt.id, staffId));
+    return !!r?.on;
+  } catch {
+    return false;
+  }
 }

@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { and, asc, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { measurementsExt, orderItemsExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
+
+const NOT_YET = "Adding people is not available yet — the database update for it has not run";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { selfWearerId } from "@/lib/wearer-db";
@@ -13,7 +17,7 @@ import { fail, ok, optText, zodError, type Result } from "./util";
 /** The customer's wearers, Self first (creates Self if the customer has none yet). */
 export async function listWearers(customerId: number): Promise<WearerLite[]> {
   await requireUser();
-  if (!customerId) return [];
+  if (!customerId || !(await features()).wearers) return [];
   const db = await getDb();
   await selfWearerId(db, customerId);
   return db
@@ -43,6 +47,7 @@ export type WearerInput = z.input<typeof WearerInput>;
 
 export async function saveWearer(input: WearerInput): Promise<Result<WearerLite>> {
   const user = await requireUser();
+  if (!(await features()).wearers) return fail(NOT_YET);
   const parsed = WearerInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, customerId, ...d } = parsed.data;
@@ -70,12 +75,13 @@ export async function saveWearer(input: WearerInput): Promise<Result<WearerLite>
 /** Removes a person — only when nothing is recorded for them (Self is never removed). */
 export async function deleteWearer(id: number): Promise<Result<null>> {
   const user = await requireUser();
+  if (!(await features()).wearers) return fail(NOT_YET);
   const db = await getDb();
   const [w] = await db.select().from(schema.wearers).where(eq(schema.wearers.id, id));
   if (!w) return ok(null);
   if (w.isSelf) return fail("Self cannot be removed");
-  const [m] = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(schema.measurements).where(eq(schema.measurements.wearerId, id));
-  const [o] = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(schema.orderItems).where(eq(schema.orderItems.wearerId, id));
+  const [m] = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(measurementsExt).where(eq(measurementsExt.wearerId, id));
+  const [o] = await db.select({ n: sql<number>`count(*)`.mapWith(Number) }).from(orderItemsExt).where(eq(orderItemsExt.wearerId, id));
   if (m.n || o.n) return fail(`${w.name} has ${m.n} measurement record(s) and ${o.n} order item(s) — cannot remove`);
   await db.delete(schema.wearers).where(eq(schema.wearers.id, id));
   await audit(db, user, "delete", "wearer", id, w.name);

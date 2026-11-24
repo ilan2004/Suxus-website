@@ -4,6 +4,8 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, schema } from "./db";
+import { col } from "./db/ext";
+import { features } from "./db/features";
 import { getOrderFull } from "./queries";
 import { GARMENTS, WHOLE_ML, fieldsFor, mlOf, enOf, wholeOf, type GarmentField } from "./measurements";
 import { formatPhone } from "./phone";
@@ -65,6 +67,8 @@ function variantOf(item: string, m: Measure | undefined) {
 
 /** One page per order item (or just the one item), each complete on its own. */
 export async function jobSlipPages(orderId: number, itemId?: number | null): Promise<JobSlipPage[] | null> {
+  // Job slips name the person for each garment: off until the database has Wearers and the job slip tables
+  if (!(await features()).jobSlip) return null;
   const order = await getOrderFull(orderId);
   if (!order) return null;
   const items = itemId ? order.items.filter((i) => i.id === itemId) : order.items;
@@ -72,7 +76,7 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
   const db = await getDb();
   const all: Measure[] = order.customerId
     ? await db
-        .select({ id: schema.measurements.id, garmentType: schema.measurements.garmentType, date: schema.measurements.date, size: schema.measurements.size, fit: schema.measurements.fit, values: schema.measurements.values, remarks: schema.measurements.remarks, wearerId: schema.measurements.wearerId })
+        .select({ id: schema.measurements.id, garmentType: schema.measurements.garmentType, date: schema.measurements.date, size: schema.measurements.size, fit: schema.measurements.fit, values: schema.measurements.values, remarks: schema.measurements.remarks, wearerId: col.measurementWearer })
         .from(schema.measurements)
         .where(eq(schema.measurements.customerId, order.customerId))
         .orderBy(desc(schema.measurements.date), desc(schema.measurements.id))
@@ -291,7 +295,7 @@ export async function jobSlipToken(orderId: number, itemId: number | null): Prom
 
 /** Token → which job slip. Nothing else is reachable from a token. */
 export async function resolveJobSlipToken(token: string) {
-  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token)) return null;
+  if (!/^[A-Za-z0-9_-]{40,60}$/.test(token) || !(await features()).jobSlip) return null;
   const db = await getDb();
   const [row] = await db
     .select({ orderId: schema.jobSlipLinks.orderId, itemId: schema.jobSlipLinks.orderItemId, kind: schema.jobSlipLinks.kind })
@@ -303,6 +307,7 @@ export async function resolveJobSlipToken(token: string) {
 }
 
 export async function logJobSlip(e: { orderId: number; itemId: number | null; action: "label" | "view" | "share"; via: "app" | "link"; staffName: string | null; detail: string | null }) {
+  if (!(await features()).jobSlip) return;
   const db = await getDb();
   await db.insert(schema.jobSlipEvents).values({ orderId: e.orderId, orderItemId: e.itemId, action: e.action, via: e.via, staffName: e.staffName, detail: e.detail });
 }

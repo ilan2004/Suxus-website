@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/app/page-header";
 import { SettingsView } from "./settings-view";
 import { listTemplates } from "@/lib/actions/messages";
 import { listUsers } from "@/lib/actions/users";
+import { features } from "@/lib/db/features";
 import { can } from "@/lib/permissions";
 import { desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
@@ -35,6 +36,7 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         tab={tab}
         users={users}
         meId={me.id}
+        simpleAvailable={(await features()).simple}
         photoLog={photoLog.map(({ l, code, brand, pattern }) => ({ ...l, at: new Date(l.createdAt).toISOString(), code, brand, pattern }))}
       />
     </>

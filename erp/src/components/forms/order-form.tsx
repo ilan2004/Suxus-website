@@ -263,7 +263,7 @@ export function OrderForm({
               </Button>
             </div>
           ))}
-          {customer &&
+          {customer && people.wearers.length > 0 &&
             (addingPerson ? (
               <AddPersonForm
                 customerId={customer.id}

@@ -3,6 +3,8 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { orderItemsExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { wearerFor } from "@/lib/wearer-db";
 import { fail, ok, type Result } from "./util";
@@ -38,6 +40,7 @@ export type DraftInput = z.input<typeof DraftInput>;
 /** Saves the measurement in progress (after every field). Returns the draft id to keep using. */
 export async function saveDraft(input: DraftInput): Promise<Result<{ id: number }>> {
   const user = await requireUser();
+  if (!(await features()).simple) return fail("Drafts are not available yet — the database update for them has not run");
   const parsed = DraftInput.safeParse(input);
   if (!parsed.success) return fail("Could not save the draft");
   const { id, ...d } = parsed.data;
@@ -57,6 +60,7 @@ export async function saveDraft(input: DraftInput): Promise<Result<{ id: number 
 
 export async function deleteDraft(id: number): Promise<Result<null>> {
   const user = await requireUser();
+  if (!(await features()).simple) return ok(null);
   const db = await getDb();
   await db.delete(schema.measurementDrafts).where(and(eq(schema.measurementDrafts.id, id), eq(schema.measurementDrafts.staffId, user.id)));
   return ok(null);
@@ -75,11 +79,9 @@ export async function lookupCode(code: string): Promise<Result<{ customerId: num
     .limit(1);
   if (o?.customerId) {
     // An order for one person (other than the customer themself) opens that person
-    const ws = await db
-      .selectDistinct({ id: schema.orderItems.wearerId, isSelf: schema.wearers.isSelf })
-      .from(schema.orderItems)
-      .leftJoin(schema.wearers, eq(schema.wearers.id, schema.orderItems.wearerId))
-      .where(eq(schema.orderItems.orderId, o.id));
+    const ws = (await features()).wearers
+      ? await db.selectDistinct({ id: orderItemsExt.wearerId }).from(orderItemsExt).innerJoin(schema.orders, eq(schema.orders.id, sql`"order_items"."order_id"`)).where(eq(schema.orders.id, o.id))
+      : [];
     return ok({ customerId: o.customerId, wearerId: ws.length === 1 ? ws[0].id : null });
   }
   const digits = term.replace(/\D/g, "");

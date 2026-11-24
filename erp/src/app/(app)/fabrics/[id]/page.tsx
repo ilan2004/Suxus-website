@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/lib/permissions";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { fabricsWithStock, withoutFabricCosts } from "@/lib/queries";
@@ -16,6 +17,8 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
   if (!fabric) notFound();
   const db = await getDb();
   const s = schema;
+  // Add stock / Adjust stock and the stock history appear once the database has them
+  const { stock } = await features();
   const [lines, settings, suppliers, moves] = await Promise.all([
     db
       .select({
@@ -38,7 +41,7 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       .orderBy(desc(s.sales.date), desc(s.sales.id)),
     getSettings(),
     db.select({ id: s.suppliers.id, name: s.suppliers.name }).from(s.suppliers).orderBy(asc(s.suppliers.name)),
-    db
+    !stock ? Promise.resolve([]) : db
       .select({
         id: s.fabricStockMoves.id,
         kind: s.fabricStockMoves.kind,
@@ -68,6 +71,7 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       lines={lines}
       moves={seesCost ? moves : moves.map((m) => ({ ...m, rate: null, rateBefore: null, rateAfter: null }))}
       canAdjust={can(session.role, "delete")}
+      stockEnabled={stock}
       supplier={supplier}
       suppliers={suppliers}
       lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}

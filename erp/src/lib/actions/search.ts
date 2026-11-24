@@ -3,6 +3,7 @@
 import { and, desc, eq, ilike, not, or, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 
 export type SearchHit = { type: string; label: string; sub: string; href: string; thumb?: string | null };
@@ -23,12 +24,14 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
       .where(or(ilike(s.customers.name, like), ilike(s.customers.code, like), digits.length >= 4 ? ilike(s.customers.phone, `%${digits}%`) : sql`false`))
       .limit(6),
     // People measured under a customer (a parent's children…) — found by their own name
-    db
-      .select({ name: s.wearers.name, relation: s.wearers.relation, school: s.wearers.school, customerId: s.customers.id, customer: s.customers.name, phone: s.customers.phone })
-      .from(s.wearers)
-      .innerJoin(s.customers, eq(s.customers.id, s.wearers.customerId))
-      .where(and(not(s.wearers.isSelf), ilike(s.wearers.name, like)))
-      .limit(6),
+    (await features()).wearers
+      ? db
+          .select({ name: s.wearers.name, relation: s.wearers.relation, school: s.wearers.school, customerId: s.customers.id, customer: s.customers.name, phone: s.customers.phone })
+          .from(s.wearers)
+          .innerJoin(s.customers, eq(s.customers.id, s.wearers.customerId))
+          .where(and(not(s.wearers.isSelf), ilike(s.wearers.name, like)))
+          .limit(6)
+      : Promise.resolve([]),
     db
       .select({ id: s.sales.id, billNo: s.sales.billNo, name: s.sales.customerName, net: s.sales.net, date: s.sales.date })
       .from(s.sales)

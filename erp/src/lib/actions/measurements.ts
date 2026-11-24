@@ -8,6 +8,8 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { LEGACY_GARMENTS } from "@/lib/measurements";
 import { wearerFor } from "@/lib/wearer-db";
+import { measurementsExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { fail, ok, optText, reqDate, zodError, type Result } from "./util";
 
 const MeasurementInput = z.object({
@@ -37,13 +39,16 @@ export async function saveMeasurement(input: MeasurementInput): Promise<Result<{
     const { Sleeve, ...others } = values;
     values = { ...others, [legacy.sleeve]: Sleeve };
   }
-  const d = { ...rest, garmentType: legacy?.to ?? rest.garmentType, wearerId: await wearerFor(db, rest.customerId, rest.wearerId) };
+  const { wearerId: wantedWearer, ...base } = rest;
+  const d = { ...base, garmentType: legacy?.to ?? rest.garmentType };
   let row;
   if (id) {
-    [row] = await db.update(schema.measurements).set({ ...d, values }).where(eq(schema.measurements.id, id)).returning();
+    [row] = await db.update(schema.measurements).set({ ...d, values }).where(eq(schema.measurements.id, id)).returning({ id: schema.measurements.id });
   } else {
-    [row] = await db.insert(schema.measurements).values({ ...d, values }).returning();
+    [row] = await db.insert(schema.measurements).values({ ...d, values }).returning({ id: schema.measurements.id });
   }
+  // Whose measurements (Wearers) — only once the database has it
+  if ((await features()).wearers) await db.update(measurementsExt).set({ wearerId: await wearerFor(db, rest.customerId, wantedWearer) }).where(eq(measurementsExt.id, row.id));
   await audit(db, user, id ? "update" : "create", "measurement", row.id, d.garmentType);
   revalidatePath("/measurements");
   revalidatePath(`/customers/${d.customerId}`);
@@ -53,7 +58,7 @@ export async function saveMeasurement(input: MeasurementInput): Promise<Result<{
 export async function deleteMeasurement(id: number): Promise<Result<null>> {
   const user = await requireUser();
   const db = await getDb();
-  const [row] = await db.delete(schema.measurements).where(eq(schema.measurements.id, id)).returning();
+  const [row] = await db.delete(schema.measurements).where(eq(schema.measurements.id, id)).returning({ customerId: schema.measurements.customerId });
   await audit(db, user, "delete", "measurement", id);
   revalidatePath("/measurements");
   if (row) revalidatePath(`/customers/${row.customerId}`);

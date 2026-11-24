@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { col, fabricsExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { can } from "@/lib/permissions";
@@ -36,7 +38,7 @@ async function lockFabric(tx: Tx, fabricId: number) {
       code: schema.fabrics.code,
       purchaseMtr: schema.fabrics.purchaseMtr,
       costPerMtr: schema.fabrics.costPerMtr,
-      openingMtr: schema.fabrics.openingMtr,
+      openingMtr: col.fabricOpeningMtr,
     })
     .from(schema.fabrics)
     .where(eq(schema.fabrics.id, fabricId))
@@ -52,8 +54,10 @@ async function lockFabric(tx: Tx, fabricId: number) {
 }
 
 /** First movement on this fabric: remember the first entry, so opening-stock capital stays as it was. */
-const openingSnapshot = (f: { purchaseMtr: number; costPerMtr: number; openingMtr: number | null }) =>
-  f.openingMtr == null ? { openingMtr: f.purchaseMtr, openingCostPerMtr: f.costPerMtr } : {};
+async function openingSnapshot(tx: Tx, f: { id: number; purchaseMtr: number; costPerMtr: number; openingMtr: number | null }) {
+  if (f.openingMtr == null) await tx.update(fabricsExt).set({ openingMtr: f.purchaseMtr, openingCostPerMtr: f.costPerMtr }).where(eq(fabricsExt.id, f.id));
+}
+const NOT_YET = "Add stock is not available yet — the database update for it has not run";
 
 function done() {
   revalidatePath("/fabrics", "layout");
@@ -82,6 +86,7 @@ export type AddStockInput = z.input<typeof AddStockInput>;
  */
 export async function addStock(input: AddStockInput): Promise<Result<StockMoveResult>> {
   const user = await requireUser();
+  if (!(await features()).stock) return fail(NOT_YET);
   const parsed = AddStockInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
@@ -100,9 +105,10 @@ export async function addStock(input: AddStockInput): Promise<Result<StockMoveRe
     const newRate = lotRate === oldRate ? oldRate : oldRate === 0 ? lotRate : round2((onHand * oldRate + metres * lotRate) / (onHand + metres));
     const boughtAfter = round2(f.purchaseMtr + metres);
     const balanceAfter = round2(boughtAfter - f.sold);
+    await openingSnapshot(tx, f);
     await tx
       .update(schema.fabrics)
-      .set({ ...openingSnapshot(f), purchaseMtr: boughtAfter, costPerMtr: newRate, updatedAt: new Date() })
+      .set({ purchaseMtr: boughtAfter, costPerMtr: newRate, updatedAt: new Date() })
       .where(eq(schema.fabrics.id, f.id));
     const [m] = await tx
       .insert(schema.fabricStockMoves)
@@ -146,6 +152,7 @@ export type AdjustInput = z.input<typeof AdjustInput>;
 /** A correction (+ or −) with a required reason. Logged separately from receipts; the cost per metre is unchanged. */
 export async function adjustStock(input: AdjustInput): Promise<Result<StockMoveResult>> {
   const user = await requireUser({ can: "delete" });
+  if (!(await features()).stock) return fail(NOT_YET);
   const parsed = AdjustInput.safeParse(input);
   if (!parsed.success) return fail(zodError(parsed.error));
   const d = parsed.data;
@@ -158,9 +165,10 @@ export async function adjustStock(input: AdjustInput): Promise<Result<StockMoveR
     const boughtAfter = round2(f.purchaseMtr + metres);
     const balanceAfter = round2(boughtAfter - f.sold);
     if (metres < 0 && balanceAfter < 0) return { error: `Only ${balanceBefore} m is in stock — cannot take off ${-metres} m` };
+    await openingSnapshot(tx, f);
     await tx
       .update(schema.fabrics)
-      .set({ ...openingSnapshot(f), purchaseMtr: boughtAfter, updatedAt: new Date() })
+      .set({ purchaseMtr: boughtAfter, updatedAt: new Date() })
       .where(eq(schema.fabrics.id, f.id));
     const [m] = await tx
       .insert(schema.fabricStockMoves)
@@ -190,6 +198,7 @@ export async function adjustStock(input: AdjustInput): Promise<Result<StockMoveR
 /** Takes back the most recent stock movement of its fabric — e.g. 50 typed instead of 5. Restores Bought and the cost. */
 export async function undoStockMove(id: number): Promise<Result<{ code: string; balanceAfter: number }>> {
   const user = await requireUser();
+  if (!(await features()).stock) return fail(NOT_YET);
   const db = await getDb();
   const res = await db.transaction(async (tx: Tx) => {
     const [m] = await tx.select().from(schema.fabricStockMoves).where(eq(schema.fabricStockMoves.id, id));
@@ -219,11 +228,11 @@ export async function undoStockMove(id: number): Promise<Result<{ code: string; 
         purchaseMtr: bought,
         // put the cost back only if nobody changed it by hand since
         ...(m.rateBefore != null && f.costPerMtr === m.rateAfter ? { costPerMtr: m.rateBefore } : {}),
-        // no movement left → the first entry is again the whole story
-        ...(n === 1 ? { openingMtr: null, openingCostPerMtr: null } : {}),
         updatedAt: new Date(),
       })
       .where(eq(schema.fabrics.id, f.id));
+    // no movement left → the first entry is again the whole story
+    if (n === 1) await tx.update(fabricsExt).set({ openingMtr: null, openingCostPerMtr: null }).where(eq(fabricsExt.id, f.id));
     await tx.delete(schema.fabricStockMoves).where(eq(schema.fabricStockMoves.id, m.id));
     await audit(tx, user, "delete", "fabric", f.id, `${f.code}: undid stock ${m.kind === "receipt" ? "receipt" : "adjustment"} of ${m.metres} m`);
     return { code: f.code, balanceAfter };

@@ -1,4 +1,4 @@
-import { asc, isNotNull } from "drizzle-orm";
+import { asc, isNotNull, sql } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
@@ -19,8 +19,9 @@ export default async function OpeningStockPage() {
         code: schema.fabrics.code,
         brand: schema.fabrics.brand,
         shade: schema.fabrics.shade,
-        purchaseMtr: schema.fabrics.purchaseMtr,
-        costPerMtr: schema.fabrics.costPerMtr,
+        // the first entry — stock added later is a business purchase, not the partner's
+        purchaseMtr: sql<number>`coalesce(${schema.fabrics.openingMtr}, ${schema.fabrics.purchaseMtr})`.mapWith(Number),
+        costPerMtr: sql<number>`coalesce(${schema.fabrics.openingCostPerMtr}, ${schema.fabrics.costPerMtr})`.mapWith(Number),
         broughtInBy: schema.fabrics.broughtInBy,
         purchaseDate: schema.fabrics.purchaseDate,
         thumb: schema.fabrics.thumbnailUrl,

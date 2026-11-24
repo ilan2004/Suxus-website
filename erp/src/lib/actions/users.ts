@@ -24,6 +24,8 @@ export type UserRow = {
   status: string;
   lockedUntil: string | null;
   failedPins: number;
+  /** Simple measurement mode */
+  simple: boolean;
 };
 
 /** Everyone in Staff — those with a sign-in first. People without one can be given one ("Add user"). */
@@ -42,6 +44,7 @@ export async function listUsers(): Promise<UserRow[]> {
       status: schema.staff.status,
       lockedUntil: schema.staff.lockedUntil,
       failedPins: schema.staff.failedPins,
+      simple: schema.staff.simpleMode,
     })
     .from(schema.staff)
     .orderBy(schema.staff.code);
@@ -56,6 +59,7 @@ export async function listUsers(): Promise<UserRow[]> {
     status: r.status,
     lockedUntil: r.lockedUntil && r.lockedUntil.getTime() > Date.now() ? r.lockedUntil.toISOString() : null,
     failedPins: r.failedPins,
+    simple: r.simple,
   }));
 }
 

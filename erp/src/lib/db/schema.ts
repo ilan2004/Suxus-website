@@ -78,6 +78,8 @@ export const staff = pgTable("staff", {
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   /** Bumped on PIN reset / role change / sign-in removed: signs that user out on every device. */
   sessionVersion: integer("session_version").notNull().default(0),
+  /** Simple measurement mode (ലളിതമായ അളവ് രീതി): one field at a time, big keypad, opens on Measurements. */
+  simpleMode: boolean("simple_mode").notNull().default(false),
   createdAt: created(),
   updatedAt: updated(),
 });
@@ -162,6 +164,13 @@ export const fabrics = pgTable(
     secondaryHexes: jsonb("secondary_hexes").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     /** Per swatch [dominant, secondary 1, secondary 2]: "auto" or "hand" (hand = never overwritten). */
     colourSources: jsonb("colour_sources").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /**
+     * Snapshot of the first entry (metres + cost/m) taken before the first "Add stock" / "Adjust stock".
+     * Empty = no stock movement yet (then purchaseMtr / costPerMtr ARE the first entry).
+     * A partner's opening-stock capital is valued from this, so later business purchases never inflate it.
+     */
+    openingMtr: money("opening_mtr"),
+    openingCostPerMtr: money("opening_cost_per_mtr"),
     createdAt: created(),
     updatedAt: updated(),
   },
@@ -259,7 +268,50 @@ export const orderItems = pgTable("order_items", {
   amount: money("amount").notNull().default(0),
   /** Who stitches this item (piece-rate wages follow the item). Null = not given out yet. */
   tailorId: integer("tailor_id").references(() => staff.id),
+  /** Whose garment this is (one of the order customer's wearers). Null = walk-in order without a customer. */
+  wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
 });
+
+/**
+ * Job slip PDF links: one long random token per order item (its own page) or per order (all pages). Opening
+ * /j/<token> returns that job slip PDF only — no login, nothing else reachable from it.
+ */
+export const jobSlipLinks = pgTable(
+  "job_slip_links",
+  {
+    id: serial("id").primaryKey(),
+    /** item | order */
+    kind: text("kind").notNull(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex("job_slip_links_token_idx").on(t.token), uniqueIndex("job_slip_links_ref_idx").on(t.kind, t.orderId, t.orderItemId)],
+);
+
+/** Every bundle label printed and every job slip PDF viewed or shared — with when and who. */
+export const jobSlipEvents = pgTable(
+  "job_slip_events",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    /** label | view | share */
+    action: text("action").notNull(),
+    /** app = signed-in user · link = opened from a shared link without signing in */
+    via: text("via").notNull().default("app"),
+    staffName: text("staff_name"),
+    /** What was printed / opened, e.g. "Shirt — Anas" (kept if the item is later removed) */
+    detail: text("detail"),
+    at: created(),
+  },
+  (t) => [index("job_slip_events_order_idx").on(t.orderId)],
+);
 
 /* ───────────────────────── Bulk / institution orders ───────────────────────── */
 
@@ -324,6 +376,31 @@ export const payments = pgTable(
 
 /* ───────────────────────── Measurements ───────────────────────── */
 
+/**
+ * A person who is measured, belonging to one customer (the account / phone). A parent's account holds
+ * the children whose uniforms are stitched. Every customer has one "Self" wearer (isSelf); while that is
+ * the only one, screens behave as if wearers did not exist.
+ */
+export const wearers = pgTable(
+  "wearers",
+  {
+    id: serial("id").primaryKey(),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Self, Son, Daughter, Wife, Husband, Father, Mother, Brother, Sister, Other */
+    relation: text("relation").notNull().default("Other"),
+    /** School / class — useful for uniforms. */
+    school: text("school"),
+    note: text("note"),
+    isSelf: boolean("is_self").notNull().default(false),
+    createdAt: created(),
+    updatedAt: updated(),
+  },
+  (t) => [index("wearers_customer_idx").on(t.customerId), uniqueIndex("wearers_one_self_idx").on(t.customerId).where(sql`${t.isSelf}`)],
+);
+
 export const measurements = pgTable(
   "measurements",
   {
@@ -331,6 +408,8 @@ export const measurements = pgTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
+    /** Whose measurements these are (always one of the customer's wearers; the Self wearer for one-person work). */
+    wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
     date: date("date").notNull(),
     garmentType: text("garment_type").notNull(),
     size: text("size"),
@@ -341,6 +420,35 @@ export const measurements = pgTable(
     updatedAt: updated(),
   },
   (t) => [index("measurements_customer_idx").on(t.customerId)],
+);
+
+/**
+ * A half-finished measurement in simple mode, saved after every field so a locked phone, a call or a closed
+ * app never loses work. One row per entry in progress; removed when the measurement is saved.
+ */
+export const measurementDrafts = pgTable(
+  "measurement_drafts",
+  {
+    id: serial("id").primaryKey(),
+    staffId: integer("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "cascade" }),
+    /** Set when an existing record is being changed (null = a new record). */
+    measurementId: integer("measurement_id").references(() => measurements.id, { onDelete: "cascade" }),
+    garmentType: text("garment_type").notNull(),
+    size: text("size"),
+    fit: text("fit"),
+    remarks: text("remarks"),
+    values: jsonb("values").$type<Record<string, number | null>>().notNull().default(sql`'{}'::jsonb`),
+    /** The field being entered (index in the measuring order); = number of fields → the final check. */
+    step: integer("step").notNull().default(0),
+    updatedAt: updated(),
+  },
+  (t) => [index("measurement_drafts_staff_idx").on(t.staffId)],
 );
 
 /* ───────────────────────── Money out ───────────────────────── */
@@ -583,6 +691,40 @@ export const orderStatusChanges = pgTable(
     changedAt: created(),
   },
   (t) => [index("order_status_changes_order_idx").on(t.orderId)],
+);
+
+/**
+ * Fabric stock movements. "receipt" = more of the same cloth arrived (Add stock); "adjust" = a correction
+ * (damage, shortage, counting mistake) with a required reason. Both add to the fabric's Bought total
+ * (adjust may be negative), so Balance stays Bought − Sold. Kept as separate kinds so purchases and
+ * corrections are never mixed up in the history.
+ */
+export const fabricStockMoves = pgTable(
+  "fabric_stock_moves",
+  {
+    id: serial("id").primaryKey(),
+    fabricId: integer("fabric_id")
+      .notNull()
+      .references(() => fabrics.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // receipt | adjust
+    date: date("date").notNull(),
+    /** Metres received (receipt, > 0) or the correction (adjust, + or −). */
+    metres: money("metres").notNull(),
+    /** Receipt: cost per metre of this lot. */
+    rate: money("rate"),
+    supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+    billNo: text("bill_no"),
+    /** Receipt: remarks · adjust: the reason (required). */
+    remarks: text("remarks"),
+    boughtAfter: money("bought_after").notNull(),
+    balanceAfter: money("balance_after").notNull(),
+    /** Fabric cost / metre before and after this movement (weighted average on receipts). */
+    rateBefore: money("rate_before"),
+    rateAfter: money("rate_after"),
+    createdBy: text("created_by"),
+    createdAt: created(),
+  },
+  (t) => [index("fabric_stock_moves_fabric_idx").on(t.fabricId, t.id)],
 );
 
 /** One row per fabric photo analysed (scale card, repeat, colours) — to check how reliable the measurement is. */

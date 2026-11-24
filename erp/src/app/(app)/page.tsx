@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { Suspense } from "react";
 import Link from "next/link";
 import { AlertTriangle, CalendarClock, KanbanSquare, CircleDollarSign, Layers, PackageCheck, Plus, Scissors, ShoppingBag, Wallet } from "lucide-react";
@@ -23,6 +24,8 @@ export const metadata = { title: "Dashboard" };
  */
 export default async function Dashboard() {
   const session = await requireUser();
+  // Simple measurement mode: the app opens on Measurements (also when reopened from the home screen)
+  if (session.simple) redirect("/measurements");
   const t = today();
   const hour = Number(new Intl.DateTimeFormat("en-IN", { timeZone: "Asia/Kolkata", hour: "numeric", hour12: false }).format(new Date()));
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";

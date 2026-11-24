@@ -4,8 +4,9 @@ const nextConfig: NextConfig = {
   // This app lives in /erp inside the website repo — keep tracing scoped to it.
   outputFileTracingRoot: __dirname,
   turbopack: { root: __dirname },
-  serverExternalPackages: ["@electric-sql/pglite", "exceljs"],
-  outputFileTracingIncludes: { "/**": ["./drizzle/**/*"] },
+  serverExternalPackages: ["@electric-sql/pglite", "exceljs", "pdfkit"],
+  // Job slip PDF: the Malayalam font it embeds is read from disk at runtime
+  outputFileTracingIncludes: { "/**": ["./drizzle/**/*"], "/j/**": ["./assets/fonts/**/*"] },
 };
 
 export default nextConfig;

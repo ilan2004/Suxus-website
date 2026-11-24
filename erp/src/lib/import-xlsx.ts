@@ -530,7 +530,14 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
           await db.insert(schema.fabrics).values({ ...(v as object), code } as typeof schema.fabrics.$inferInsert);
         },
         update: async (id, v) => {
-          await db.update(schema.fabrics).set({ ...(v as object), updatedAt: new Date() }).where(eq(schema.fabrics.id, id));
+          // Fabrics with Add stock / Adjust stock entries: the ERP owns Bought and the (weighted average) cost now —
+          // a re-import of the old sheet must not put the first-entry figures back
+          const moved = existing.find((e) => e.id === id)?.values.openingMtr != null;
+          const { purchaseMtr, costPerMtr, ...other } = v as Record<string, unknown>;
+          await db
+            .update(schema.fabrics)
+            .set({ ...other, ...(moved ? {} : { purchaseMtr, costPerMtr }), updatedAt: new Date() } as never)
+            .where(eq(schema.fabrics.id, id));
         },
       });
       report["Fabric Stock"] = statLine(stats);

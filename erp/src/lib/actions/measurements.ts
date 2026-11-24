@@ -7,11 +7,14 @@ import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { LEGACY_GARMENTS } from "@/lib/measurements";
+import { wearerFor } from "@/lib/wearer-db";
 import { fail, ok, optText, reqDate, zodError, type Result } from "./util";
 
 const MeasurementInput = z.object({
   id: z.number().int().optional(),
   customerId: z.number().int().positive("Choose a customer"),
+  /** Whose measurements (empty = the customer's Self wearer). */
+  wearerId: z.number().int().positive().nullable().optional(),
   date: reqDate,
   garmentType: z.string().min(1, "Choose the garment type"),
   size: optText,
@@ -34,7 +37,7 @@ export async function saveMeasurement(input: MeasurementInput): Promise<Result<{
     const { Sleeve, ...others } = values;
     values = { ...others, [legacy.sleeve]: Sleeve };
   }
-  const d = { ...rest, garmentType: legacy?.to ?? rest.garmentType };
+  const d = { ...rest, garmentType: legacy?.to ?? rest.garmentType, wearerId: await wearerFor(db, rest.customerId, rest.wearerId) };
   let row;
   if (id) {
     [row] = await db.update(schema.measurements).set({ ...d, values }).where(eq(schema.measurements.id, id)).returning();

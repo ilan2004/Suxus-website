@@ -10,14 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/app/field";
 import { ListSelect } from "@/components/app/search-select";
 import { CustomerPicker } from "./customer-picker";
+import { WearerField, useWearers } from "./wearer-picker";
 import type { CustomerLite } from "./customer-dialog";
 import { GARMENTS, GARMENT_TYPES, fieldsFor, wholeOf } from "@/lib/measurements";
 import { saveMeasurement, type MeasurementInput } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
+import { wearerTitle } from "@/lib/wearers";
 
 export type MeasurementRow = {
   id: number;
   customerId: number;
+  /** Whose measurements (null on rows saved before wearers = Self). */
+  wearerId?: number | null;
   date: string;
   garmentType: string;
   size: string | null;
@@ -57,13 +61,17 @@ export function MeasurementDialog({
     if (open) setV(blank());
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const people = useWearers(v.customerId || null);
+  const wearerId = v.wearerId ?? people.self?.id ?? null;
   const fields = GARMENTS[v.garmentType] ?? GARMENTS.Other;
-  const previous = history.find((h) => h.garmentType === v.garmentType && h.customerId === v.customerId && h.id !== v.id);
+  // "Copy last" only from the same person's earlier record of this garment
+  const sameWearer = (h: MeasurementRow) => (h.wearerId ?? null) === (wearerId ?? null) || (!h.wearerId && wearerId === people.self?.id);
+  const previous = history.find((h) => h.garmentType === v.garmentType && h.customerId === v.customerId && h.id !== v.id && sameWearer(h));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const r = await saveMeasurement(v);
+      const r = await saveMeasurement({ ...v, wearerId });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Measurements saved");
       onOpenChange(false);
@@ -74,7 +82,10 @@ export function MeasurementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{v.id ? "Edit measurements" : "New measurements"}</DialogTitle>
+          <DialogTitle>
+            {v.id ? "Edit measurements" : "New measurements"}
+            {people.many && wearerId && <span className="ml-2 text-base font-normal text-muted-foreground">· {wearerTitle(people.wearers.find((w) => w.id === wearerId) ?? { name: "", relation: "", isSelf: true })}</span>}
+          </DialogTitle>
           <DialogDescription>All values in inches · അളവുകൾ ഇഞ്ചിൽ</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
@@ -85,10 +96,11 @@ export function MeasurementDialog({
                   customers={customers}
                   types={customerTypes}
                   value={v.customerId || null}
-                  onChange={(c) => setV((s) => ({ ...s, customerId: c?.id ?? 0 }))}
+                  onChange={(c) => setV((s) => ({ ...s, customerId: c?.id ?? 0, wearerId: null }))}
                 />
               </Field>
             )}
+            <WearerField customerId={v.customerId || null} value={wearerId} onChange={(id) => setV((s) => ({ ...s, wearerId: id }))} hook={people} />
             <Field label="Garment" ml="ഗാർമെന്റ് തരം" required>
               <ListSelect items={GARMENT_TYPES} value={v.garmentType} onChange={(g) => setV((s) => ({ ...s, garmentType: g ?? "Other" }))} />
             </Field>
@@ -127,16 +139,10 @@ export function MeasurementDialog({
                   // Part-of-whole (chest): show the whole as it is typed — worked out, never stored
                   hint={f.part ? (v.values[f.key] != null ? `${v.values[f.key]} → ${f.part.whole} ${wholeOf(f, v.values[f.key])} in` : `× ${f.part.factor}${f.part.add ? ` + ${f.part.add}` : ""} = ${f.part.whole}`) : undefined}
                 >
-                  <Input
-                    type="number"
-                    inputMode="decimal"
-                    step="0.25"
-                    min={0}
-                    value={v.values[f.key] ?? ""}
-                    onChange={(e) =>
-                      setV((s) => ({ ...s, values: { ...s.values, [f.key]: e.target.value === "" ? null : Number(e.target.value) } }))
-                    }
-                    className="text-right font-medium tabular-nums"
+                  <MeasureInput
+                    value={v.values[f.key] ?? null}
+                    onChange={(n) => setV((s) => ({ ...s, values: { ...s.values, [f.key]: n } }))}
+                    label={f.en}
                   />
                 </Field>
               ))}
@@ -183,5 +189,62 @@ export function MeasurementCard({ m, onEdit }: { m: MeasurementRow; onEdit?: () 
       </dl>
       {m.remarks && <p className="mt-3 text-xs text-muted-foreground">{m.remarks}</p>}
     </button>
+  );
+}
+
+/**
+ * A measurement box. Tapping into a filled box selects the whole value, so the first key typed replaces it
+ * (no cursor at the start, no digits stuck in front of the old number). Text input with the decimal keypad:
+ * a number input cannot be reliably selected on phones.
+ */
+function MeasureInput({ value, onChange, label }: { value: number | null; onChange: (n: number | null) => void; label: string }) {
+  const [text, setText] = React.useState(value == null ? "" : String(value));
+  const focused = React.useRef(false);
+  const justFocused = React.useRef(false);
+  // Follow outside changes ("Copy last") while the box is not being typed in
+  React.useEffect(() => {
+    if (!focused.current) setText(value == null ? "" : String(value));
+  }, [value]);
+  const typedSinceFocus = React.useRef(false);
+  const selectAll = (el: HTMLInputElement) => {
+    typedSinceFocus.current = false;
+    el.select();
+    // Phones place the caret after focus — select again once the tap has finished, unless typing already began
+    requestAnimationFrame(() => {
+      if (!typedSinceFocus.current && document.activeElement === el) el.setSelectionRange(0, el.value.length);
+    });
+  };
+  return (
+    <Input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      aria-label={label}
+      value={text}
+      onFocus={(e) => {
+        focused.current = true;
+        justFocused.current = true;
+        selectAll(e.currentTarget);
+      }}
+      onMouseUp={(e) => {
+        // the mouse-up of the focusing tap would otherwise drop the selection
+        if (justFocused.current) e.preventDefault();
+        justFocused.current = false;
+      }}
+      onBlur={() => {
+        focused.current = false;
+        setText(value == null ? "" : String(value));
+      }}
+      onChange={(e) => {
+        // digits and one decimal point only
+        typedSinceFocus.current = true;
+        let t = e.target.value.replace(",", ".").replace(/[^\d.]/g, "");
+        const dot = t.indexOf(".");
+        if (dot >= 0) t = t.slice(0, dot + 1) + t.slice(dot + 1).replace(/\./g, "");
+        setText(t);
+        onChange(t === "" || t === "." ? null : Number(t));
+      }}
+      className="text-right font-medium tabular-nums"
+    />
   );
 }

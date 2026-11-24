@@ -132,11 +132,15 @@ export async function GET(req: NextRequest) {
     { header: "Tailor", key: "tailorName" }, { header: "Urgency", key: "urgency" },
   ], [...orders].reverse());
 
-  const ms = await db.select({ m: s.measurements, name: s.customers.name, phone: s.customers.phone }).from(s.measurements).innerJoin(s.customers, eq(s.customers.id, s.measurements.customerId));
+  const ms = await db
+    .select({ m: s.measurements, name: s.customers.name, phone: s.customers.phone, wearer: s.wearers.name, relation: s.wearers.relation, school: s.wearers.school, isSelf: s.wearers.isSelf })
+    .from(s.measurements)
+    .innerJoin(s.customers, eq(s.customers.id, s.measurements.customerId))
+    .leftJoin(s.wearers, eq(s.wearers.id, s.measurements.wearerId));
   sheet(wb, "Measurements", "MEASUREMENTS (inches)", [
-    { header: "Customer", key: "name", width: 20 }, { header: "Phone", key: "phone" }, { header: "Date", key: "date", date: true }, { header: "Garment Type", key: "garmentType", width: 20 },
+    { header: "Customer", key: "name", width: 20 }, { header: "Phone", key: "phone" }, { header: "Wearer", key: "wearer", width: 24 }, { header: "Date", key: "date", date: true }, { header: "Garment Type", key: "garmentType", width: 20 },
     { header: "Size", key: "size" }, { header: "Fit", key: "fit" }, { header: "Measurements", key: "values", width: 60 }, { header: "Remarks", key: "remarks", width: 30 },
-  ], ms.map((x) => ({ ...x.m, name: x.name, phone: x.phone, values: fieldsFor(x.m.garmentType, x.m.values).filter((f) => x.m.values[f.key] != null).map((f) => `${f.part ? f.key : f.en} ${measureText(f, x.m.values[f.key])}`).join(", ") })));
+  ], ms.map((x) => ({ ...x.m, name: x.name, phone: x.phone, wearer: !x.wearer || x.isSelf ? "Self" : [x.wearer, [x.relation, x.school].filter(Boolean).join(", ")].filter(Boolean).join(" — "), values: fieldsFor(x.m.garmentType, x.m.values).filter((f) => x.m.values[f.key] != null).map((f) => `${f.part ? f.key : f.en} ${measureText(f, x.m.values[f.key])}`).join(", ") })));
 
   const bulkLines = await db
     .select({ orderNo: s.bulkOrders.orderNo, date: s.bulkOrders.date, institution: s.bulkOrders.institution, contact: s.bulkOrders.contactPerson, phone: s.bulkOrders.phone, fabricBy: s.bulkOrders.fabricBy, item: s.bulkOrderItems.item, description: s.bulkOrderItems.description, size: s.bulkOrderItems.size, qty: s.bulkOrderItems.qty, rate: s.bulkOrderItems.rate, amount: s.bulkOrderItems.amount, delivery: s.bulkOrders.deliveryDate, status: s.bulkOrders.status })
@@ -205,7 +209,7 @@ export async function GET(req: NextRequest) {
     ...assets.map((a) => ({ ...a, total: a.qty * a.unitValue })),
     ...fabrics
       .filter((f) => f.broughtInBy)
-      .map((f) => ({ assetType: "Fabric Stock (from Fabric Stock)", description: `${f.code} ${f.brand}${f.shade ? " · " + f.shade : ""}`, qty: f.purchaseMtr, unitValue: f.costPerMtr, total: f.purchaseMtr * f.costPerMtr, ownedBy: f.broughtInBy, valuationDate: f.purchaseDate, remarks: f.remarks })),
+      .map((f) => ({ assetType: "Fabric Stock (from Fabric Stock)", description: `${f.code} ${f.brand}${f.shade ? " · " + f.shade : ""}`, qty: f.openingMtr ?? f.purchaseMtr, unitValue: f.openingCostPerMtr ?? f.costPerMtr, total: (f.openingMtr ?? f.purchaseMtr) * (f.openingCostPerMtr ?? f.costPerMtr), ownedBy: f.broughtInBy, valuationDate: f.purchaseDate, remarks: f.remarks })),
   ]);
 
   const cash = await db.select().from(s.cashBook).orderBy(asc(s.cashBook.date), asc(s.cashBook.id));

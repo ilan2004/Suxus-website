@@ -134,6 +134,34 @@
       "when": 1795442792182,
       "tag": "0018_fabric_pattern_colour",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1795490021621,
+      "tag": "0019_fabric_stock_moves",
+      "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795492109452,
+      "tag": "0020_wearers",
+      "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1795494216257,
+      "tag": "0021_simple_measure",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "7",
+      "when": 1795496617634,
+      "tag": "0022_job_slip",
+      "breakpoints": true
     }
   ]
 }

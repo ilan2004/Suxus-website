@@ -7,6 +7,7 @@ import { getOrderFull } from "@/lib/queries";
 import { getSettings } from "@/lib/settings";
 import { OrderView } from "./order-view";
 import { jobSlipFileName, jobSlipPages, jobSlipToken } from "@/lib/job-slip";
+import { orderFabricPlan } from "@/lib/order-fabric";
 
 export default async function OrderPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ print?: string }> }) {
   const session = await requireUser();
@@ -39,8 +40,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
     .where(eq(schema.jobSlipEvents.orderId, order.id))
     .orderBy(desc(schema.jobSlipEvents.id))
     .limit(200);
+  // Fabric requirement per garment + totals per fabric (estimate; stock is reduced only by the bill)
+  const fabricPlan = await orderFabricPlan(order);
   return (
     <OrderView
+      fabricPlan={fabricPlan}
       order={order}
       shop={settings.shop}
       statuses={settings.lists.status}

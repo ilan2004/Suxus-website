@@ -34,7 +34,7 @@ const OrderInput = z.object({
   remarks: optText,
   items: z
     // Each item has its own tailor (piece-rate wages follow the item); empty = not given out yet
-    .array(z.object({ id: optId, item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId }))
+    .array(z.object({ id: optId, item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId, fabricId: optId }))
     .min(1, "Add at least one item"),
   advance: money,
   advanceMode: z.string().default("Cash"),
@@ -107,6 +107,12 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
         } else savedIds.push((await tx.insert(schema.orderItems).values(rows[n]).returning({ id: schema.orderItems.id }))[0].id);
       }
       if (hasWearers) for (const [n, itemId] of savedIds.entries()) await tx.update(orderItemsExt).set({ wearerId: wearerIds[n] }).where(eq(orderItemsExt.id, itemId));
+      // Which fabric each garment is cut from (fabric requirement estimate). Never touches stock: only bills do.
+      if ((await features()).itemFabric) {
+        await tx.delete(schema.orderItemFabrics).where(inArray(schema.orderItemFabrics.orderItemId, savedIds));
+        const pairs = savedIds.map((itemId, n) => ({ orderItemId: itemId, fabricId: d.items[n].fabricId ?? null })).filter((x): x is { orderItemId: number; fabricId: number } => !!x.fabricId);
+        if (pairs.length) await tx.insert(schema.orderItemFabrics).values(pairs);
+      }
       const gone = existing.filter((x) => !keep.has(x));
       if (gone.length) await tx.delete(schema.orderItems).where(inArray(schema.orderItems.id, gone));
 

@@ -1,5 +1,6 @@
 import "server-only";
 import { eq, inArray } from "drizzle-orm";
+import { DEFAULT_FABRIC_REQUIREMENT, type FabricRequirementTables } from "./fabric-requirement";
 import { getDb, schema } from "./db";
 import {
   DEFAULT_COMPOSITIONS,
@@ -23,6 +24,8 @@ export type AppSettings = {
   measureOrder: Record<string, string[]>;
   /** Simple mode options. autoAdvance: move to the next field by itself after a pause (OFF — Next only). */
   measureOptions: { autoAdvance: boolean };
+  /** Settings → Fabric requirement: metres per garment (shirt chest / length tables, pant), per fabric width */
+  fabricRequirement: FabricRequirementTables;
 };
 
 const DEFAULTS: AppSettings = {
@@ -34,6 +37,7 @@ const DEFAULTS: AppSettings = {
   sizeChart: DEFAULT_SIZE_CHART,
   measureOrder: {},
   measureOptions: { autoAdvance: false },
+  fabricRequirement: DEFAULT_FABRIC_REQUIREMENT,
 };
 
 export async function getSettings(): Promise<AppSettings> {

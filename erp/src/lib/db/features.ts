@@ -9,14 +9,16 @@ import { getDb } from "./index";
  *   wearers  0020  Wearers                           wearers, measurements.wearer_id, order_items.wearer_id
  *   simple   0021  Simple measurement mode           staff.simple_mode, measurement_drafts
  *   jobSlip  0022  Bundle label + job slip PDF       job_slip_links, job_slip_events
+ *   itemFabric 0023 Fabric per order item (fabric requirement)   order_item_fabrics
  */
-export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean };
+export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean };
 
 const NEEDS: Record<keyof Features, string[]> = {
   stock: ["fabrics.opening_mtr", "fabrics.opening_cost_per_mtr", "fabric_stock_moves.id"],
   wearers: ["wearers.id", "measurements.wearer_id", "order_items.wearer_id"],
   simple: ["staff.simple_mode", "measurement_drafts.id"],
   jobSlip: ["job_slip_links.token", "job_slip_events.id"],
+  itemFabric: ["order_item_fabrics.order_item_id", "order_item_fabrics.fabric_id"],
 };
 
 const g = globalThis as unknown as { __suxusFeatures?: { at: number; f: Features } };
@@ -25,11 +27,11 @@ export async function features(): Promise<Features> {
   const c = g.__suxusFeatures;
   const all = c && Object.values(c.f).every(Boolean);
   if (c && (all || Date.now() - c.at < 60_000)) return c.f;
-  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false };
+  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false };
   try {
     const db = await getDb();
     const res = await db.execute(sql`select table_name || '.' || column_name as k from information_schema.columns where table_schema = current_schema()
-      and table_name in ('fabrics', 'fabric_stock_moves', 'wearers', 'measurements', 'order_items', 'staff', 'measurement_drafts', 'job_slip_links', 'job_slip_events')`);
+      and table_name in ('fabrics', 'fabric_stock_moves', 'wearers', 'measurements', 'order_items', 'staff', 'measurement_drafts', 'job_slip_links', 'job_slip_events', 'order_item_fabrics')`);
     const rows = (Array.isArray(res) ? res : (res as { rows: unknown[] }).rows) as { k: string }[];
     const have = new Set(rows.map((r) => r.k));
     f = Object.fromEntries(Object.entries(NEEDS).map(([k, cols]) => [k, cols.every((x) => have.has(x))])) as Features;

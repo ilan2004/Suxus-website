@@ -32,7 +32,7 @@ export default async function EditOrderPage({ params }: { params: Promise<{ id: 
           broughtById: order.broughtById,
           discount: order.discount,
           remarks: order.remarks,
-          items: order.items.map((i) => ({ id: i.id, item: i.item, qty: i.qty, rate: i.rate, tailorId: i.tailorId, wearerId: i.wearerId })),
+          items: order.items.map((i) => ({ id: i.id, item: i.item, qty: i.qty, rate: i.rate, tailorId: i.tailorId, wearerId: i.wearerId, fabricId: i.fabricId })),
         }}
       />
     </>

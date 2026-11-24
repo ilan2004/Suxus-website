@@ -30,7 +30,7 @@ export async function GET() {
       const { getDb } = await import("@/lib/db");
       const db = await getDb();
       const r = await db.execute(sql`select count(*)::int as n from information_schema.tables where table_schema = 'public'`);
-      const rows = (r as unknown as { n: number }[]) ?? [];
+      const rows = (Array.isArray(r) ? r : ((r as unknown as { rows?: { n: number }[] }).rows ?? [])) as { n: number }[];
       out.database = "connected";
       out.tables = rows[0]?.n ?? "?";
       if (!out.tables || out.tables === 0) out.hint = "Connected but no tables — the build did not run migrations. Check DATABASE_URL_DIRECT and redeploy.";

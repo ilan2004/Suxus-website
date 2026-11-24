@@ -4,6 +4,7 @@ import fs from "node:fs";
 import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
 import { seedDefaults } from "./seed";
+import { pgConnection } from "./pg-config";
 
 export type DB = ReturnType<typeof drizzlePg<typeof schema>>;
 export type Tx = Parameters<Parameters<DB["transaction"]>[0]>[0];
@@ -29,7 +30,8 @@ async function create(): Promise<DB> {
     const pg = await import("pg");
     const Pool = pg.Pool ?? pg.default.Pool;
     const pool = new Pool({
-      connectionString: url,
+      // same TLS behaviour as the previous client (see pg-config.ts)
+      ...pgConnection(url),
       max: 3,
       idleTimeoutMillis: 5_000,
       connectionTimeoutMillis: 10_000,

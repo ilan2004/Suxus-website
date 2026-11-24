@@ -236,10 +236,18 @@ export async function getOrderFull(id: number) {
         .from(schema.wearers)
         .where(inArray(schema.wearers.id, wearerIds))
     : [];
+  // Which fabric each garment is cut from (fabric requirement) — none before that database update
+  const fabricOf = new Map<number, number>();
+  if (items.length && (await features()).itemFabric)
+    for (const r of await db
+      .select({ itemId: schema.orderItemFabrics.orderItemId, fabricId: schema.orderItemFabrics.fabricId })
+      .from(schema.orderItemFabrics)
+      .where(inArray(schema.orderItemFabrics.orderItemId, items.map((i) => i.id))))
+      fabricOf.set(r.itemId, r.fabricId);
   const itemsWithTailor = items.map((i) => {
     const w = itemWearers.find((x) => x.id === i.wearerId) ?? null;
     // wearerName: whose garment, as printed for the tailor (Self = the customer's own name)
-    return { ...i, tailor: itemPeople.find((p) => p.id === i.tailorId)?.name ?? null, wearer: w, wearerName: w ? (w.isSelf ? (order.customerName ?? "Self") : w.name) : null };
+    return { ...i, fabricId: fabricOf.get(i.id) ?? null, tailor: itemPeople.find((p) => p.id === i.tailorId)?.name ?? null, wearer: w, wearerName: w ? (w.isSelf ? (order.customerName ?? "Self") : w.name) : null };
   });
   const ids = [order.tailorId, order.broughtById].filter(Boolean) as number[];
   const people = ids.length ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, ids)) : [];

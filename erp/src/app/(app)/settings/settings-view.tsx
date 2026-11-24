@@ -18,6 +18,8 @@ import { TemplatesTab } from "./templates-tab";
 import { UsersTab } from "./users-tab";
 import { FabricPhotosTab, type PhotoLogRow } from "./fabric-photos-tab";
 import { MeasureOrderTab } from "./measure-order-tab";
+import { FabricRequirementTab } from "./fabric-requirement-tab";
+import { DEFAULT_FABRIC_REQUIREMENT } from "@/lib/fabric-requirement";
 import type { UserRow } from "@/lib/actions/users";
 
 function useSave() {
@@ -33,7 +35,7 @@ function useSave() {
   return { pending, save };
 }
 
-const TABS = ["shop", "lists", "rates", "codes", "slabs", "templates", "photos", "measure", "users", "import"];
+const TABS = ["shop", "lists", "rates", "codes", "slabs", "templates", "photos", "measure", "fabric-req", "users", "import"];
 
 export function SettingsView({
   settings,
@@ -66,6 +68,9 @@ export function SettingsView({
         <TabsTrigger value="measure">
           Measuring order <span className="ml ml-1">അളക്കുന്ന ക്രമം</span>
         </TabsTrigger>
+        <TabsTrigger value="fabric-req">
+          Fabric requirement <span className="ml ml-1">തുണിയുടെ അളവ്</span>
+        </TabsTrigger>
         <TabsTrigger value="photos">
           Fabric photos <span className="ml ml-1">തുണി ഫോട്ടോ</span>
         </TabsTrigger>
@@ -96,6 +101,9 @@ export function SettingsView({
       </TabsContent>
       <TabsContent value="measure">
         <MeasureOrderTab value={settings.measureOrder ?? {}} options={settings.measureOptions ?? { autoAdvance: false }} />
+      </TabsContent>
+      <TabsContent value="fabric-req">
+        <FabricRequirementTab value={settings.fabricRequirement ?? DEFAULT_FABRIC_REQUIREMENT} />
       </TabsContent>
       <TabsContent value="photos">
         <FabricPhotosTab log={photoLog} />

@@ -22,6 +22,8 @@ import type { OrderFull } from "@/lib/queries";
 import type { ShopInfo } from "@/lib/defaults";
 import { cn, fmtDate, num, rupees, today, waLink } from "@/lib/utils";
 import { JobSlipActions, type SlipLink } from "@/components/app/job-slip-actions";
+import type { OrderFabricPlan } from "@/lib/order-fabric";
+import { metres, requirementText, shortText } from "@/lib/fabric-requirement";
 
 const FLOW = ["Booked", "Cut", "Stitching", "Ready", "Delivered"];
 
@@ -38,6 +40,7 @@ export function OrderView({
   isPartner,
   slips,
   slipLog,
+  fabricPlan,
 }: {
   order: OrderFull;
   shop: ShopInfo;
@@ -53,6 +56,8 @@ export function OrderView({
   slips: { order: SlipLink; items: Record<number, SlipLink> };
   /** Labels printed, PDFs viewed / shared — newest first */
   slipLog: { id: number; action: string; via: string; staffName: string | null; detail: string | null; at: string }[];
+  /** Fabric requirement per item and totals per fabric */
+  fabricPlan?: OrderFabricPlan;
 }) {
   const router = useRouter();
   const [payOpen, setPayOpen] = React.useState<false | "pay" | "deliver">(false);
@@ -289,6 +294,7 @@ export function OrderView({
                   {/* Bundle label + job slip PDF for this garment */}
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={5} className="pt-0 pb-3">
+                      {fabricPlan?.items[i.id] && <ItemFabricReq plan={fabricPlan.items[i.id]} qty={i.qty} totals={fabricPlan.totals} />}
                       {slips.items[i.id] && <JobSlipActions orderId={order.id} itemId={i.id} link={slips.items[i.id]} />}
                     </TableCell>
                   </TableRow>
@@ -330,6 +336,23 @@ export function OrderView({
                 All job slips ({order.items.length} pages) <span className="ml">എല്ലാ ജോബ് സ്ലിപ്പുകളും</span>
               </span>
               <JobSlipActions orderId={order.id} link={slips.order} className="ml-auto" />
+            </div>
+          )}
+          {fabricPlan && fabricPlan.totals.length > 0 && order.items.length > 1 && (
+            <div className="rounded-xl border bg-card px-4 py-3 text-sm" data-testid="fabric-totals">
+              <p className="font-medium">
+                Fabric for this order <span className="ml">ഈ ഓർഡറിന് വേണ്ട തുണി</span>
+              </p>
+              {fabricPlan.totals.map((t) => (
+                <p key={t.fabric.id} className={cn("flex flex-wrap justify-between gap-2 tabular-nums", t.short && "font-semibold text-warning")}>
+                  <span>
+                    {t.fabric.code} · {t.fabric.name} <span className="text-xs text-muted-foreground">({t.garments} pc)</span>
+                  </span>
+                  <span>
+                    {metres(t.need)} m needed · {metres(t.available)} m available {t.short ? "— short" : "✓"}
+                  </span>
+                </p>
+              ))}
             </div>
           )}
           <SlipRecord log={slipLog} />
@@ -688,5 +711,35 @@ function SlipRecord({ log }: { log: { id: number; action: string; via: string; s
         ))}
       </ul>
     </details>
+  );
+}
+
+/** Under a garment on the order: metres needed (and which rule decided it), its fabric, and a warning if short. */
+function ItemFabricReq({ plan, qty, totals }: { plan: OrderFabricPlan["items"][number]; qty: number; totals: OrderFabricPlan["totals"] }) {
+  const { req, fabric } = plan;
+  if (!req) return null;
+  const total = fabric ? totals.find((t) => t.fabric.id === fabric.id) : undefined;
+  return (
+    <div className="mb-2 grid gap-1 text-sm" data-testid="fabric-req">
+      <p className="flex flex-wrap items-baseline gap-x-2">
+        {req.ok ? (
+          <>
+            <b className="font-ml">{requirementText(req, qty)}</b>
+            <span className="font-ml text-xs text-muted-foreground">
+              ({req.rule}
+              {req.sleeveGuessed ? ` · ഫുൾ കൈ കണക്കാക്കി — ഹാഫ് കൈ ${metres((req.halfPerPiece ?? 0) * qty)}` : ""})
+            </span>
+          </>
+        ) : (
+          <b className="font-ml text-warning">{req.missing}</b>
+        )}
+        {fabric && (
+          <span className="text-xs text-muted-foreground">
+            · {fabric.code} {fabric.name}
+          </span>
+        )}
+      </p>
+      {total?.short && <p className="w-fit rounded-md bg-warning/15 px-2 py-1 font-ml font-semibold">⚠ {shortText(total.available, total.need)}</p>}
+    </div>
   );
 }

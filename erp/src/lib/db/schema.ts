@@ -271,6 +271,20 @@ export const orderItemsColumns = () => ({
 export const orderItems = pgTable("order_items", orderItemsColumns());
 
 /**
+ * Which fabric each order item is cut from (optional) — for the fabric requirement estimate, the short-stock warning
+ * and the per-fabric totals. Its own table, so the order tables are untouched. Stock is NOT reduced by this: only bills
+ * reduce stock.
+ */
+export const orderItemFabrics = pgTable("order_item_fabrics", {
+  orderItemId: integer("order_item_id")
+    .primaryKey()
+    .references(() => orderItems.id, { onDelete: "cascade" }),
+  fabricId: integer("fabric_id")
+    .notNull()
+    .references(() => fabrics.id, { onDelete: "cascade" }),
+});
+
+/**
  * Job slip PDF links: one long random token per order item (its own page) or per order (all pages). Opening
  * /j/<token> returns that job slip PDF only — no login, nothing else reachable from it.
  */

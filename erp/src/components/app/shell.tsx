@@ -5,8 +5,9 @@ import { ChangePinDialog } from "@/components/app/change-pin-dialog";
 import * as React from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { BookOpen, Building2, KeyRound, LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus } from "lucide-react";
-import { NAV, type NavItem } from "@/lib/nav";
+import { BookOpen, Building2, KeyRound, LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus, Ruler } from "lucide-react";
+import { NAV, SIMPLE_MENU, type NavItem } from "@/lib/nav";
+import { setSimpleMode } from "@/lib/actions/profile";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -24,7 +25,7 @@ import { cn } from "@/lib/utils";
 import { logoutAction } from "@/app/login/actions";
 import { globalSearch, type SearchHit } from "@/lib/actions/search";
 
-type User = { name: string; fullName: string; role: Role };
+type User = { name: string; fullName: string; role: Role; simple?: boolean };
 
 function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
@@ -37,7 +38,17 @@ function NavList({ user, onNavigate }: { user: User; onNavigate?: () => void }) 
   const pathname = usePathname();
   return (
     <nav className="flex flex-col gap-5 px-3 py-4">
-      {NAV.map((group) => {
+      {user.simple && (
+        // Simple measurement mode: one short list, big rows
+        <ul className="grid gap-1">
+          {SIMPLE_MENU.map((href) => NAV.flatMap((g) => g.items).find((i) => i.href === href))
+            .filter((i): i is NavItem => !!i && (!i.perm || can(user.role, i.perm)))
+            .map((item) => (
+              <NavLink key={item.href} item={item} active={isActive(pathname, item.href)} onNavigate={onNavigate} big />
+            ))}
+        </ul>
+      )}
+      {!user.simple && NAV.map((group) => {
         const items = group.items.filter((i) => !i.perm || can(user.role, i.perm));
         if (!items.length) return null;
         return (
@@ -55,7 +66,7 @@ function NavList({ user, onNavigate }: { user: User; onNavigate?: () => void }) 
   );
 }
 
-function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean; onNavigate?: () => void }) {
+function NavLink({ item, active, onNavigate, big }: { item: NavItem; active: boolean; onNavigate?: () => void; big?: boolean }) {
   const Icon = item.icon;
   const inner = (
     <>
@@ -69,6 +80,7 @@ function NavLink({ item, active, onNavigate }: { item: NavItem; active: boolean;
   );
   const cls = cn(
     "group flex items-center gap-3 rounded-lg px-3 py-2 text-[13.5px] transition-colors",
+    big && "min-h-14 text-base",
     active ? "bg-sidebar-accent font-medium text-white" : "text-sidebar-foreground/85 hover:bg-sidebar-accent/60",
     item.soon && "pointer-events-none opacity-55",
   );
@@ -193,6 +205,7 @@ function CommandPalette({ user, open, setOpen }: { user: User; open: boolean; se
 }
 
 export function Shell({ user, children }: { user: User; children: React.ReactNode }) {
+  const router = useRouter();
   const [mobileOpen, setMobileOpen] = React.useState(false);
   const [cmdOpen, setCmdOpen] = React.useState(false);
   const [pinOpen, setPinOpen] = React.useState(false);
@@ -293,6 +306,16 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => setPinOpen(true)}>
                   <KeyRound /> Change my PIN
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onSelect={async () => {
+                    await setSimpleMode(!user.simple);
+                    router.push("/measurements");
+                    router.refresh();
+                  }}
+                >
+                  <Ruler /> {user.simple ? "Detailed measurement form" : "Simple measurement mode"}
+                  <span className="ml-auto font-[family-name:var(--font-ml)] text-[10px] text-muted-foreground">{user.simple ? "വിശദമായ" : "ലളിതമായ"}</span>
                 </DropdownMenuItem>
                 <form action={logoutAction}>
                   <DropdownMenuItem asChild>

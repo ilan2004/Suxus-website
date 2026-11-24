@@ -78,6 +78,8 @@ export const staff = pgTable("staff", {
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
   /** Bumped on PIN reset / role change / sign-in removed: signs that user out on every device. */
   sessionVersion: integer("session_version").notNull().default(0),
+  /** Simple measurement mode (ലളിതമായ അളവ് രീതി): one field at a time, big keypad, opens on Measurements. */
+  simpleMode: boolean("simple_mode").notNull().default(false),
   createdAt: created(),
   updatedAt: updated(),
 });
@@ -377,6 +379,35 @@ export const measurements = pgTable(
     updatedAt: updated(),
   },
   (t) => [index("measurements_customer_idx").on(t.customerId)],
+);
+
+/**
+ * A half-finished measurement in simple mode, saved after every field so a locked phone, a call or a closed
+ * app never loses work. One row per entry in progress; removed when the measurement is saved.
+ */
+export const measurementDrafts = pgTable(
+  "measurement_drafts",
+  {
+    id: serial("id").primaryKey(),
+    staffId: integer("staff_id")
+      .notNull()
+      .references(() => staff.id, { onDelete: "cascade" }),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "cascade" }),
+    /** Set when an existing record is being changed (null = a new record). */
+    measurementId: integer("measurement_id").references(() => measurements.id, { onDelete: "cascade" }),
+    garmentType: text("garment_type").notNull(),
+    size: text("size"),
+    fit: text("fit"),
+    remarks: text("remarks"),
+    values: jsonb("values").$type<Record<string, number | null>>().notNull().default(sql`'{}'::jsonb`),
+    /** The field being entered (index in the measuring order); = number of fields → the final check. */
+    step: integer("step").notNull().default(0),
+    updatedAt: updated(),
+  },
+  (t) => [index("measurement_drafts_staff_idx").on(t.staffId)],
 );
 
 /* ───────────────────────── Money out ───────────────────────── */

@@ -19,6 +19,8 @@ export type AppSettings = {
   pieceRates: Record<string, number>;
   slabs: typeof DEFAULT_SLABS;
   sizeChart: typeof DEFAULT_SIZE_CHART;
+  /** Simple mode: the order fields are measured in, per garment type (field keys). Empty = stored order. */
+  measureOrder: Record<string, string[]>;
 };
 
 const DEFAULTS: AppSettings = {
@@ -28,6 +30,7 @@ const DEFAULTS: AppSettings = {
   pieceRates: DEFAULT_PIECE_RATES,
   slabs: DEFAULT_SLABS,
   sizeChart: DEFAULT_SIZE_CHART,
+  measureOrder: {},
 };
 
 export async function getSettings(): Promise<AppSettings> {

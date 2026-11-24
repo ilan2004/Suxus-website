@@ -33,6 +33,7 @@ const schemas = {
     sizes: z.array(z.string()),
     rows: z.array(z.object({ label: z.string(), values: z.array(z.coerce.number<number>()) })),
   }),
+  measureOrder: z.record(z.string(), z.array(z.string())),
 } satisfies Record<keyof AppSettings, z.ZodType>;
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<Result<null>> {

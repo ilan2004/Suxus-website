@@ -15,6 +15,9 @@ import { fieldsFor, measureText } from "@/lib/measurements";
 import { formatPhone } from "@/lib/phone";
 import { wearerTitle, type WearerLite } from "@/lib/wearers";
 import { cn, fmtDate } from "@/lib/utils";
+import { History } from "lucide-react";
+import type { Draft } from "@/lib/actions/drafts";
+import { SimpleEntry, fromDraft } from "./simple/entry";
 
 type Row = MeasurementRow & { customerName: string; phone: string | null };
 type Person = { wearer: WearerLite; garments: Row[] };
@@ -36,11 +39,16 @@ export function MeasurementsView({
   rows,
   customers,
   wearers,
+  drafts = [],
+  order = {},
   lists,
 }: {
   rows: Row[];
   customers: CustomerLite[];
   wearers: WearerLite[];
+  /** The signed-in user's unfinished simple-mode entries */
+  drafts?: Draft[];
+  order?: Record<string, string[]>;
   lists: { customerType: string[]; fit: string[] };
 }) {
   const router = useRouter();
@@ -50,6 +58,12 @@ export function MeasurementsView({
   const [open, setOpen] = React.useState<Set<number>>(new Set());
   const [adding, setAdding] = React.useState<number | null>(null);
   const [limit, setLimit] = React.useState(PAGE);
+  const [resume, setResume] = React.useState<Draft | null>(null);
+  const draftWho = (d: Draft) => {
+    const c = customers.find((x) => x.id === d.customerId);
+    const w = wearers.find((x) => x.id === d.wearerId);
+    return `${w && !w.isSelf ? w.name : (c?.name ?? "")} · ${d.garmentType}`;
+  };
 
   const groups = React.useMemo(() => {
     const byCustomer = new Map<number, WearerLite[]>();
@@ -135,6 +149,33 @@ export function MeasurementsView({
         </Button>
       </div>
 
+      {drafts.length > 0 && (
+        <div className="grid gap-1.5 rounded-xl border border-warning/50 bg-warning/5 p-3">
+          <p className="text-sm font-medium">
+            Unfinished <span className="ml">തീരാത്തവ</span>
+          </p>
+          {drafts.map((d) => (
+            <button key={d.id} type="button" onClick={() => setResume(d)} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2 text-left text-sm hover:border-primary/40">
+              <History className="size-4 text-warning" />
+              <span className="flex-1 font-medium">{draftWho(d)}</span>
+              <span className="text-xs text-muted-foreground">Continue →</span>
+            </button>
+          ))}
+        </div>
+      )}
+      {resume && (
+        <SimpleEntry
+          initial={fromDraft(resume)}
+          who={draftWho(resume)}
+          order={order}
+          onClose={() => (setResume(null), router.refresh())}
+          onSaved={() => {
+            setResume(null);
+            toast.success("Measurements saved");
+            router.refresh();
+          }}
+        />
+      )}
       <div className="overflow-hidden rounded-xl border bg-card">
         {!shown.length && <p className="p-8 text-center text-sm text-muted-foreground">{q ? "No customer matches that search." : "No measurements saved yet."}</p>}
         <ul className="divide-y">

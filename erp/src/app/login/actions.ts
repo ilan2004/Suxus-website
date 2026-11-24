@@ -40,7 +40,8 @@ export async function loginAction(staffId: number, pin: string): Promise<{ error
   if (user.failedPins || user.lockedUntil) await db.update(schema.staff).set({ failedPins: 0, lockedUntil: null }).where(eq(schema.staff.id, user.id));
   await startSession(user);
   await audit(db, { id: user.id, name: displayNameOf(user), fullName: user.name, role: "staff", v: 0, exp: 0 }, "login", "staff", user.id);
-  redirect("/");
+  // Simple measurement mode: straight to Measurements (the cutting master's work), not the dashboard
+  redirect(user.simpleMode ? "/measurements" : "/");
 }
 
 export async function logoutAction() {

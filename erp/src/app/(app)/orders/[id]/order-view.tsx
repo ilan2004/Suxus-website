@@ -21,6 +21,7 @@ import { addOrderPayment, deleteOrder, deletePayment, setOrderStatus } from "@/l
 import type { OrderFull } from "@/lib/queries";
 import type { ShopInfo } from "@/lib/defaults";
 import { cn, fmtDate, num, rupees, today, waLink } from "@/lib/utils";
+import { JobSlipActions, type SlipLink } from "@/components/app/job-slip-actions";
 
 const FLOW = ["Booked", "Cut", "Stitching", "Ready", "Delivered"];
 
@@ -35,6 +36,8 @@ export function OrderView({
   customerTypes,
   autoPrint,
   isPartner,
+  slips,
+  slipLog,
 }: {
   order: OrderFull;
   shop: ShopInfo;
@@ -46,6 +49,10 @@ export function OrderView({
   customerTypes: string[];
   autoPrint: boolean;
   isPartner: boolean;
+  /** Job slip PDF links: the whole order, and each item */
+  slips: { order: SlipLink; items: Record<number, SlipLink> };
+  /** Labels printed, PDFs viewed / shared — newest first */
+  slipLog: { id: number; action: string; via: string; staffName: string | null; detail: string | null; at: string }[];
 }) {
   const router = useRouter();
   const [payOpen, setPayOpen] = React.useState<false | "pay" | "deliver">(false);
@@ -54,7 +61,6 @@ export function OrderView({
   const [justBooked] = React.useState(autoPrint);
   const [deleting, setDeleting] = React.useState(false);
   const printBill = () => window.open(`/print/order/${order.id}`, "_blank", "width=420,height=760");
-  const printJobSlip = () => window.open(`/print/job/${order.id}`, "_blank", "width=420,height=760");
 
   React.useEffect(() => {
     if (autoPrint) {
@@ -131,12 +137,7 @@ export function OrderView({
           <Button variant="outline" onClick={printBill}>
             <Printer /> Print
           </Button>
-          <Button variant="outline" onClick={() => window.open(`/print/garment-labels/${order.id}`, "_blank")}>
-            <Tag /> Garment labels
-          </Button>
-          <Button variant="outline" onClick={printJobSlip}>
-            <Ruler /> Job slip
-          </Button>
+
           <WhatsAppButtons
             phone={order.phone}
             name={order.orderNo}
@@ -257,7 +258,8 @@ export function OrderView({
               </TableHeader>
               <TableBody>
                 {order.items.map((i) => (
-                  <TableRow key={i.id}>
+                  <React.Fragment key={i.id}>
+                  <TableRow className="border-b-0">
                     <TableCell className="font-medium">
                       {i.item}
                       {order.showWearers && i.wearerName && (
@@ -284,6 +286,13 @@ export function OrderView({
                     <TableCell className="text-right tabular-nums">{rupees(i.rate)}</TableCell>
                     <TableCell className="text-right tabular-nums">{rupees(i.amount)}</TableCell>
                   </TableRow>
+                  {/* Bundle label + job slip PDF for this garment */}
+                  <TableRow className="hover:bg-transparent">
+                    <TableCell colSpan={5} className="pt-0 pb-3">
+                      {slips.items[i.id] && <JobSlipActions orderId={order.id} itemId={i.id} link={slips.items[i.id]} />}
+                    </TableCell>
+                  </TableRow>
+                  </React.Fragment>
                 ))}
                 {order.sale && (
                   <TableRow>
@@ -315,6 +324,15 @@ export function OrderView({
               </TableFooter>
             </Table>
           </div>
+          {order.items.length > 1 && slips.order.fileName && (
+            <div className="flex flex-wrap items-center gap-2 rounded-xl border bg-card px-4 py-3">
+              <span className="text-sm font-medium">
+                All job slips ({order.items.length} pages) <span className="ml">എല്ലാ ജോബ് സ്ലിപ്പുകളും</span>
+              </span>
+              <JobSlipActions orderId={order.id} link={slips.order} className="ml-auto" />
+            </div>
+          )}
+          <SlipRecord log={slipLog} />
           {!order.sale && order.workType === "Shop Fabric Stitching" && (
             <Button variant="outline" asChild className="w-fit">
               <Link href={`/sales/new?order=${order.id}${order.customerId ? `&customer=${order.customerId}` : ""}`}>
@@ -645,4 +663,30 @@ function fmtChange(iso: string) {
       .map((x) => [x.type, x.value]),
   );
   return `${p.day}-${p.month} ${p.hour}:${p.minute} ${String(p.dayPeriod ?? "").toLowerCase()}`;
+}
+
+const ACTION_LABEL: Record<string, string> = { label: "Label printed", view: "PDF opened", share: "PDF shared" };
+
+/** Who printed a bundle label, opened or shared a job slip — and when (for "I never got the slip"). */
+function SlipRecord({ log }: { log: { id: number; action: string; via: string; staffName: string | null; detail: string | null; at: string }[] }) {
+  if (!log.length) return null;
+  return (
+    <details className="rounded-xl border bg-card px-4 py-3 text-sm">
+      <summary className="cursor-pointer font-medium">
+        Job slip record <span className="ml">ജോബ് സ്ലിപ്പ് രേഖ</span> <span className="text-xs font-normal text-muted-foreground">· {log.length}</span>
+      </summary>
+      <ul className="mt-2 grid gap-1">
+        {log.map((e) => (
+          <li key={e.id} className="flex flex-wrap gap-x-2">
+            <span className="w-36 shrink-0 tabular-nums text-muted-foreground">
+              {new Date(e.at).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "numeric", minute: "2-digit" })}
+            </span>
+            <span className="font-medium">{ACTION_LABEL[e.action] ?? e.action}</span>
+            <span>{e.detail}</span>
+            <span className="text-muted-foreground">· {e.via === "link" ? "from the shared link (no sign-in)" : `by ${e.staffName ?? "?"}`}</span>
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }

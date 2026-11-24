@@ -8,6 +8,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { BookOpen, Building2, KeyRound, LogOut, Menu, Moon, Plus, Search, Sun, Scissors, ShoppingBag, UserPlus, Ruler } from "lucide-react";
 import { NAV, SIMPLE_MENU, type NavItem } from "@/lib/nav";
 import { setSimpleMode } from "@/lib/actions/profile";
+import { BundleScanListener } from "./bundle-scan-listener";
 import { Logo } from "./logo";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
@@ -213,6 +214,7 @@ export function Shell({ user, children }: { user: User; children: React.ReactNod
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
+      <BundleScanListener />
       {/* Desktop sidebar */}
       <aside className="no-print sticky top-0 hidden h-dvh flex-col overflow-y-auto bg-sidebar text-sidebar-foreground lg:flex">
         <div className="flex h-16 items-center border-b border-sidebar-border px-5">

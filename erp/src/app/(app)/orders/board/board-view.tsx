@@ -9,6 +9,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import { setOrderStatus } from "@/lib/actions/orders";
 import { cn } from "@/lib/utils";
+import { ScanBundleButton } from "@/components/app/scan-bundle-button";
 
 export type BoardOrder = {
   id: number;
@@ -113,6 +114,7 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
     <div className="grid gap-3">
       {/* Summary + filters */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        <ScanBundleButton className="order-last ml-auto sm:order-none" />
         <p className="text-sm">
           <span className="font-semibold">{running.length} orders running</span>
           <span className="text-muted-foreground"> · </span>

@@ -9,25 +9,8 @@ import { saveDraft, deleteDraft, type Draft } from "@/lib/actions/drafts";
 import { deleteMeasurement, saveMeasurement } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
 
-/** Big Malayalam name per field key (part-of-whole fields carry a "how to measure" text instead of a name). */
-export const KEY_ML: Record<string, string> = {
-  Length: "നീളം",
-  Chest: "നെഞ്ച്",
-  Waist: "അര",
-  Shoulder: "തോൾ",
-  Seat: "സീറ്റ്",
-  Thigh: "തുട",
-  Knee: "മുട്ട്",
-  Bottom: "ബോട്ടം",
-  Hip: "ഇടുപ്പ്",
-  Sleeve: "കൈ നീളം",
-  Armhole: "കൈക്കുഴി",
-  Neck: "കഴുത്ത്",
-  Cuff: "കഫ്",
-  Ankle: "കണങ്കാൽ",
-};
-export const mlOf = (f: GarmentField) => (f.part ? (KEY_ML[f.key] ?? f.ml) : f.ml || KEY_ML[f.key] || f.en);
-export const enOf = (f: GarmentField) => (f.part ? f.key : f.en);
+export { KEY_ML, mlOf, enOf } from "@/lib/measurements";
+import { mlOf, enOf } from "@/lib/measurements";
 const fmt = (n: number | null | undefined) => (n == null ? "" : String(Math.round(n * 100) / 100));
 
 /** How long to wait after the last tap before moving to the next field (time to type a second digit). */

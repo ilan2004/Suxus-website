@@ -272,6 +272,47 @@ export const orderItems = pgTable("order_items", {
   wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
 });
 
+/**
+ * Job slip PDF links: one long random token per order item (its own page) or per order (all pages). Opening
+ * /j/<token> returns that job slip PDF only — no login, nothing else reachable from it.
+ */
+export const jobSlipLinks = pgTable(
+  "job_slip_links",
+  {
+    id: serial("id").primaryKey(),
+    /** item | order */
+    kind: text("kind").notNull(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "cascade" }),
+    token: text("token").notNull(),
+    createdAt: created(),
+  },
+  (t) => [uniqueIndex("job_slip_links_token_idx").on(t.token), uniqueIndex("job_slip_links_ref_idx").on(t.kind, t.orderId, t.orderItemId)],
+);
+
+/** Every bundle label printed and every job slip PDF viewed or shared — with when and who. */
+export const jobSlipEvents = pgTable(
+  "job_slip_events",
+  {
+    id: serial("id").primaryKey(),
+    orderId: integer("order_id")
+      .notNull()
+      .references(() => orders.id, { onDelete: "cascade" }),
+    orderItemId: integer("order_item_id").references(() => orderItems.id, { onDelete: "set null" }),
+    /** label | view | share */
+    action: text("action").notNull(),
+    /** app = signed-in user · link = opened from a shared link without signing in */
+    via: text("via").notNull().default("app"),
+    staffName: text("staff_name"),
+    /** What was printed / opened, e.g. "Shirt — Anas" (kept if the item is later removed) */
+    detail: text("detail"),
+    at: created(),
+  },
+  (t) => [index("job_slip_events_order_idx").on(t.orderId)],
+);
+
 /* ───────────────────────── Bulk / institution orders ───────────────────────── */
 
 export const bulkOrders = pgTable("bulk_orders", {

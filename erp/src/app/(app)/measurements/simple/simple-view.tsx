@@ -8,6 +8,8 @@ import { BarcodeScanner } from "@/components/app/barcode-scanner";
 import { CustomerDialog, type CustomerLite } from "@/components/forms/customer-dialog";
 import { AddPersonForm } from "@/components/forms/wearer-picker";
 import { deleteDraft, lookupCode, type Draft } from "@/lib/actions/drafts";
+import { jobSlipByCode } from "@/lib/actions/job-slip";
+import { parseItemCode } from "@/lib/job-slip-code";
 import { setSimpleMode } from "@/lib/actions/profile";
 import { GARMENT_TYPES, fromSizeChart, measuringOrder, wholeOf } from "@/lib/measurements";
 import { formatPhone } from "@/lib/phone";
@@ -204,6 +206,12 @@ export function SimpleMeasurements({
 
   const scanned = async (code: string) => {
     setScan(false);
+    // A bundle label → that garment's job slip PDF
+    if (parseItemCode(code)) {
+      const j = await jobSlipByCode(code);
+      if (!j.ok) return void toast.error(j.error);
+      return void (window.location.href = j.data.url);
+    }
     const r = await lookupCode(code);
     if (!r.ok) return void toast.error(r.error);
     open(r.data.customerId, r.data.wearerId);

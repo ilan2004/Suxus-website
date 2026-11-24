@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { z } from "zod";
 import { getSetting } from "@/lib/settings";
 import { getDb, schema } from "@/lib/db";
@@ -32,7 +32,7 @@ const OrderInput = z.object({
   remarks: optText,
   items: z
     // Each item has its own tailor (piece-rate wages follow the item); empty = not given out yet
-    .array(z.object({ item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId }))
+    .array(z.object({ id: optId, item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId }))
     .min(1, "Add at least one item"),
   advance: money,
   advanceMode: z.string().default("Cash"),
@@ -82,7 +82,6 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
         if (prev?.saleId && prev.saleId !== d.saleId) {
           await tx.update(schema.sales).set({ orderId: null }).where(eq(schema.sales.id, prev.saleId));
         }
-        await tx.delete(schema.orderItems).where(eq(schema.orderItems.orderId, order.id));
       } else {
         const orderNo = await nextDocNo(tx, "SO");
         [order] = await tx.insert(schema.orders).values({ ...values, orderNo, createdBy: user.name }).returning();
@@ -90,9 +89,19 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
 
       // Each item is someone's garment: one of the customer's wearers (empty = Self). Walk-ins without a customer have none.
       const wearerIds = await Promise.all(d.items.map((i) => (d.customerId ? wearerFor(tx, d.customerId, i.wearerId) : null)));
-      await tx.insert(schema.orderItems).values(
-        d.items.map((i, n) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null, wearerId: wearerIds[n] })),
-      );
+      const rows = d.items.map((i, n) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null, wearerId: wearerIds[n] }));
+      // Items keep their id when an order is edited: a printed bundle label (barcode = item id) and a shared
+      // job slip link stay valid. Changed items are updated, new ones added, removed ones deleted.
+      const existing = d.id ? (await tx.select({ id: schema.orderItems.id }).from(schema.orderItems).where(eq(schema.orderItems.orderId, order.id))).map((r) => r.id) : [];
+      const keep = new Set<number>();
+      for (const [n, i] of d.items.entries()) {
+        if (i.id && existing.includes(i.id) && !keep.has(i.id)) {
+          keep.add(i.id);
+          await tx.update(schema.orderItems).set(rows[n]).where(eq(schema.orderItems.id, i.id));
+        } else await tx.insert(schema.orderItems).values(rows[n]);
+      }
+      const gone = existing.filter((x) => !keep.has(x));
+      if (gone.length) await tx.delete(schema.orderItems).where(inArray(schema.orderItems.id, gone));
 
       if (d.saleId) {
         // Fabric is now billed through this order: link it and drop its separate cash entry.

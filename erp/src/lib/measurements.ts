@@ -118,3 +118,26 @@ export function fromSizeChart(garmentType: string, chart: { sizes: string[]; row
   }
   return out;
 }
+
+/** Big Malayalam name per field key (part-of-whole fields carry a "how to measure" text instead of a name). */
+export const KEY_ML: Record<string, string> = {
+  Length: "നീളം",
+  Chest: "നെഞ്ച്",
+  Waist: "അര",
+  Shoulder: "തോൾ",
+  Seat: "സീറ്റ്",
+  Thigh: "തുട",
+  Knee: "മുട്ട്",
+  Bottom: "ബോട്ടം",
+  Hip: "ഇടുപ്പ്",
+  Sleeve: "കൈ നീളം",
+  Armhole: "കൈക്കുഴി",
+  Neck: "കഴുത്ത്",
+  Cuff: "കഫ്",
+  Ankle: "കണങ്കാൽ",
+};
+export const mlOf = (f: GarmentField) => (f.part ? (KEY_ML[f.key] ?? f.ml) : f.ml || KEY_ML[f.key] || f.en);
+export const enOf = (f: GarmentField) => (f.part ? f.key : f.en);
+
+/** Malayalam for the derived whole of a part-of-whole field ("shirt round"). */
+export const WHOLE_ML: Record<string, string> = { "shirt round": "ഷർട്ട് ചുറ്റളവ്" };

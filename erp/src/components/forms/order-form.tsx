@@ -16,9 +16,9 @@ import type { CustomerLite } from "./customer-dialog";
 import { saveOrder, type OrderInput } from "@/lib/actions/orders";
 import { addDays, cn, fmtDate, num, round2, rupees, today } from "@/lib/utils";
 
-type Item = { key: string; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null };
+type Item = { key: string; /** existing order item (kept on save, so its bundle label stays valid) */ id?: number; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null };
 export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null };
-export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null }[] };
+export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null }[] };
 
 export function OrderForm({
   initial,
@@ -60,7 +60,7 @@ export function OrderForm({
   const [remarks, setRemarks] = React.useState(initial?.remarks ?? "");
   const [items, setItems] = React.useState<Item[]>(
     initial?.items?.length
-      ? initial.items.map((i) => ({ key: crypto.randomUUID(), item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null }))
+      ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null }))
       : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null }],
   );
   // People measured under this customer: the "whose garment" picker appears once there is more than Self
@@ -122,7 +122,7 @@ export function OrderForm({
         saleId: linked?.id ?? null,
         discount: Number(discount) || 0,
         remarks: remarks || null,
-        items: items.map((i) => ({ item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId, wearerId: customer ? whoOf(i) : null })),
+        items: items.map((i) => ({ id: i.id, item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId, wearerId: customer ? whoOf(i) : null })),
         advance: editing ? 0 : adv,
         advanceMode,
       });

@@ -13,6 +13,7 @@ import { round2, today } from "@/lib/utils";
 import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 import { recalcOrder } from "@/lib/order-calc";
+import { wearerFor } from "@/lib/wearer-db";
 
 const OrderInput = z.object({
   id: z.number().int().optional(),
@@ -31,7 +32,7 @@ const OrderInput = z.object({
   remarks: optText,
   items: z
     // Each item has its own tailor (piece-rate wages follow the item); empty = not given out yet
-    .array(z.object({ item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId }))
+    .array(z.object({ item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId }))
     .min(1, "Add at least one item"),
   advance: money,
   advanceMode: z.string().default("Cash"),
@@ -87,8 +88,10 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
         [order] = await tx.insert(schema.orders).values({ ...values, orderNo, createdBy: user.name }).returning();
       }
 
+      // Each item is someone's garment: one of the customer's wearers (empty = Self). Walk-ins without a customer have none.
+      const wearerIds = await Promise.all(d.items.map((i) => (d.customerId ? wearerFor(tx, d.customerId, i.wearerId) : null)));
       await tx.insert(schema.orderItems).values(
-        d.items.map((i) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null })),
+        d.items.map((i, n) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null, wearerId: wearerIds[n] })),
       );
 
       if (d.saleId) {

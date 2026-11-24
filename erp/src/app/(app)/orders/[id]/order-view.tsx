@@ -3,7 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, Check, CircleDollarSign, Loader2, MoreHorizontal, Pencil, Plus, Printer, Ruler, ShoppingBag, Trash2, Zap } from "lucide-react";
+import { ArrowLeft, Check, CircleDollarSign, Loader2, MoreHorizontal, Pencil, Plus, Printer, Ruler, ShoppingBag, Trash2, Zap, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -82,7 +82,7 @@ export function OrderView({
     fabricLines.length ? `\nFabric${order.sale ? ` (bill ${order.sale.billNo})` : ""}:` : "",
     ...fabricLines,
     `\nStitching:`,
-    ...order.items.map((i) => `• ${i.qty} × ${i.item}`),
+    ...order.items.map((i) => `• ${i.qty} × ${i.item}${i.wearer && !i.wearer.isSelf ? ` — ${i.wearer.name}` : ""}`),
     "",
     `Total: ₹${num(order.total)}`,
     order.paid > 0 ? `Advance paid: ₹${num(order.paid)}` : "",
@@ -130,6 +130,9 @@ export function OrderView({
         <div className="ml-auto flex flex-wrap gap-2">
           <Button variant="outline" onClick={printBill}>
             <Printer /> Print
+          </Button>
+          <Button variant="outline" onClick={() => window.open(`/print/garment-labels/${order.id}`, "_blank")}>
+            <Tag /> Garment labels
           </Button>
           <Button variant="outline" onClick={printJobSlip}>
             <Ruler /> Job slip
@@ -255,7 +258,15 @@ export function OrderView({
               <TableBody>
                 {order.items.map((i) => (
                   <TableRow key={i.id}>
-                    <TableCell className="font-medium">{i.item}</TableCell>
+                    <TableCell className="font-medium">
+                      {i.item}
+                      {order.showWearers && i.wearerName && (
+                        <span className="ml-2 rounded-full bg-gold/15 px-2 py-0.5 text-xs font-semibold">
+                          {i.wearerName}
+                          {i.wearer?.isSelf ? " (self)" : ""}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm">
                       {i.tailor ? (
                         isPartner && i.tailorId ? (

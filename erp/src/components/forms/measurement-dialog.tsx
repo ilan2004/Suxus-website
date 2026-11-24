@@ -10,14 +10,18 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/app/field";
 import { ListSelect } from "@/components/app/search-select";
 import { CustomerPicker } from "./customer-picker";
+import { WearerField, useWearers } from "./wearer-picker";
 import type { CustomerLite } from "./customer-dialog";
 import { GARMENTS, GARMENT_TYPES, fieldsFor, wholeOf } from "@/lib/measurements";
 import { saveMeasurement, type MeasurementInput } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
+import { wearerTitle } from "@/lib/wearers";
 
 export type MeasurementRow = {
   id: number;
   customerId: number;
+  /** Whose measurements (null on rows saved before wearers = Self). */
+  wearerId?: number | null;
   date: string;
   garmentType: string;
   size: string | null;
@@ -57,13 +61,17 @@ export function MeasurementDialog({
     if (open) setV(blank());
   }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const people = useWearers(v.customerId || null);
+  const wearerId = v.wearerId ?? people.self?.id ?? null;
   const fields = GARMENTS[v.garmentType] ?? GARMENTS.Other;
-  const previous = history.find((h) => h.garmentType === v.garmentType && h.customerId === v.customerId && h.id !== v.id);
+  // "Copy last" only from the same person's earlier record of this garment
+  const sameWearer = (h: MeasurementRow) => (h.wearerId ?? null) === (wearerId ?? null) || (!h.wearerId && wearerId === people.self?.id);
+  const previous = history.find((h) => h.garmentType === v.garmentType && h.customerId === v.customerId && h.id !== v.id && sameWearer(h));
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const r = await saveMeasurement(v);
+      const r = await saveMeasurement({ ...v, wearerId });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Measurements saved");
       onOpenChange(false);
@@ -74,7 +82,10 @@ export function MeasurementDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{v.id ? "Edit measurements" : "New measurements"}</DialogTitle>
+          <DialogTitle>
+            {v.id ? "Edit measurements" : "New measurements"}
+            {people.many && wearerId && <span className="ml-2 text-base font-normal text-muted-foreground">· {wearerTitle(people.wearers.find((w) => w.id === wearerId) ?? { name: "", relation: "", isSelf: true })}</span>}
+          </DialogTitle>
           <DialogDescription>All values in inches · അളവുകൾ ഇഞ്ചിൽ</DialogDescription>
         </DialogHeader>
         <form onSubmit={submit} className="grid gap-4">
@@ -85,10 +96,11 @@ export function MeasurementDialog({
                   customers={customers}
                   types={customerTypes}
                   value={v.customerId || null}
-                  onChange={(c) => setV((s) => ({ ...s, customerId: c?.id ?? 0 }))}
+                  onChange={(c) => setV((s) => ({ ...s, customerId: c?.id ?? 0, wearerId: null }))}
                 />
               </Field>
             )}
+            <WearerField customerId={v.customerId || null} value={wearerId} onChange={(id) => setV((s) => ({ ...s, wearerId: id }))} hook={people} />
             <Field label="Garment" ml="ഗാർമെന്റ് തരം" required>
               <ListSelect items={GARMENT_TYPES} value={v.garmentType} onChange={(g) => setV((s) => ({ ...s, garmentType: g ?? "Other" }))} />
             </Field>

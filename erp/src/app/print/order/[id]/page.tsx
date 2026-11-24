@@ -16,7 +16,8 @@ export default async function PrintOrder({ params, searchParams }: { params: Pro
   const lines: BillLine[] = [
     ...(order.sale?.items ?? []).map((i) => ({ description: i.description, qty: i.metres, rate: i.rate, amount: i.amount })),
     ...(order.sale && order.sale.discount ? [{ description: "Fabric discount", qty: 1, rate: -order.sale.discount, amount: -order.sale.discount }] : []),
-    ...order.items.map((i) => ({ description: `${i.item} stitching`, qty: i.qty, rate: i.rate, amount: i.amount })),
+    // Whose garment, when it is not the customer themself — the parent sees what they are paying for
+    ...order.items.map((i) => ({ description: `${i.item} stitching${i.wearer && !i.wearer.isSelf ? ` — ${i.wearer.name}` : ""}`, qty: i.qty, rate: i.rate, amount: i.amount })),
   ];
   return (
     <>

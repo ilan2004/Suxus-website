@@ -22,9 +22,22 @@ export default async function MeasurementsPage() {
     .from(schema.measurements)
     .innerJoin(schema.customers, eq(schema.customers.id, schema.measurements.customerId))
     .orderBy(desc(schema.measurements.date), desc(schema.measurements.id));
+  // Every wearer (people measured under a customer) — Self included, so cards can say "3 wearers"
+  const people = await db
+    .select({
+      id: schema.wearers.id,
+      customerId: schema.wearers.customerId,
+      name: schema.wearers.name,
+      relation: schema.wearers.relation,
+      school: schema.wearers.school,
+      note: schema.wearers.note,
+      isSelf: schema.wearers.isSelf,
+    })
+    .from(schema.wearers)
+    .orderBy(desc(schema.wearers.isSelf), schema.wearers.id);
   const owner = can(session.role, "settings");
   const since = new Date(Date.now() - 30 * 86400_000);
-  const [customers, lists, merged, sleeveNote, toCheck] = await Promise.all([
+  const [customers, lists, merged, sleeveNote, toCheck, wearerNote] = await Promise.all([
     customerOptions(),
     getSetting("lists"),
     // What the one-time shirt merge did (shown to the Owner for a month)
@@ -54,6 +67,15 @@ export default async function MeasurementsPage() {
           .where(and(eq(schema.auditLog.entity, "measurement-check"), gte(schema.auditLog.at, since)))
           .orderBy(schema.customers.name)
       : Promise.resolve([]),
+    // What the move to wearers did (one-time migration)
+    owner
+      ? db
+          .select({ summary: schema.auditLog.summary })
+          .from(schema.auditLog)
+          .where(and(eq(schema.auditLog.entity, "measurement"), like(schema.auditLog.summary, "Wearers:%"), gte(schema.auditLog.at, since)))
+          .orderBy(desc(schema.auditLog.at))
+          .limit(1)
+      : Promise.resolve([]),
   ]);
   return (
     <>
@@ -63,6 +85,7 @@ export default async function MeasurementsPage() {
           Shirt now holds both sleeve lengths in one record — {merged[0].summary?.replace("Shirt merge: ", "")}.
         </p>
       )}
+      {wearerNote[0] && <p className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">{wearerNote[0].summary}.</p>}
       {sleeveNote[0] && (
         <div className="mb-3 rounded-lg border bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
           <p>{sleeveNote[0].summary}.</p>
@@ -86,6 +109,7 @@ export default async function MeasurementsPage() {
       <MeasurementsView
         rows={rows.map((r) => ({ ...r.m, customerName: r.customerName, phone: r.phone }))}
         customers={customers}
+        wearers={people}
         lists={{ customerType: lists.customerType, fit: lists.fit }}
       />
     </>

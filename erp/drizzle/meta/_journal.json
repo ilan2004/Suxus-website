@@ -141,6 +141,13 @@
       "when": 1795490021621,
       "tag": "0019_fabric_stock_moves",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "7",
+      "when": 1795492109452,
+      "tag": "0020_wearers",
+      "breakpoints": true
     }
   ]
 }

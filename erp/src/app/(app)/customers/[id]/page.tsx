@@ -6,6 +6,7 @@ import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
 import { ordersWithBalance } from "@/lib/queries";
 import { CustomerView } from "./customer-view";
+import { listWearers } from "@/lib/actions/wearers";
 
 export default async function CustomerPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireUser();
@@ -14,7 +15,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
   const db = await getDb();
   const [customer] = await db.select().from(schema.customers).where(eq(schema.customers.id, id));
   if (!customer) notFound();
-  const [orders, bills, measurements, lists, messages] = await Promise.all([
+  const [orders, bills, measurements, lists, messages, wearers] = await Promise.all([
     ordersWithBalance(eq(schema.orders.customerId, id)),
     db.select().from(schema.sales).where(eq(schema.sales.customerId, id)).orderBy(desc(schema.sales.id)),
     db.select().from(schema.measurements).where(eq(schema.measurements.customerId, id)).orderBy(desc(schema.measurements.date), desc(schema.measurements.id)),
@@ -33,6 +34,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       .leftJoin(schema.orders, eq(schema.orders.id, schema.customerMessages.orderId))
       .where(eq(schema.customerMessages.customerId, id))
       .orderBy(desc(schema.customerMessages.id)),
+    listWearers(id),
   ]);
   return (
     <CustomerView
@@ -40,6 +42,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
       orders={orders}
       bills={bills.map((b) => ({ id: b.id, billNo: b.billNo, date: b.date, net: b.net, paymentMode: b.paymentMode, cancelled: b.cancelled, stitchingHere: b.stitchingHere }))}
       measurements={measurements}
+      wearers={wearers}
       messages={messages.map((m) => ({ ...m, sentAt: new Date(m.sentAt).toISOString() }))}
       lists={{ customerType: lists.customerType, fit: lists.fit }}
       canDelete={can(session.role, "delete")}

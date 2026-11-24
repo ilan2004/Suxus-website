@@ -266,6 +266,8 @@ export const orderItems = pgTable("order_items", {
   amount: money("amount").notNull().default(0),
   /** Who stitches this item (piece-rate wages follow the item). Null = not given out yet. */
   tailorId: integer("tailor_id").references(() => staff.id),
+  /** Whose garment this is (one of the order customer's wearers). Null = walk-in order without a customer. */
+  wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
 });
 
 /* ───────────────────────── Bulk / institution orders ───────────────────────── */
@@ -331,6 +333,31 @@ export const payments = pgTable(
 
 /* ───────────────────────── Measurements ───────────────────────── */
 
+/**
+ * A person who is measured, belonging to one customer (the account / phone). A parent's account holds
+ * the children whose uniforms are stitched. Every customer has one "Self" wearer (isSelf); while that is
+ * the only one, screens behave as if wearers did not exist.
+ */
+export const wearers = pgTable(
+  "wearers",
+  {
+    id: serial("id").primaryKey(),
+    customerId: integer("customer_id")
+      .notNull()
+      .references(() => customers.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    /** Self, Son, Daughter, Wife, Husband, Father, Mother, Brother, Sister, Other */
+    relation: text("relation").notNull().default("Other"),
+    /** School / class — useful for uniforms. */
+    school: text("school"),
+    note: text("note"),
+    isSelf: boolean("is_self").notNull().default(false),
+    createdAt: created(),
+    updatedAt: updated(),
+  },
+  (t) => [index("wearers_customer_idx").on(t.customerId), uniqueIndex("wearers_one_self_idx").on(t.customerId).where(sql`${t.isSelf}`)],
+);
+
 export const measurements = pgTable(
   "measurements",
   {
@@ -338,6 +365,8 @@ export const measurements = pgTable(
     customerId: integer("customer_id")
       .notNull()
       .references(() => customers.id, { onDelete: "cascade" }),
+    /** Whose measurements these are (always one of the customer's wearers; the Self wearer for one-person work). */
+    wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
     date: date("date").notNull(),
     garmentType: text("garment_type").notNull(),
     size: text("size"),

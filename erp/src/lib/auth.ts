@@ -13,7 +13,7 @@ export const SESSION_COOKIE = "suxus_session";
 const MAX_AGE = 60 * 60 * 24 * 400;
 
 /** name = the short display name ("GK") shown at the top and written on records. v = session version. */
-export type Session = { id: number; name: string; fullName: string; role: Role; v: number; exp: number; /** Simple measurement mode */ simple?: boolean };
+export type Session = { id: number; name: string; fullName: string; role: Role; v: number; exp: number };
 type Token = { id: number; v: number; exp: number };
 
 function secret() {
@@ -57,12 +57,12 @@ export const getSession = cache(async (): Promise<Session | null> => {
   if (!t) return null;
   const db = await getDb();
   const [u] = await db
-    .select({ id: schema.staff.id, name: schema.staff.name, displayName: schema.staff.displayName, access: schema.staff.access, status: schema.staff.status, v: schema.staff.sessionVersion, simple: schema.staff.simpleMode })
+    .select({ id: schema.staff.id, name: schema.staff.name, displayName: schema.staff.displayName, access: schema.staff.access, status: schema.staff.status, v: schema.staff.sessionVersion })
     .from(schema.staff)
     .where(eq(schema.staff.id, t.id));
   const role = roleFromAccess(u?.access);
   if (!u || !role || u.status !== "Active" || u.v !== t.v) return null;
-  return { id: u.id, name: displayNameOf(u), fullName: u.name, role, v: u.v, exp: t.exp, simple: u.simple };
+  return { id: u.id, name: displayNameOf(u), fullName: u.name, role, v: u.v, exp: t.exp };
 });
 
 /**

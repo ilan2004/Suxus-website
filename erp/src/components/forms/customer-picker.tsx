@@ -28,8 +28,8 @@ export function CustomerPicker({
         options={list.map((c) => ({
           value: String(c.id),
           label: c.name,
-          sub: [c.phone, c.place, c.people && `for ${c.people}`].filter(Boolean).join(" · "),
-          keywords: [c.code, ...(c.people ? c.people.split(", ") : [])],
+          sub: [c.phone, c.place].filter(Boolean).join(" · "),
+          keywords: [c.code],
         }))}
         value={value ? String(value) : null}
         onChange={(v) => onChange(v ? list.find((c) => String(c.id) === v) ?? null : null)}

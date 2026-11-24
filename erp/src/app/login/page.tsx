@@ -7,8 +7,7 @@ export const metadata = { title: "Sign in" };
 export const dynamic = "force-dynamic";
 
 export default async function LoginPage() {
-  const session = await getSession();
-  if (session) redirect(session.simple ? "/measurements" : "/");
+  if (await getSession()) redirect("/");
   if (!(await hasAnyLoginUser())) redirect("/setup");
   const users = await loginUsers();
   return (

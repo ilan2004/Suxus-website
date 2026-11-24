@@ -16,7 +16,7 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
   if (!fabric) notFound();
   const db = await getDb();
   const s = schema;
-  const [lines, settings, suppliers, moves] = await Promise.all([
+  const [lines, settings, suppliers] = await Promise.all([
     db
       .select({
         saleId: s.sales.id,
@@ -38,36 +38,12 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       .orderBy(desc(s.sales.date), desc(s.sales.id)),
     getSettings(),
     db.select({ id: s.suppliers.id, name: s.suppliers.name }).from(s.suppliers).orderBy(asc(s.suppliers.name)),
-    db
-      .select({
-        id: s.fabricStockMoves.id,
-        kind: s.fabricStockMoves.kind,
-        date: s.fabricStockMoves.date,
-        metres: s.fabricStockMoves.metres,
-        rate: s.fabricStockMoves.rate,
-        supplier: s.suppliers.name,
-        supplierId: s.fabricStockMoves.supplierId,
-        billNo: s.fabricStockMoves.billNo,
-        remarks: s.fabricStockMoves.remarks,
-        boughtAfter: s.fabricStockMoves.boughtAfter,
-        balanceAfter: s.fabricStockMoves.balanceAfter,
-        rateBefore: s.fabricStockMoves.rateBefore,
-        rateAfter: s.fabricStockMoves.rateAfter,
-        createdBy: s.fabricStockMoves.createdBy,
-      })
-      .from(s.fabricStockMoves)
-      .leftJoin(s.suppliers, eq(s.suppliers.id, s.fabricStockMoves.supplierId))
-      .where(eq(s.fabricStockMoves.fabricId, id))
-      .orderBy(asc(s.fabricStockMoves.id)),
   ]);
-  const seesCost = can(session.role, "costs");
   const supplier = suppliers.find((x) => x.id === fabric.supplierId) ?? null;
   return (
     <FabricDetail
       fabric={fabric}
       lines={lines}
-      moves={seesCost ? moves : moves.map((m) => ({ ...m, rate: null, rateBefore: null, rateAfter: null }))}
-      canAdjust={can(session.role, "delete")}
       supplier={supplier}
       suppliers={suppliers}
       lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}

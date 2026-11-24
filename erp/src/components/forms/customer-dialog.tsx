@@ -11,7 +11,7 @@ import { Field } from "@/components/app/field";
 import { ListSelect } from "@/components/app/search-select";
 import { saveCustomer, type CustomerInput } from "@/lib/actions/customers";
 
-export type CustomerLite = { id: number; code: string; name: string; phone: string | null; place: string | null; /** Other wearers' names, comma separated */ people?: string | null };
+export type CustomerLite = { id: number; code: string; name: string; phone: string | null; place: string | null };
 
 export function CustomerDialog({
   open,

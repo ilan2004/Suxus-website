@@ -66,6 +66,3 @@ export const NAV: NavGroup[] = [
     ],
   },
 ];
-
-/** Simple measurement mode: a short menu with only what the cutting master uses (Measurements first). */
-export const SIMPLE_MENU = ["/measurements", "/orders/board", "/orders", "/customers"];

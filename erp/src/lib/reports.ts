@@ -96,7 +96,7 @@ export async function capitalAccount() {
       .where(eq(openingStock.ownedBy, name));
     // fabric rolls marked "brought in by" this partner in Fabric Stock (value at cost when brought in)
     const [cloth] = await db
-      .select({ v: num(sql`sum(coalesce(${fabrics.openingMtr}, ${fabrics.purchaseMtr}) * coalesce(${fabrics.openingCostPerMtr}, ${fabrics.costPerMtr}))`) })
+      .select({ v: num(sql`sum(${fabrics.purchaseMtr} * ${fabrics.costPerMtr})`) })
       .from(fabrics)
       .where(eq(fabrics.broughtInBy, name));
     const stock = { v: r2(assets.v + cloth.v) };
@@ -193,7 +193,7 @@ export async function summary(from: string, to: string) {
   const fabrics = (await fabricsWithStock()).filter((f) => f.active);
   const openingValue = r2(
     (await one(db.select({ v: num(sql`sum(${openingStock.qty} * ${openingStock.unitValue})`) }).from(openingStock))) +
-      (await one(db.select({ v: num(sql`sum(coalesce(${schema.fabrics.openingMtr}, ${schema.fabrics.purchaseMtr}) * coalesce(${schema.fabrics.openingCostPerMtr}, ${schema.fabrics.costPerMtr}))`) }).from(schema.fabrics).where(sql`${schema.fabrics.broughtInBy} is not null`))),
+      (await one(db.select({ v: num(sql`sum(${schema.fabrics.purchaseMtr} * ${schema.fabrics.costPerMtr})`) }).from(schema.fabrics).where(sql`${schema.fabrics.broughtInBy} is not null`))),
   );
   const capital = await capitalAccount();
 

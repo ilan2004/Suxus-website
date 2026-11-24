@@ -13,8 +13,6 @@ import { addUser, removeUserAccess, resetUserPin, unlockUser, updateUser, type U
 import { ROLE_LABEL, type Role } from "@/lib/permissions";
 import { cn } from "@/lib/utils";
 import { MergeStaff } from "./merge-staff";
-import { Switch } from "@/components/ui/switch";
-import { setSimpleMode } from "@/lib/actions/profile";
 
 const ROLES: { key: Role; label: string; hint: string }[] = [
   { key: "owner", label: "Owner", hint: "Everything" },
@@ -66,18 +64,6 @@ export function UsersTab({ users, meId }: { users: UserRow[]; meId: number }) {
                 )}
               </div>
               {u.job && u.job !== ROLE_LABEL[u.role!] && <p className="text-xs text-muted-foreground">{u.job}</p>}
-              <label className="mt-1.5 flex w-fit cursor-pointer items-center gap-2 text-xs">
-                <Switch
-                  checked={u.simple}
-                  aria-label={`Simple measurement mode for ${u.name}`}
-                  onCheckedChange={async (on) => {
-                    const r = await setSimpleMode(on, u.id);
-                    if (!r.ok) return void toast.error(r.error);
-                    done(`Simple measurement mode ${on ? "on" : "off"} for ${u.displayName || u.name}`);
-                  }}
-                />
-                Simple measurement mode <span className="ml">ലളിതമായ അളവ് രീതി</span>
-              </label>
             </div>
             <div className="flex flex-wrap gap-1">
               {u.lockedUntil && (

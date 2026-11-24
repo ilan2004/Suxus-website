@@ -9,7 +9,6 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { WhatsAppTemplateButton, orderMessageValues } from "@/components/app/whatsapp-template-button";
 import { setOrderStatus } from "@/lib/actions/orders";
 import { cn } from "@/lib/utils";
-import { ScanBundleButton } from "@/components/app/scan-bundle-button";
 
 export type BoardOrder = {
   id: number;
@@ -22,7 +21,7 @@ export type BoardOrder = {
   items: string;
   pieces: number;
   /** Item lines with who has each (tailor is per item). */
-  lines: { item: string; qty: number; tailor: string | null; /** whose garment, when not the customer themself */ wearer?: string | null }[];
+  lines: { item: string; qty: number; tailor: string | null }[];
   deliveryDate: string | null;
   deliveredOn: string | null;
   status: string;
@@ -114,7 +113,6 @@ export function OrderBoard({ orders, tailors, today: t, initialTailor, initialDu
     <div className="grid gap-3">
       {/* Summary + filters */}
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <ScanBundleButton className="order-last ml-auto sm:order-none" />
         <p className="text-sm">
           <span className="font-semibold">{running.length} orders running</span>
           <span className="text-muted-foreground"> · </span>
@@ -249,19 +247,11 @@ function Card({ o, lines, filtered, t, onMove }: { o: BoardOrder; lines: BoardOr
           <span className={cn("shrink-0 text-xs tabular-nums", d.kind === "late" ? "font-semibold text-destructive" : d.kind === "soon" ? "font-semibold text-warning" : "text-muted-foreground")}>{d.label}</span>
         </div>
         <p className="mt-0.5 truncate text-sm font-semibold">{o.customerName ?? "—"}</p>
-        {lines.some((l) => l.wearer)
-          ? // Several people's garments: one line per item, the person's name right next to the garment
-            lines.map((l, i) => (
-              <p key={i} className={cn("truncate text-xs", l.tailor ? "text-muted-foreground" : "text-warning")}>
-                {l.qty > 1 && `${l.qty} × `}
-                {l.item} — <b className="font-semibold text-foreground">{l.wearer ?? (o.customerName ? `${o.customerName.split(" ")[0]} (self)` : "Self")}</b> · {l.tailor ?? "Not assigned"}
-              </p>
-            ))
-          : whatLines.map((w) => (
-              <p key={w} className={cn("truncate text-xs", w.endsWith("Not assigned") ? "text-warning" : "text-muted-foreground")}>
-                {w}
-              </p>
-            ))}
+        {whatLines.map((w) => (
+          <p key={w} className={cn("truncate text-xs", w.endsWith("Not assigned") ? "text-warning" : "text-muted-foreground")}>
+            {w}
+          </p>
+        ))}
         {others > 0 && <p className="text-[11px] text-muted-foreground/70">+ {others} item{others === 1 ? "" : "s"} with others</p>}
       </Link>
       <DropdownMenu open={menu} onOpenChange={setMenu}>

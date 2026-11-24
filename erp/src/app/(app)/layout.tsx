@@ -7,5 +7,5 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   if (!session) {
     redirect((await hasAnyLoginUser()) ? "/login" : "/setup");
   }
-  return <Shell user={{ name: session.name, fullName: session.fullName, role: session.role, simple: !!session.simple }}>{children}</Shell>;
+  return <Shell user={{ name: session.name, fullName: session.fullName, role: session.role }}>{children}</Shell>;
 }

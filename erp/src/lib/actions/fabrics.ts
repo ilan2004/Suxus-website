@@ -77,9 +77,8 @@ export async function saveFabric(input: FabricInput): Promise<Result<{ id: numbe
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, photos, ...all } = parsed.data;
   // Without the cost-price / money permissions those fields were never shown — keep what is stored
-  // Bought is set once, when the fabric is created — after that only Add stock / Adjust stock change it
-  const { costPerMtr, broughtInBy, purchaseMtr, ...others } = all;
-  const rest = { ...others, ...(id ? {} : { purchaseMtr }), ...(can(user.role, "costs") ? { costPerMtr } : {}), ...(can(user.role, "money") ? { broughtInBy } : {}) };
+  const { costPerMtr, broughtInBy, ...others } = all;
+  const rest = { ...others, ...(can(user.role, "costs") ? { costPerMtr } : {}), ...(can(user.role, "money") ? { broughtInBy } : {}) };
   if (photos?.some((p) => !isOurPhotoUrl(p.url) || !isOurPhotoUrl(p.thumb) || (p.original && !isOurPhotoUrl(p.original)))) return fail("Photo link not recognised — please upload again");
   // Pattern size only belongs to checks and stripes
   if (rest.pattern && rest.pattern !== "Check" && rest.pattern !== "Stripe") (rest.patternMm = null), (rest.patternMmSource = null);

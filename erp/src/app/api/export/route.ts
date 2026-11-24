@@ -205,7 +205,7 @@ export async function GET(req: NextRequest) {
     ...assets.map((a) => ({ ...a, total: a.qty * a.unitValue })),
     ...fabrics
       .filter((f) => f.broughtInBy)
-      .map((f) => ({ assetType: "Fabric Stock (from Fabric Stock)", description: `${f.code} ${f.brand}${f.shade ? " · " + f.shade : ""}`, qty: f.purchaseMtr, unitValue: f.costPerMtr, total: f.purchaseMtr * f.costPerMtr, ownedBy: f.broughtInBy, valuationDate: f.purchaseDate, remarks: f.remarks })),
+      .map((f) => ({ assetType: "Fabric Stock (from Fabric Stock)", description: `${f.code} ${f.brand}${f.shade ? " · " + f.shade : ""}`, qty: f.openingMtr ?? f.purchaseMtr, unitValue: f.openingCostPerMtr ?? f.costPerMtr, total: (f.openingMtr ?? f.purchaseMtr) * (f.openingCostPerMtr ?? f.costPerMtr), ownedBy: f.broughtInBy, valuationDate: f.purchaseDate, remarks: f.remarks })),
   ]);
 
   const cash = await db.select().from(s.cashBook).orderBy(asc(s.cashBook.date), asc(s.cashBook.id));

@@ -48,6 +48,8 @@ export async function fabricsWithStock() {
       purchaseDate: fabrics.purchaseDate,
       purchaseMtr: fabrics.purchaseMtr,
       costPerMtr: fabrics.costPerMtr,
+      openingMtr: fabrics.openingMtr,
+      openingCostPerMtr: fabrics.openingCostPerMtr,
       saleRate: fabrics.saleRate,
       remarks: fabrics.remarks,
       active: fabrics.active,
@@ -73,8 +75,8 @@ export async function fabricsWithStock() {
 }
 
 /** For people without the "costs" permission: cost price, stock value and capital source never leave the server. */
-export function withoutFabricCosts<T extends { costPerMtr: number; stockValue: number; totalCost: number; broughtInBy?: string | null }>(rows: T[]): T[] {
-  return rows.map((r) => ({ ...r, costPerMtr: 0, stockValue: 0, totalCost: 0, broughtInBy: null }));
+export function withoutFabricCosts<T extends { costPerMtr: number; openingCostPerMtr?: number | null; stockValue: number; totalCost: number; broughtInBy?: string | null }>(rows: T[]): T[] {
+  return rows.map((r) => ({ ...r, costPerMtr: 0, openingCostPerMtr: null, stockValue: 0, totalCost: 0, broughtInBy: null }));
 }
 export type FabricRow = Awaited<ReturnType<typeof fabricsWithStock>>[number];
 

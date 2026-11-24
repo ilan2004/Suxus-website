@@ -162,6 +162,13 @@ export const fabrics = pgTable(
     secondaryHexes: jsonb("secondary_hexes").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
     /** Per swatch [dominant, secondary 1, secondary 2]: "auto" or "hand" (hand = never overwritten). */
     colourSources: jsonb("colour_sources").$type<string[]>().notNull().default(sql`'[]'::jsonb`),
+    /**
+     * Snapshot of the first entry (metres + cost/m) taken before the first "Add stock" / "Adjust stock".
+     * Empty = no stock movement yet (then purchaseMtr / costPerMtr ARE the first entry).
+     * A partner's opening-stock capital is valued from this, so later business purchases never inflate it.
+     */
+    openingMtr: money("opening_mtr"),
+    openingCostPerMtr: money("opening_cost_per_mtr"),
     createdAt: created(),
     updatedAt: updated(),
   },
@@ -583,6 +590,40 @@ export const orderStatusChanges = pgTable(
     changedAt: created(),
   },
   (t) => [index("order_status_changes_order_idx").on(t.orderId)],
+);
+
+/**
+ * Fabric stock movements. "receipt" = more of the same cloth arrived (Add stock); "adjust" = a correction
+ * (damage, shortage, counting mistake) with a required reason. Both add to the fabric's Bought total
+ * (adjust may be negative), so Balance stays Bought − Sold. Kept as separate kinds so purchases and
+ * corrections are never mixed up in the history.
+ */
+export const fabricStockMoves = pgTable(
+  "fabric_stock_moves",
+  {
+    id: serial("id").primaryKey(),
+    fabricId: integer("fabric_id")
+      .notNull()
+      .references(() => fabrics.id, { onDelete: "cascade" }),
+    kind: text("kind").notNull(), // receipt | adjust
+    date: date("date").notNull(),
+    /** Metres received (receipt, > 0) or the correction (adjust, + or −). */
+    metres: money("metres").notNull(),
+    /** Receipt: cost per metre of this lot. */
+    rate: money("rate"),
+    supplierId: integer("supplier_id").references(() => suppliers.id, { onDelete: "set null" }),
+    billNo: text("bill_no"),
+    /** Receipt: remarks · adjust: the reason (required). */
+    remarks: text("remarks"),
+    boughtAfter: money("bought_after").notNull(),
+    balanceAfter: money("balance_after").notNull(),
+    /** Fabric cost / metre before and after this movement (weighted average on receipts). */
+    rateBefore: money("rate_before"),
+    rateAfter: money("rate_after"),
+    createdBy: text("created_by"),
+    createdAt: created(),
+  },
+  (t) => [index("fabric_stock_moves_fabric_idx").on(t.fabricId, t.id)],
 );
 
 /** One row per fabric photo analysed (scale card, repeat, colours) — to check how reliable the measurement is. */

@@ -3,6 +3,7 @@ import { getSession } from "@/lib/auth";
 import { jobSlipFileName, jobSlipPages, logJobSlip, renderJobSlipPdf, resolveJobSlipToken } from "@/lib/job-slip";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 /**
  * A shared job slip: /j/<long random token> → that one PDF. No login, no listing, no links into the ERP.

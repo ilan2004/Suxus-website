@@ -223,7 +223,7 @@ type RefCount = { label: string; count: number };
 
 /** postgres-js returns an array (with .count); PGlite returns { rows, affectedRows }. */
 const rowsOf = <T,>(res: unknown): T[] => (Array.isArray(res) ? (res as T[]) : ((res as { rows?: T[] }).rows ?? []));
-const changedOf = (res: unknown) => Number((res as { count?: number }).count ?? (res as { affectedRows?: number }).affectedRows ?? 0);
+const changedOf = (res: unknown) => Number((res as { rowCount?: number }).rowCount ?? (res as { count?: number }).count ?? (res as { affectedRows?: number }).affectedRows ?? 0);
 
 /** Every place a staff record is referenced: by id, and by name (text fields hold the name as it was written). */
 async function staffRefs(db: Awaited<ReturnType<typeof getDb>>, src: { id: number; name: string; displayName: string | null }) {

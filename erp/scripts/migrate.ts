@@ -15,6 +15,7 @@ import postgres from "postgres";
 import { drizzle } from "drizzle-orm/postgres-js";
 import { migrate } from "drizzle-orm/postgres-js/migrator";
 import { runDataFixes } from "../src/lib/data-fixes";
+import { seedDefaults } from "../src/lib/db/seed";
 
 const onVercel = !!process.env.VERCEL;
 const stop = (msg: string): never => {
@@ -72,6 +73,9 @@ async function main() {
 
     // One-time data fixes that need code (each runs once, recorded in counters)
     await runDataFixes(db, (s) => console.log(s));
+    // Default settings that do not exist yet — once per deploy here, never on a request (getSettings() also falls
+    // back to the built-in defaults for any row that is missing)
+    await seedDefaults(db as unknown as Parameters<typeof seedDefaults>[0]);
     console.log("[migrate] done");
   } finally {
     await client.end({ timeout: 5 });

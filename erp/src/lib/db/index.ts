@@ -1,7 +1,7 @@
 import "server-only";
 import path from "node:path";
 import fs from "node:fs";
-import { drizzle as drizzlePg } from "drizzle-orm/postgres-js";
+import { drizzle as drizzlePg } from "drizzle-orm/node-postgres";
 import * as schema from "./schema";
 import { seedDefaults } from "./seed";
 
@@ -15,13 +15,32 @@ async function create(): Promise<DB> {
   const migrationsFolder = path.join(process.cwd(), "drizzle");
 
   if (url) {
-    // Supabase / any Postgres. Migrations run at deploy time (scripts/migrate.ts);
-    // `prepare: false` is required for Supabase's transaction pooler.
-    const postgres = (await import("postgres")).default;
-    const client = postgres(url, { prepare: false, max: 5 });
-    const db = drizzlePg(client, { schema });
-    await seedDefaults(db);
-    return db;
+    // Supabase / any Postgres. Migrations and default settings are done at deploy time (scripts/migrate.ts) —
+    // nothing is written on start, so a cold start costs no database round trip.
+    //
+    // Vercel pauses idle function instances (Fluid compute). A connection left open across a pause can be dead
+    // when the instance wakes, and a query on it never answers: the request then hangs until Vercel's 300 s limit
+    // (the "Task timed out after 300 seconds" errors). So:
+    //   - attachDatabasePool: Vercel keeps the instance alive just long enough to close idle connections before
+    //     it pauses (supported for the `pg` pool; the old `postgres` client kept idle connections forever);
+    //   - idleTimeoutMillis: idle connections close after 5 s anyway;
+    //   - connectionTimeoutMillis / query_timeout: a stuck connect or query fails in seconds instead of hanging.
+    // No server-side settings are sent at connect (Supabase's transaction pooler can refuse startup parameters).
+    const pg = await import("pg");
+    const Pool = pg.Pool ?? pg.default.Pool;
+    const pool = new Pool({
+      connectionString: url,
+      max: 3,
+      idleTimeoutMillis: 5_000,
+      connectionTimeoutMillis: 10_000,
+      query_timeout: 25_000,
+      keepAlive: true,
+    });
+    // An idle connection dropped by the pooler must not crash the instance
+    pool.on("error", (e) => console.error("[db] idle connection closed:", e.message));
+    const { attachDatabasePool } = await import("@vercel/functions");
+    attachDatabasePool(pool);
+    return drizzlePg(pool, { schema });
   }
 
   if (process.env.VERCEL || process.env.NODE_ENV === "production" && process.env.ERP_ALLOW_PGLITE !== "1") {

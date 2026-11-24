@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const interTight = Inter_Tight({ subsets: ["latin"], weight: ["500", "600", "700"], variable: "--font-display-face" });
 const malayalam = Noto_Sans_Malayalam({ subsets: ["malayalam"], weight: ["400", "500"], variable: "--font-ml-face" });
 
+/** No page should ever take this long; if the database stalls, fail after 60 s instead of holding a function for 300 s. */
+export const maxDuration = 60;
+
 export const metadata: Metadata = {
   title: { default: "SUXUS ERP", template: "%s · SUXUS ERP" },
   description: "Daily operations for SUXUS Heritage Tailor",

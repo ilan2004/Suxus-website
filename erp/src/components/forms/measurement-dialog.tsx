@@ -16,6 +16,8 @@ import { GARMENTS, GARMENT_TYPES, fieldsFor, wholeOf } from "@/lib/measurements"
 import { saveMeasurement, type MeasurementInput } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
 import { wearerTitle } from "@/lib/wearers";
+import { DEFAULT_POCKET, hasPocket, pocketWords, type Pocket } from "@/lib/pocket";
+import { PocketDrawing, PocketFields } from "./pocket-fields";
 
 export type MeasurementRow = {
   id: number;
@@ -28,6 +30,8 @@ export type MeasurementRow = {
   fit: string | null;
   values: Record<string, number | null>;
   remarks: string | null;
+  /** Pocket choices (shirt); null = not recorded */
+  pocket?: Pocket | null;
 };
 
 export function MeasurementDialog({
@@ -38,7 +42,10 @@ export function MeasurementDialog({
   customerTypes,
   fits,
   history = [],
+  pocketOn = true,
 }: {
+  /** the database has the pocket field */
+  pocketOn?: boolean;
   open: boolean;
   onOpenChange: (o: boolean) => void;
   initial?: Partial<MeasurementRow>;
@@ -54,6 +61,8 @@ export function MeasurementDialog({
     fit: "Regular",
     values: {},
     ...initial,
+    // A new shirt record starts with one pocket (left), no flap; an existing record keeps what it has (empty = not recorded)
+    pocket: initial?.id ? (initial.pocket ?? null) : (initial?.pocket ?? { ...DEFAULT_POCKET }),
   });
   const [v, setV] = React.useState<MeasurementInput>(blank);
   const [pending, start] = React.useTransition();
@@ -71,7 +80,7 @@ export function MeasurementDialog({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     start(async () => {
-      const r = await saveMeasurement({ ...v, wearerId });
+      const r = await saveMeasurement({ ...v, wearerId, pocket: pocketOn && hasPocket(v.garmentType) ? (v.pocket ?? null) : undefined });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Measurements saved");
       onOpenChange(false);
@@ -123,7 +132,7 @@ export function MeasurementDialog({
                   type="button"
                   variant="ghost"
                   size="sm"
-                  onClick={() => setV((s) => ({ ...s, values: { ...previous.values }, size: previous.size, fit: previous.fit }))}
+                  onClick={() => setV((s) => ({ ...s, values: { ...previous.values }, size: previous.size, fit: previous.fit, ...(previous.pocket ? { pocket: { ...previous.pocket } } : {}) }))}
                 >
                   <Copy /> Copy last ({previous.date})
                 </Button>
@@ -148,6 +157,15 @@ export function MeasurementDialog({
               ))}
             </div>
           </div>
+
+          {pocketOn && hasPocket(v.garmentType) && (
+            <div className="rounded-xl border bg-muted/30 p-4">
+              <p className="mb-3 text-sm font-medium">
+                Pocket <span className="ml">പോക്കറ്റ്</span>
+              </p>
+              <PocketFields value={(v.pocket as Pocket | null | undefined) ?? null} onChange={(pocket) => setV((s) => ({ ...s, pocket }))} />
+            </div>
+          )}
 
           <Field label="Remarks" ml="കുറിപ്പ്">
             <Textarea value={v.remarks ?? ""} onChange={(e) => setV((s) => ({ ...s, remarks: e.target.value }))} rows={2} placeholder="Style notes, pocket, collar…" />
@@ -187,6 +205,12 @@ export function MeasurementCard({ m, onEdit }: { m: MeasurementRow; onEdit?: () 
           </div>
         ))}
       </dl>
+      {m.pocket && pocketWords(m.pocket) && (
+        <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" data-testid="pocket-summary">
+          {m.pocket.count !== "none" && m.pocket.shape && <PocketDrawing shape={m.pocket.shape} className="size-8 rounded border" />}
+          <span>{pocketWords(m.pocket)!.map((l) => l.en).join(" · ")}</span>
+        </div>
+      )}
       {m.remarks && <p className="mt-3 text-xs text-muted-foreground">{m.remarks}</p>}
     </button>
   );

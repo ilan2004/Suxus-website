@@ -16,6 +16,7 @@ import { formatPhone } from "@/lib/phone";
 import { wearerTitle, RELATION_ML, type WearerLite } from "@/lib/wearers";
 import { cn, fmtDate } from "@/lib/utils";
 import { SimpleEntry, enOf, fromDraft, mlOf, type EntryState } from "./entry";
+import { DEFAULT_POCKET, type Pocket } from "@/lib/pocket";
 
 export type SimpleRow = {
   id: number;
@@ -27,6 +28,8 @@ export type SimpleRow = {
   fit: string | null;
   values: Record<string, number | null>;
   remarks: string | null;
+  /** pocket choices (shirt); null = not recorded */
+  pocket?: Pocket | null;
   updatedAt: string;
 };
 /** The latest tailor given each person's garments (order items), newest first. */
@@ -67,7 +70,10 @@ export function SimpleMeasurements({
   order,
   autoAdvance = false,
   customerTypes,
+  pocketOn = false,
 }: {
+  /** the database has the pocket field (shirts get a pocket step) */
+  pocketOn?: boolean;
   rows: SimpleRow[];
   customers: CustomerLite[];
   wearers: WearerLite[];
@@ -160,6 +166,8 @@ export function SimpleMeasurements({
         remarks: how === "last" ? (last?.remarks ?? null) : null,
         values,
         previous: last?.values ?? null,
+        // pocket: carried over with "same as last time"; otherwise a new shirt starts with one pocket, no flap
+        pocket: how === "last" && last?.pocket ? { ...last.pocket } : { ...DEFAULT_POCKET },
         step: 0,
       },
     });
@@ -171,13 +179,14 @@ export function SimpleMeasurements({
         customerId: r.customerId,
         wearerId: r.wearerId,
         measurementId: r.id,
-        original: { date: r.date, size: r.size, fit: r.fit, remarks: r.remarks, values: r.values },
+        original: { date: r.date, size: r.size, fit: r.fit, remarks: r.remarks, values: r.values, pocket: r.pocket ?? null },
         garmentType: r.garmentType,
         size: r.size,
         fit: r.fit,
         remarks: r.remarks,
         values: { ...r.values },
         previous: r.values,
+        pocket: r.pocket ?? null,
         step: 0,
       },
     });
@@ -456,7 +465,7 @@ export function SimpleMeasurements({
         />
       )}
 
-      {entry && <SimpleEntry key={entry.state.draftId ?? entry.who} initial={entry.state} who={entry.who} order={order} autoAdvance={autoAdvance} onClose={() => (setEntry(null), router.refresh())} onSaved={saved(entry.who)} />}
+      {entry && <SimpleEntry key={entry.state.draftId ?? entry.who} initial={entry.state} who={entry.who} order={order} autoAdvance={autoAdvance} pocketOn={pocketOn} onClose={() => (setEntry(null), router.refresh())} onSaved={saved(entry.who)} />}
 
       <BarcodeScanner open={scan} onClose={() => setScan(false)} title="Scan the customer's slip" onResult={scanned} />
       <CustomerDialog

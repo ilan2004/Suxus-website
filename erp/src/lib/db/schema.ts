@@ -458,9 +458,7 @@ export const measurements = pgTable("measurements", measurementsColumns(), measu
  * A half-finished measurement in simple mode, saved after every field so a locked phone, a call or a closed
  * app never loses work. One row per entry in progress; removed when the measurement is saved.
  */
-export const measurementDrafts = pgTable(
-  "measurement_drafts",
-  {
+export const measurementDraftsColumns = () => ({
     id: serial("id").primaryKey(),
     staffId: integer("staff_id")
       .notNull()
@@ -479,9 +477,9 @@ export const measurementDrafts = pgTable(
     /** The field being entered (index in the measuring order); = number of fields → the final check. */
     step: integer("step").notNull().default(0),
     updatedAt: updated(),
-  },
-  (t) => [index("measurement_drafts_staff_idx").on(t.staffId)],
-);
+});
+export const measurementDraftsIndexes = (t: { staffId: AnyPgColumn }) => [index("measurement_drafts_staff_idx").on(t.staffId)];
+export const measurementDrafts = pgTable("measurement_drafts", measurementDraftsColumns(), measurementDraftsIndexes);
 
 /* ───────────────────────── Money out ───────────────────────── */
 

@@ -1,5 +1,6 @@
 import "server-only";
-import { boolean, integer, numeric, pgTable, text } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, numeric, pgTable, text } from "drizzle-orm/pg-core";
+import type { Pocket } from "../pocket";
 import { sql } from "drizzle-orm";
 
 /*
@@ -24,6 +25,10 @@ export const orderItemsPrice = pgTable("order_items", { id: integer("id").primar
 /** bulk_order_items.variant / list_rate / rate_changed_by — Stitching price list on Bulk Orders */
 export const bulkItemsPrice = pgTable("bulk_order_items", { id: integer("id").primaryKey(), variant: text("variant"), listRate: money("list_rate"), rateChangedBy: text("rate_changed_by") });
 
+/** measurements.pocket / measurement_drafts.pocket — Pocket options on a shirt record */
+export const measurementsPocket = pgTable("measurements", { id: integer("id").primaryKey(), pocket: jsonb("pocket").$type<Pocket | null>() });
+export const draftsPocket = pgTable("measurement_drafts", { id: integer("id").primaryKey(), pocket: jsonb("pocket").$type<Pocket | null>() });
+
 /** For a select list on the un-aliased table: e.g. { wearerId: col.measurementWearer } */
 export const col = {
   measurementWearer: sql<number | null>`"measurements"."wearer_id"`.mapWith((v) => (v == null ? null : Number(v))),
@@ -34,6 +39,8 @@ export const col = {
   bulkItemVariant: sql<string | null>`"bulk_order_items"."variant"`,
   bulkItemListRate: sql<number | null>`"bulk_order_items"."list_rate"`.mapWith((v) => (v == null ? null : Number(v))),
   bulkItemRateChangedBy: sql<string | null>`"bulk_order_items"."rate_changed_by"`,
+  measurementPocket: sql<Pocket | null>`"measurements"."pocket"`.mapWith((v) => (v == null ? null : typeof v === "string" ? (JSON.parse(v) as Pocket) : (v as Pocket))),
+  draftPocket: sql<Pocket | null>`"measurement_drafts"."pocket"`.mapWith((v) => (v == null ? null : typeof v === "string" ? (JSON.parse(v) as Pocket) : (v as Pocket))),
   fabricOpeningMtr: sql<number | null>`"fabrics"."opening_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
   fabricOpeningCost: sql<number | null>`"fabrics"."opening_cost_per_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
 };

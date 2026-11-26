@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, desc, eq, gte, isNotNull, like, ne, sql } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, gte, isNotNull, like, ne, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
@@ -25,6 +25,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
     .select({
       m: schema.measurements,
       wearerId: when(feat.wearers, col.measurementWearer),
+      pocket: when(feat.pocket, col.measurementPocket),
       customerName: schema.customers.name,
       phone: schema.customers.phone,
     })
@@ -87,7 +88,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
       : Promise.resolve([]),
   ]);
   // Unfinished simple-mode entries of the signed-in user — always at the top of the list
-  const drafts = (!feat.simple ? [] : await db.select().from(schema.measurementDrafts).where(eq(schema.measurementDrafts.staffId, session.id)).orderBy(desc(schema.measurementDrafts.updatedAt))).map((d) => ({
+  const drafts = (!feat.simple ? [] : await db.select({ ...getTableColumns(schema.measurementDrafts), pocket: when(feat.pocket, col.draftPocket) }).from(schema.measurementDrafts).where(eq(schema.measurementDrafts.staffId, session.id)).orderBy(desc(schema.measurementDrafts.updatedAt))).map((d) => ({
     id: d.id,
     customerId: d.customerId,
     wearerId: d.wearerId,
@@ -97,6 +98,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
     fit: d.fit,
     remarks: d.remarks,
     values: d.values,
+    pocket: d.pocket,
     step: d.step,
     updatedAt: new Date(d.updatedAt).toISOString(),
   }));
@@ -133,7 +135,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
           അളവുകൾ <span className="font-sans text-base font-normal text-muted-foreground">Measurements</span>
         </h1>
         <SimpleMeasurements
-          rows={rows.map((r) => ({ ...r.m, wearerId: r.wearerId, updatedAt: new Date(r.m.updatedAt).toISOString(), createdAt: undefined }))}
+          rows={rows.map((r) => ({ ...r.m, wearerId: r.wearerId, pocket: r.pocket, updatedAt: new Date(r.m.updatedAt).toISOString(), createdAt: undefined }))}
           customers={customers}
           wearers={people}
           drafts={drafts}
@@ -142,6 +144,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
           order={settings.measureOrder}
           autoAdvance={settings.measureOptions?.autoAdvance ?? false}
           customerTypes={settings.lists.customerType}
+          pocketOn={feat.pocket}
         />
       </>
     );
@@ -192,7 +195,7 @@ export default async function MeasurementsPage({ searchParams }: { searchParams:
         </div>
       )}
       <MeasurementsView
-        rows={rows.map((r) => ({ ...r.m, wearerId: r.wearerId, customerName: r.customerName, phone: r.phone }))}
+        rows={rows.map((r) => ({ ...r.m, wearerId: r.wearerId, pocket: r.pocket, customerName: r.customerName, phone: r.phone }))}
         customers={customers}
         wearers={people}
         drafts={drafts}

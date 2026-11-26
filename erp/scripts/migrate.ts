@@ -41,6 +41,8 @@ const REQUIRED: [string, string][] = [
   ["stitching_prices", "id"],
   ["order_items", "list_rate"],
   ["bulk_order_items", "list_rate"],
+  ["measurements", "pocket"],
+  ["measurement_drafts", "pocket"],
 ];
 
 async function main() {

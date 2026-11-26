@@ -183,6 +183,13 @@
       "when": 1795716087580,
       "tag": "0025_stitching_prices",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1795716450489,
+      "tag": "0026_pocket",
+      "breakpoints": true
     }
   ]
 }

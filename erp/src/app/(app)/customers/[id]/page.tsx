@@ -22,7 +22,7 @@ export default async function CustomerPage({ params }: { params: Promise<{ id: s
     ordersWithBalance(eq(schema.orders.customerId, id)),
     db.select().from(schema.sales).where(eq(schema.sales.customerId, id)).orderBy(desc(schema.sales.id)),
     db
-      .select({ ...getTableColumns(schema.measurements), wearerId: when(hasWearers, col.measurementWearer) })
+      .select({ ...getTableColumns(schema.measurements), wearerId: when(hasWearers, col.measurementWearer), pocket: when((await features()).pocket, col.measurementPocket) })
       .from(schema.measurements)
       .where(eq(schema.measurements.customerId, id))
       .orderBy(desc(schema.measurements.date), desc(schema.measurements.id)),

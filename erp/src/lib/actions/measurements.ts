@@ -8,7 +8,8 @@ import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { LEGACY_GARMENTS } from "@/lib/measurements";
 import { wearerFor } from "@/lib/wearer-db";
-import { measurementsExt } from "@/lib/db/ext";
+import { measurementsExt, measurementsPocket } from "@/lib/db/ext";
+import { cleanPocket, hasPocket } from "@/lib/pocket";
 import { features } from "@/lib/db/features";
 import { fail, ok, optText, reqDate, zodError, type Result } from "./util";
 
@@ -23,6 +24,18 @@ const MeasurementInput = z.object({
   fit: optText,
   values: z.record(z.string(), z.number().nullable()),
   remarks: optText,
+  /** Pocket choices (shirt records only); null / missing = not recorded */
+  pocket: z
+    .object({
+      count: z.enum(["none", "one", "two"]),
+      size: z.enum(["small", "medium", "large"]).nullable(),
+      width: z.number().nullable(),
+      depth: z.number().nullable(),
+      shape: z.enum(["flat", "pointed", "cut", "rounded"]).nullable(),
+      flap: z.boolean(),
+    })
+    .nullable()
+    .optional(),
 });
 export type MeasurementInput = z.input<typeof MeasurementInput>;
 
@@ -39,7 +52,7 @@ export async function saveMeasurement(input: MeasurementInput): Promise<Result<{
     const { Sleeve, ...others } = values;
     values = { ...others, [legacy.sleeve]: Sleeve };
   }
-  const { wearerId: wantedWearer, ...base } = rest;
+  const { wearerId: wantedWearer, pocket, ...base } = rest;
   const d = { ...base, garmentType: legacy?.to ?? rest.garmentType };
   let row;
   if (id) {
@@ -48,7 +61,10 @@ export async function saveMeasurement(input: MeasurementInput): Promise<Result<{
     [row] = await db.insert(schema.measurements).values({ ...d, values }).returning({ id: schema.measurements.id });
   }
   // Whose measurements (Wearers) — only once the database has it
-  if ((await features()).wearers) await db.update(measurementsExt).set({ wearerId: await wearerFor(db, rest.customerId, wantedWearer) }).where(eq(measurementsExt.id, row.id));
+  // Pocket (shirt records only) — once the database has it; another garment keeps none
+  const feat = await features();
+  if (feat.pocket && pocket !== undefined) await db.update(measurementsPocket).set({ pocket: hasPocket(d.garmentType) ? cleanPocket(pocket) : null }).where(eq(measurementsPocket.id, row.id));
+  if (feat.wearers) await db.update(measurementsExt).set({ wearerId: await wearerFor(db, rest.customerId, wantedWearer) }).where(eq(measurementsExt.id, row.id));
   await audit(db, user, id ? "update" : "create", "measurement", row.id, d.garmentType);
   revalidatePath("/measurements");
   revalidatePath(`/customers/${d.customerId}`);

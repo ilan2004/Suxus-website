@@ -3,7 +3,8 @@
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
-import { orderItemsExt } from "@/lib/db/ext";
+import { draftsPocket, orderItemsExt } from "@/lib/db/ext";
+import type { Pocket } from "@/lib/pocket";
 import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { wearerFor } from "@/lib/wearer-db";
@@ -19,6 +20,8 @@ export type Draft = {
   fit: string | null;
   remarks: string | null;
   values: Record<string, number | null>;
+  /** pocket choices in progress (shirt) */
+  pocket?: Pocket | null;
   step: number;
   updatedAt: string;
 };
@@ -33,6 +36,7 @@ const DraftInput = z.object({
   fit: z.string().nullable().optional(),
   remarks: z.string().nullable().optional(),
   values: z.record(z.string(), z.number().nullable()),
+  pocket: z.any().optional(),
   step: z.number().int().min(0),
 });
 export type DraftInput = z.input<typeof DraftInput>;
@@ -43,8 +47,11 @@ export async function saveDraft(input: DraftInput): Promise<Result<{ id: number 
   if (!(await features()).simple) return fail("Drafts are not available yet — the database update for them has not run");
   const parsed = DraftInput.safeParse(input);
   if (!parsed.success) return fail("Could not save the draft");
-  const { id, ...d } = parsed.data;
+  const { id, pocket, ...d } = parsed.data;
   const db = await getDb();
+  const savePocket = async (draftId: number) => {
+    if (pocket !== undefined && (await features()).pocket) await db.update(draftsPocket).set({ pocket: (pocket as Pocket | null) ?? null }).where(eq(draftsPocket.id, draftId));
+  };
   const values = { ...d, wearerId: await wearerFor(db, d.customerId, d.wearerId), updatedAt: new Date() };
   if (id) {
     const [row] = await db
@@ -52,9 +59,13 @@ export async function saveDraft(input: DraftInput): Promise<Result<{ id: number 
       .set(values)
       .where(and(eq(schema.measurementDrafts.id, id), eq(schema.measurementDrafts.staffId, user.id)))
       .returning({ id: schema.measurementDrafts.id });
-    if (row) return ok(row);
+    if (row) {
+      await savePocket(row.id);
+      return ok(row);
+    }
   }
   const [row] = await db.insert(schema.measurementDrafts).values({ ...values, staffId: user.id }).returning({ id: schema.measurementDrafts.id });
+  await savePocket(row.id);
   return ok(row);
 }
 

@@ -12,8 +12,9 @@ import { getDb } from "./index";
  *   itemFabric 0023 Fabric per order item (fabric requirement)   order_item_fabrics
  *   variant  0024  Garment variant on the order item   order_items.variant
  *   prices   0025  Stitching price list               stitching_prices, order_items.list_rate, bulk_order_items.list_rate
+ *   pocket   0026  Pocket options on a shirt record   measurements.pocket, measurement_drafts.pocket
  */
-export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean; prices: boolean };
+export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean; prices: boolean; pocket: boolean };
 
 const NEEDS: Record<keyof Features, string[]> = {
   stock: ["fabrics.opening_mtr", "fabrics.opening_cost_per_mtr", "fabric_stock_moves.id"],
@@ -23,6 +24,7 @@ const NEEDS: Record<keyof Features, string[]> = {
   itemFabric: ["order_item_fabrics.order_item_id", "order_item_fabrics.fabric_id"],
   variant: ["order_items.variant"],
   prices: ["stitching_prices.id", "order_items.list_rate", "order_items.rate_changed_by", "bulk_order_items.variant", "bulk_order_items.list_rate", "bulk_order_items.rate_changed_by"],
+  pocket: ["measurements.pocket", "measurement_drafts.pocket"],
 };
 
 const g = globalThis as unknown as { __suxusFeatures?: { at: number; f: Features } };
@@ -31,7 +33,7 @@ export async function features(): Promise<Features> {
   const c = g.__suxusFeatures;
   const all = c && Object.values(c.f).every(Boolean);
   if (c && (all || Date.now() - c.at < 60_000)) return c.f;
-  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false, prices: false };
+  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false, prices: false, pocket: false };
   try {
     const db = await getDb();
     const res = await db.execute(sql`select table_name || '.' || column_name as k from information_schema.columns where table_schema = current_schema()

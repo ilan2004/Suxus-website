@@ -18,11 +18,12 @@ import type { CustomerLite } from "./customer-dialog";
 import { saveOrder, type OrderInput } from "@/lib/actions/orders";
 import { previousVariants, type PreviousVariant } from "@/lib/actions/order-help";
 import { variantMl, variantRequired, variantsFor, type VariantLists } from "@/lib/variants";
+import { listPriceFor, rateChanged, type PriceRow } from "@/lib/stitching-prices";
 import { addDays, cn, fmtDate, num, round2, rupees, today } from "@/lib/utils";
 
-type Item = { key: string; /** existing order item (kept on save, so its bundle label stays valid) */ id?: number; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null; /** fabric it is cut from (fabric requirement) */ fabricId?: number | null; /** തരം: Full sleeve / Half sleeve … (null = not chosen) */ variant: string | null };
+type Item = { key: string; /** existing order item (kept on save, so its bundle label stays valid) */ id?: number; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null; /** fabric it is cut from (fabric requirement) */ fabricId?: number | null; /** തരം: Full sleeve / Half sleeve … (null = not chosen) */ variant: string | null; /** stitching list price this charge was filled from (stored on the order); null = none */ listRate?: number | null; rateChangedBy?: string | null };
 export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null; /** fabric + metres on the bill */ fabrics?: { fabricId: number | null; metres: number }[] };
-export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null; fabricId?: number | null; variant?: string | null }[] };
+export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null; fabricId?: number | null; variant?: string | null; listRate?: number | null; rateChangedBy?: string | null }[] };
 
 /** The one shop fabric on a bill (null when it has none or several — then each garment's fabric is chosen by hand). */
 const onlyFabricOf = (sale: LinkedSale | null | undefined) => {
@@ -41,6 +42,7 @@ export function OrderForm({
   days,
   fabricReq,
   variants,
+  prices,
 }: {
   initial?: OrderInitial;
   customers: CustomerLite[];
@@ -54,6 +56,8 @@ export function OrderForm({
   fabricReq?: { tables: FabricRequirementTables; enabled: boolean; fabrics: { id: number; code: string; name: string; balance: number }[] };
   /** Settings → Variants; null = the database does not have variants yet (no variant field) */
   variants: VariantLists | null;
+  /** Settings → Stitching Prices; null = the database does not have the price list yet */
+  prices: PriceRow[] | null;
 }) {
   const router = useRouter();
   const editing = !!initial?.id;
@@ -76,8 +80,8 @@ export function OrderForm({
   const [remarks, setRemarks] = React.useState(initial?.remarks ?? "");
   const [items, setItems] = React.useState<Item[]>(
     initial?.items?.length
-      ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, fabricId: i.fabricId ?? null, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null, variant: i.variant ?? null }))
-      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null, variant: null, fabricId: fabricReq?.enabled ? onlyFabricOf(sale) : null }],
+      ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, fabricId: i.fabricId ?? null, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null, variant: i.variant ?? null, listRate: i.listRate ?? null, rateChangedBy: i.rateChangedBy ?? null }))
+      : [withPrice({ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null, variant: null, fabricId: fabricReq?.enabled ? onlyFabricOf(sale) : null }, prices)],
   );
   // People measured under this customer: the "whose garment" picker appears once there is more than Self
   const people = useWearers(customer?.id);
@@ -117,7 +121,7 @@ export function OrderForm({
       is.map((i) => {
         if (i.variant || i.id) return i;
         const v = previousFor(i.item, i.wearerId);
-        return v && variantsFor(i.item, variants).includes(v) ? { ...i, variant: v } : i;
+        return v && variantsFor(i.item, variants).includes(v) ? withPrice({ ...i, variant: v }, prices, i) : i;
       }),
     );
   }, [prevVariants, previousFor, variants]);
@@ -177,9 +181,13 @@ export function OrderForm({
             next.variant = prev && allowed.includes(prev) ? prev : next.variant && allowed.includes(next.variant) ? next.variant : null;
           }
         }
+        // A different garment or variant: the charge is filled from the price list (an emptied "not set" — never 0)
+        if (prices && (next.item !== i.item || next.variant !== i.variant)) return withPrice(next, prices, i);
         return next;
       }),
     );
+  // A garment with no list price and no charge typed: warn (a silent 0 loses money)
+  const noRate = (i: Item) => !!prices && i.listRate == null && !(Number(i.rate) > 0) && !(variants && variantRequired(i.item) && !i.variant);
   const missingVariant = (i: Item) => !!variants && !i.variant && variantRequired(i.item) && !(i.id && initial?.items?.find((x) => x.id === i.id)?.item === i.item);
   const tailors = staff;
   const tailorName = (id: number | null) => (id ? (staff.find((x) => x.id === id)?.name ?? "?") : null);
@@ -200,6 +208,8 @@ export function OrderForm({
     if (items.some((i) => !i.item || !(Number(i.qty) > 0))) return void toast.error("Every item needs a name and quantity");
     const noVariant = items.find(missingVariant);
     if (noVariant) return void toast.error(`Choose the variant (തരം) for ${noVariant.item}`);
+    const unpriced = items.filter((i) => noRate(i));
+    if (unpriced.length && !window.confirm(`No stitching rate for ${unpriced.map((i) => `${i.item}${i.variant ? ` (${i.variant})` : ""}`).join(", ")} — it will be charged ₹0. Save anyway?`)) return;
     start(async () => {
       const r = await saveOrder({
         id: initial?.id,
@@ -303,7 +313,7 @@ export function OrderForm({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null, wearerId: is.at(-1)?.wearerId ?? null, variant: variants ? previousFor("Pant", is.at(-1)?.wearerId ?? null) : null }])}
+              onClick={() => setItems((is) => [...is, withPrice({ key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null, wearerId: is.at(-1)?.wearerId ?? null, variant: variants ? previousFor("Pant", is.at(-1)?.wearerId ?? null) : null }, prices)])}
             >
               <Plus /> Add item
             </Button>
@@ -326,7 +336,16 @@ export function OrderForm({
               )}
               <ListSelect items={lists.item} value={i.item} onChange={(v) => updateItem(i.key, { item: v ?? "" })} className="col-span-3 sm:col-span-1" />
               <Input type="number" min={1} step={1} value={i.qty} onChange={(e) => updateItem(i.key, { qty: e.target.value })} className="text-right" />
-              <Input type="number" min={0} step={10} value={i.rate} onChange={(e) => updateItem(i.key, { rate: e.target.value })} className="text-right" placeholder="0" />
+              <Input
+                type="number"
+                min={0}
+                step={10}
+                aria-label="Stitching charge"
+                value={i.rate}
+                onChange={(e) => updateItem(i.key, { rate: e.target.value })}
+                className={cn("text-right", noRate(i) && "border-warning", prices && rateChanged(Number(i.rate) || 0, i.listRate) && "border-gold")}
+                placeholder={noRate(i) ? "no rate" : "0"}
+              />
               <select
                 aria-label="Tailor"
                 value={i.tailorId ?? ""}
@@ -355,6 +374,7 @@ export function OrderForm({
               >
                 <Trash2 className="text-muted-foreground" />
               </Button>
+              {prices && <RateNote item={i} noRate={noRate(i)} />}
               {variants && <VariantPicker item={i.item} options={variantsFor(i.item, variants)} value={i.variant} missing={missingVariant(i)} wasOld={!!i.id && !i.variant && variantRequired(i.item)} onChange={(v) => updateItem(i.key, { variant: v })} />}
               {fabricReq && fabricPlan && (
                 <FabricReqLine
@@ -382,7 +402,7 @@ export function OrderForm({
                   // a new item row for the new person (existing items keep their person)
                   setItems((is) => {
                     const last = is.at(-1);
-                    return [...is, { key: crypto.randomUUID(), item: last?.item ?? "Shirt", qty: "1", rate: "", tailorId: last?.tailorId ?? null, wearerId: w.id, variant: null }];
+                    return [...is, withPrice({ key: crypto.randomUUID(), item: last?.item ?? "Shirt", qty: "1", rate: "", tailorId: last?.tailorId ?? null, wearerId: w.id, variant: null }, prices)];
                   });
                 }}
               />
@@ -522,6 +542,37 @@ function Sum({ label, value }: { label: string; value: React.ReactNode }) {
       <span className="tabular-nums">{value}</span>
     </div>
   );
+}
+
+/** The garment's list price filled in (no ₹0), or a warning when none is set; or "rate changed" from the list price. */
+function withPrice(next: Item, prices: PriceRow[] | null, prev?: Item): Item {
+  if (!prices) return next;
+  const list = listPriceFor(prices, next.item, next.variant);
+  // keep a charge typed by hand when the new garment has no list price; drop one that only came from the old list price
+  const typedByHand = prev && prev.rate !== "" && Number(prev.rate) !== prev.listRate;
+  const rate = list != null ? String(list) : typedByHand ? next.rate : "";
+  return { ...next, listRate: list, rate, rateChangedBy: null };
+}
+
+function RateNote({ item, noRate }: { item: Item; noRate: boolean }) {
+  if (noRate)
+    return (
+      <p className="col-span-3 rounded-md bg-warning/15 px-2 py-1 text-sm font-medium sm:col-span-6" data-testid="no-rate">
+        ⚠ No stitching rate set for this garment{item.variant ? ` (${item.item} — ${item.variant})` : ` (${item.item})`}. Type the charge, or{" "}
+        <Link href="/settings/stitching-prices" className="underline" target="_blank">
+          set it in Stitching Prices
+        </Link>
+        .
+      </p>
+    );
+  if (rateChanged(Number(item.rate) || 0, item.listRate))
+    return (
+      <p className="col-span-3 text-xs text-[#8a6a2a] sm:col-span-6 dark:text-gold" data-testid="rate-changed">
+        Rate changed — list price {rupees(item.listRate!)}
+        {item.rateChangedBy ? ` · changed by ${item.rateChangedBy}` : ""}
+      </p>
+    );
+  return null;
 }
 
 /** Variant (തരം) of one garment: large buttons, Malayalam first. Required for shirts and pants. */

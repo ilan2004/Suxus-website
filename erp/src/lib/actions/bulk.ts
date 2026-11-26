@@ -11,6 +11,10 @@ import { postCash, removeCash } from "@/lib/cashbook";
 import { round2 } from "@/lib/utils";
 import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
+import { features } from "@/lib/db/features";
+import { bulkItemsPrice, col } from "@/lib/db/ext";
+import { listPriceFor, rateChanged } from "@/lib/stitching-prices";
+import { loadPrices } from "./prices";
 
 const BulkInput = z.object({
   id: z.number().int().optional(),
@@ -35,6 +39,10 @@ const BulkInput = z.object({
         size: optText,
         qty: z.coerce.number<number>().int().positive("Qty must be at least 1"),
         rate: z.coerce.number<number>().min(0),
+        variant: optText,
+        /** the list price the line was filled from when it was first saved (kept on edit) */
+        listRate: z.coerce.number<number>().min(0).nullable().optional(),
+        rateChangedBy: optText,
       }),
     )
     .min(1, "Add at least one line"),
@@ -63,10 +71,20 @@ export async function saveBulkOrder(input: BulkInput): Promise<Result<{ id: numb
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, items, advance, advanceMode, ...d } = parsed.data;
   const db = await getDb();
+  const hasPrices = (await features()).prices;
   try {
     const res = await db.transaction(async (tx) => {
       const values = { ...d, phone: intlOrAsTyped(d.phone), broughtById: d.broughtById ?? null };
       let row;
+      // Lines are replaced on edit: remember each garment's price snapshot so an unchanged line keeps the price it was
+      // created with (a later price change never alters an existing order or bill)
+      const before: { item: string; variant: string | null; rate: number; listRate: number | null; rateChangedBy: string | null }[] =
+        id && hasPrices
+          ? await tx
+              .select({ item: schema.bulkOrderItems.item, rate: schema.bulkOrderItems.rate, variant: col.bulkItemVariant, listRate: col.bulkItemListRate, rateChangedBy: col.bulkItemRateChangedBy })
+              .from(schema.bulkOrderItems)
+              .where(eq(schema.bulkOrderItems.bulkOrderId, id))
+          : [];
       if (id) {
         [row] = await tx.update(schema.bulkOrders).set(values).where(eq(schema.bulkOrders.id, id)).returning();
         await tx.delete(schema.bulkOrderItems).where(eq(schema.bulkOrderItems.bulkOrderId, id));
@@ -74,9 +92,25 @@ export async function saveBulkOrder(input: BulkInput): Promise<Result<{ id: numb
         const orderNo = await nextDocNo(tx, "BO");
         [row] = await tx.insert(schema.bulkOrders).values({ ...values, orderNo, createdBy: user.name }).returning();
       }
-      await tx
+      const inserted = await tx
         .insert(schema.bulkOrderItems)
-        .values(items.map((i) => ({ ...i, bulkOrderId: row.id, amount: round2(i.qty * i.rate) })));
+        .values(items.map(({ variant: _v, listRate: _l, rateChangedBy: _c, ...i }) => ({ ...i, bulkOrderId: row.id, amount: round2(i.qty * i.rate) })))
+        .returning({ id: schema.bulkOrderItems.id });
+      if (hasPrices) {
+        const prices = await loadPrices();
+        for (const [n, i] of items.entries()) {
+          const variant = i.variant ?? null;
+          // the snapshot this line had (same garment and variant), else today's bulk / institution rate
+          const kept = i.listRate != null ? before.find((b) => b.item === i.item && (b.variant ?? null) === variant && b.listRate === i.listRate) : undefined;
+          const listRate = kept ? kept.listRate : listPriceFor(prices, i.item, variant, true);
+          const changed = rateChanged(i.rate, listRate);
+          const keptBy = changed && kept && i.rateChangedBy ? before.find((b) => b.item === i.item && (b.variant ?? null) === variant && b.rate === i.rate && b.rateChangedBy === i.rateChangedBy) : undefined;
+          await tx
+            .update(bulkItemsPrice)
+            .set({ variant, listRate, rateChangedBy: !changed ? null : (keptBy?.rateChangedBy ?? user.name) })
+            .where(eq(bulkItemsPrice.id, inserted[n].id));
+        }
+      }
       await totals(tx, row.id, d.discount, d.gstPct);
       if (!id && advance > 0) {
         const [p] = await tx

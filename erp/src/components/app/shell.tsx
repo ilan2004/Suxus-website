@@ -32,6 +32,7 @@ function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   // A more specific menu item (e.g. /orders/board) wins over its parent (/orders)
   if (href === "/orders" && pathname.startsWith("/orders/board")) return false;
+  if (href === "/settings" && pathname.startsWith("/settings/stitching-prices")) return false;
   return pathname === href || pathname.startsWith(href + "/");
 }
 

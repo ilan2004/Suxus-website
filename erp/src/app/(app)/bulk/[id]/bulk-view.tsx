@@ -1,5 +1,6 @@
 "use client";
 
+import { rateChanged } from "@/lib/stitching-prices";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -23,8 +24,8 @@ export function BulkView({ order, statuses, modes, shopName, isPartner }: { orde
   // group lines by item + description for a readable summary
   const groups = Object.values(
     order.items.reduce<Record<string, { label: string; qty: number; sizes: string[] }>>((acc, i) => {
-      const k = `${i.item}|${i.description ?? ""}`;
-      acc[k] ??= { label: [i.item, i.description].filter(Boolean).join(" — "), qty: 0, sizes: [] };
+      const k = `${i.item}|${i.variant ?? ""}|${i.description ?? ""}`;
+      acc[k] ??= { label: [i.variant ? `${i.item} (${i.variant})` : i.item, i.description].filter(Boolean).join(" — "), qty: 0, sizes: [] };
       acc[k].qty += i.qty;
       if (i.size) acc[k].sizes.push(`${i.size}×${i.qty}`);
       return acc;
@@ -103,7 +104,15 @@ export function BulkView({ order, statuses, modes, shopName, isPartner }: { orde
                   <TableRow key={i.id}>
                     <TableCell className="text-muted-foreground">{n + 1}</TableCell>
                     <TableCell>
-                      <span className="font-medium">{i.item}</span> {i.description && <span className="text-muted-foreground">— {i.description}</span>}
+                      <span className="font-medium">{i.item}</span>
+                      {i.variant && <span className="text-muted-foreground"> ({i.variant})</span>}
+                      {rateChanged(i.rate, i.listRate) && (
+                        <span className="ml-1 text-[10px] text-[#8a6a2a] dark:text-gold" data-testid="rate-changed">
+                          rate changed · list {rupees(i.listRate!)}
+                          {i.rateChangedBy ? ` · ${i.rateChangedBy}` : ""}
+                        </span>
+                      )}{" "}
+                      {i.description && <span className="text-muted-foreground">— {i.description}</span>}
                     </TableCell>
                     <TableCell>{i.size}</TableCell>
                     <TableCell className="text-right">{i.qty}</TableCell>

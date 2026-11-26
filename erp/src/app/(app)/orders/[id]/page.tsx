@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/lib/permissions";
 import { desc, eq } from "drizzle-orm";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
 import { getOrderFull } from "@/lib/queries";
@@ -45,6 +46,7 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   return (
     <OrderView
       fabricPlan={fabricPlan}
+      pricesOn={(await features()).prices}
       order={order}
       shop={settings.shop}
       statuses={settings.lists.status}

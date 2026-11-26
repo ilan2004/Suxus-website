@@ -352,7 +352,7 @@ export const bulkOrders = pgTable("bulk_orders", {
   updatedAt: updated(),
 });
 
-export const bulkOrderItems = pgTable("bulk_order_items", {
+export const bulkOrderItemsColumns = () => ({
   id: serial("id").primaryKey(),
   bulkOrderId: integer("bulk_order_id")
     .notNull()
@@ -364,6 +364,30 @@ export const bulkOrderItems = pgTable("bulk_order_items", {
   rate: money("rate").notNull().default(0),
   amount: money("amount").notNull().default(0),
 });
+export const bulkOrderItems = pgTable("bulk_order_items", bulkOrderItemsColumns());
+
+/**
+ * Settings → Stitching Prices: what the shop CHARGES for stitching, per garment and variant (the tailor's piece rate —
+ * what we PAY — stays in Tailor Wages). Filled onto an order item when the garment is added and then stored there:
+ * changing a price never alters an existing order or bill.
+ */
+export const stitchingPrices = pgTable(
+  "stitching_prices",
+  {
+    id: serial("id").primaryKey(),
+    garment: text("garment").notNull(),
+    /** "" = the garment has no variants */
+    variant: text("variant").notNull().default(""),
+    /** Customer rate — null = not set (never treated as 0) */
+    customerRate: money("customer_rate"),
+    /** Bulk / institution rate (optional) — Bulk Orders and Institution Bills */
+    bulkRate: money("bulk_rate"),
+    active: boolean("active").notNull().default(true),
+    updatedBy: text("updated_by"),
+    updatedAt: updated(),
+  },
+  (t) => [uniqueIndex("stitching_prices_garment_variant_idx").on(t.garment, t.variant)],
+);
 
 /* ───────────────────────── Payments received (advance + later collections) ───────────────────────── */
 

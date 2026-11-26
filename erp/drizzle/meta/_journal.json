@@ -176,6 +176,13 @@
       "when": 1795715716712,
       "tag": "0024_item_variant",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1795716087580,
+      "tag": "0025_stitching_prices",
+      "breakpoints": true
     }
   ]
 }

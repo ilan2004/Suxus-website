@@ -18,6 +18,7 @@ import {
   Landmark,
   BarChart3,
   Settings,
+  Tags,
   type LucideIcon,
 } from "lucide-react";
 import type { Perm } from "./permissions";
@@ -62,6 +63,7 @@ export const NAV: NavGroup[] = [
       { href: "/opening-stock", en: "Opening Stock", ml: "ആസ്തി", icon: Package, perm: "money" },
       { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, perm: "money" },
       { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, perm: "money" },
+      { href: "/settings/stitching-prices", en: "Stitching Prices", ml: "തുന്നൽക്കൂലി നിരക്ക്", icon: Tags, perm: "prices" },
       { href: "/settings", en: "Settings", ml: "സെറ്റിംഗ്സ്", icon: Settings, perm: "settings" },
     ],
   },

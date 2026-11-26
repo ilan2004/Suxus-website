@@ -4,7 +4,7 @@
  * Local declarations below take precedence over the `export *` names, so drizzle-kit sees the full tables.
  */
 import { boolean, integer, numeric, pgTable, text } from "drizzle-orm/pg-core";
-import { fabricsColumns, fabricsIndexes, measurementsColumns, measurementsIndexes, orderItemsColumns, staffColumns, wearers } from "./schema";
+import { bulkOrderItemsColumns, fabricsColumns, fabricsIndexes, measurementsColumns, measurementsIndexes, orderItemsColumns, staffColumns, wearers } from "./schema";
 
 export * from "./schema";
 
@@ -33,6 +33,18 @@ export const orderItems = pgTable("order_items", {
   wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
   /** Garment variant (തരം): Full sleeve / Half sleeve, Regular / Loose model … Null = not set (older items) — migration 0024 */
   variant: text("variant"),
+  /** Stitching price list at the time the charge was filled (null = no list price) — migration 0025 */
+  listRate: money("list_rate"),
+  /** Who set a charge different from the list price — migration 0025 */
+  rateChangedBy: text("rate_changed_by"),
+});
+
+export const bulkOrderItems = pgTable("bulk_order_items", {
+  ...bulkOrderItemsColumns(),
+  /** Variant (തരം) and the price-list snapshot, as on order items — migration 0025 */
+  variant: text("variant"),
+  listRate: money("list_rate"),
+  rateChangedBy: text("rate_changed_by"),
 });
 
 export const measurements = pgTable(

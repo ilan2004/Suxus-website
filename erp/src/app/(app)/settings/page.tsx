@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { PageHeader } from "@/components/app/page-header";
@@ -29,7 +30,16 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
   ]);
   return (
     <>
-      <PageHeader title="Settings" ml="സെറ്റിംഗ്സ്" description="Shop details on bills, dropdown lists, piece rates and fabric codes. Changes apply everywhere." />
+      <PageHeader
+        title="Settings"
+        ml="സെറ്റിംഗ്സ്"
+        description="Shop details on bills, dropdown lists, piece rates and fabric codes. Changes apply everywhere."
+        actions={
+          <Link href="/settings/stitching-prices" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
+            Stitching Prices <span className="ml ml-1">തുന്നൽക്കൂലി നിരക്ക്</span> →
+          </Link>
+        }
+      />
       <SettingsView
         settings={settings}
         templates={templates}

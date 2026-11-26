@@ -58,15 +58,14 @@ export async function orderFabricPlan(order: {
   // Metres of each fabric on this order's own bill: already off the stock balance, but set aside for this order
   const billed = new Map<number, number>();
   if (order.sale && !order.sale.cancelled) for (const s of order.sale.items) if (s.fabricId) billed.set(s.fabricId, (billed.get(s.fabricId) ?? 0) + s.metres);
-  // A garment with no fabric of its own: the bill's fabric when the bill has just one
-  const onlyBillFabric = billed.size === 1 ? [...billed.keys()][0] : null;
 
   const items: OrderFabricPlan["items"] = {};
   const sums = new Map<number, { need: number; garments: number }>();
   for (const i of order.items) {
     const m = measureFor(measures, i.item, i.wearerId ?? null, selfId);
     const req = fabricRequirement(tables, i.item, i.qty, m, i.variant);
-    const fabric = lite(i.fabricId ?? onlyBillFabric);
+    // the garment's own fabric only — never another garment's or the whole bill's
+    const fabric = lite(i.fabricId);
     items[i.id] = { req, fabric };
     if (fabric && req?.ok) {
       const s = sums.get(fabric.id) ?? { need: 0, garments: 0 };

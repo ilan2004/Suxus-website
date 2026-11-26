@@ -2,7 +2,7 @@ import "server-only";
 import path from "node:path";
 import fs from "node:fs";
 import crypto from "node:crypto";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { col } from "./db/ext";
 import { features } from "./db/features";
@@ -42,7 +42,8 @@ export type JobSlipPage = {
   measures: Measure[];
   /** No record of this garment for this person — the person's other garments are shown instead. */
   measuresNote: string | null;
-  fabrics: { code: string; name: string; hex: string | null }[];
+  /** this garment's own fabric (null = customer's own / not chosen) */
+  fabric: { code: string; name: string; hex: string | null } | null;
   /** Fabric requirement for this garment ("തുണി വേണ്ടത്: 1.70 മീറ്റർ" + the rule), or the missing measurement */
   requirement: { text: string; rule: string } | { missing: string } | null;
   remarks: string[];
@@ -76,13 +77,6 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
   const selfId = order.customerId
     ? ((await db.select({ id: schema.wearers.id }).from(schema.wearers).where(and(eq(schema.wearers.customerId, order.customerId), eq(schema.wearers.isSelf, true))))[0]?.id ?? null)
     : null;
-  // Fabric bought for this order (linked fabric bill)
-  const fabricIds = (order.sale?.items ?? []).map((i) => i.fabricId).filter((x): x is number => !!x);
-  const fabrics = fabricIds.length
-    ? await db.select({ id: schema.fabrics.id, code: schema.fabrics.code, brand: schema.fabrics.brand, shade: schema.fabrics.shade, hex: schema.fabrics.dominantHex }).from(schema.fabrics).where(inArray(schema.fabrics.id, fabricIds))
-    : [];
-  const fabricList = fabrics.map((f) => ({ code: f.code, name: [f.brand, f.shade].filter(Boolean).join(" · "), hex: f.hex }));
-
   // Fabric requirement per garment, and the garment's own fabric where one was chosen on the order
   const plan = await orderFabricPlan(order);
   return items.map((i, n) => {
@@ -113,8 +107,8 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
       tailor: i.tailor,
       measures,
       measuresNote: !latest.length ? "No measurements saved for this person" : !match.length ? `No ${i.item} record — showing this person's other measurements` : null,
-      // the garment's own fabric when known; otherwise every fabric on the order's bill
-      fabrics: plan.items[i.id]?.fabric ? [{ code: plan.items[i.id].fabric!.code, name: plan.items[i.id].fabric!.name, hex: plan.items[i.id].fabric!.hex }] : fabricList,
+      // this garment's own fabric only — never a list of every fabric on the order
+      fabric: plan.items[i.id]?.fabric ? { code: plan.items[i.id].fabric!.code, name: plan.items[i.id].fabric!.name, hex: plan.items[i.id].fabric!.hex } : null,
       requirement: (() => {
         const r = plan.items[i.id]?.req;
         if (!r) return null;
@@ -225,7 +219,7 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
     // What comes after the measurements (fabric, remarks) — reserved so the page holds everything
     doc.font("B").fontSize(16);
     const remarksH = p.remarks.reduce((h, r) => h + doc.heightOfString(r, { width: W }) + 2, p.remarks.length ? 22 : 0);
-    const footerH = 16 + (p.fabrics.length ? 18 + p.fabrics.length * 26 : 22) + (p.requirement ? 44 : 0) + remarksH;
+    const footerH = 16 + (p.fabric ? 18 + 40 : 22) + (p.requirement ? 44 : 0) + remarksH;
     const rows = p.measures.reduce((n, m) => n + 1 + (GARMENTS[m.garmentType] ? GARMENTS[m.garmentType] : fieldsFor(m.garmentType, m.values)).filter((f) => m.values[f.key] != null).length, 0);
     // Row height from the space left: large when there is room, never smaller than readable on a phone
     const rowH = Math.max(34, Math.min(48, (BOTTOM - doc.y - footerH) / Math.max(1, rows)));
@@ -260,19 +254,18 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
     rule(3);
     // Required metres next to the fabric name (one fabric), or on its own line
     const reqText = p.requirement ? ("text" in p.requirement ? `${p.requirement.text.replace("തുണി വേണ്ടത്: ", "വേണ്ടത് ")}` : p.requirement.missing) : null;
-    if (p.fabrics.length) {
-      text(p.fabrics.length > 1 ? "Fabric on this order" : "Fabric", 13, "M");
-      for (const f of p.fabrics) {
-        const y = doc.y + 2;
-        if (f.hex) doc.rect(L, y, 22, 22).fillAndStroke(f.hex, black);
-        const x = L + (f.hex ? 32 : 0);
-        doc.font("B").fontSize(16).fillColor(black).text(`${f.code}  ${f.name}`, x, y + 2, { width: W - 32, continued: !!(reqText && p.fabrics.length === 1) });
-        if (reqText && p.fabrics.length === 1) doc.text(`   —   ${reqText}`);
-        doc.y = Math.max(doc.y, y + 26);
-      }
-      if (reqText && p.fabrics.length > 1) text(`തുണി ${reqText}`, 16);
+    if (p.fabric) {
+      // This garment's fabric: a colour swatch, then code and name large, the metres needed beside them
+      text("Fabric · തുണി", 13, "M");
+      const f = p.fabric;
+      const y = doc.y + 2;
+      if (f.hex) doc.rect(L, y, 34, 34).fillAndStroke(f.hex, black);
+      const x = L + (f.hex ? 44 : 0);
+      doc.font("B").fontSize(20).fillColor(black).text(f.code, x, y, { width: W - 44 });
+      doc.font("M").fontSize(14).fillColor(black).text(`${f.name}${reqText ? `   —   ${reqText}` : ""}`, x, doc.y, { width: W - 44 });
+      doc.y = Math.max(doc.y, y + 38);
     } else {
-      text("Fabric: customer's own / not linked", 14, "M");
+      text("Fabric: customer's own / not chosen", 14, "M");
       if (reqText) text(`തുണി ${reqText}`, 16);
     }
     if (p.requirement && "rule" in p.requirement) text(`(${p.requirement.rule})`, 12, "M");

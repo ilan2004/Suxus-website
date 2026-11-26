@@ -19,12 +19,21 @@ export const measurementsExt = pgTable("measurements", { id: integer("id").prima
 export const orderItemsExt = pgTable("order_items", { id: integer("id").primaryKey(), wearerId: integer("wearer_id") });
 /** order_items.variant — Garment variant (തരം) */
 export const orderItemsVariant = pgTable("order_items", { id: integer("id").primaryKey(), variant: text("variant") });
+/** order_items.list_rate / rate_changed_by — Stitching price list snapshot */
+export const orderItemsPrice = pgTable("order_items", { id: integer("id").primaryKey(), listRate: money("list_rate"), rateChangedBy: text("rate_changed_by") });
+/** bulk_order_items.variant / list_rate / rate_changed_by — Stitching price list on Bulk Orders */
+export const bulkItemsPrice = pgTable("bulk_order_items", { id: integer("id").primaryKey(), variant: text("variant"), listRate: money("list_rate"), rateChangedBy: text("rate_changed_by") });
 
 /** For a select list on the un-aliased table: e.g. { wearerId: col.measurementWearer } */
 export const col = {
   measurementWearer: sql<number | null>`"measurements"."wearer_id"`.mapWith((v) => (v == null ? null : Number(v))),
   orderItemWearer: sql<number | null>`"order_items"."wearer_id"`.mapWith((v) => (v == null ? null : Number(v))),
   orderItemVariant: sql<string | null>`"order_items"."variant"`,
+  orderItemListRate: sql<number | null>`"order_items"."list_rate"`.mapWith((v) => (v == null ? null : Number(v))),
+  orderItemRateChangedBy: sql<string | null>`"order_items"."rate_changed_by"`,
+  bulkItemVariant: sql<string | null>`"bulk_order_items"."variant"`,
+  bulkItemListRate: sql<number | null>`"bulk_order_items"."list_rate"`.mapWith((v) => (v == null ? null : Number(v))),
+  bulkItemRateChangedBy: sql<string | null>`"bulk_order_items"."rate_changed_by"`,
   fabricOpeningMtr: sql<number | null>`"fabrics"."opening_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
   fabricOpeningCost: sql<number | null>`"fabrics"."opening_cost_per_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
 };

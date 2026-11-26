@@ -70,7 +70,7 @@ export default async function Invoice({ params }: { params: Promise<{ id: string
               {rows.map((i, n) => (
                 <tr key={n} className="h-[7mm]">
                   <td className="border border-black/30 px-2">{i ? n + 1 : ""}</td>
-                  <td className="border border-black/30 px-2">{i ? [i.item, i.description].filter(Boolean).join(" — ") : ""}</td>
+                  <td className="border border-black/30 px-2">{i ? [i.variant ? `${i.item} (${i.variant})` : i.item, i.description].filter(Boolean).join(" — ") : ""}</td>
                   <td className="border border-black/30 px-2 text-center">{i?.size}</td>
                   <td className="border border-black/30 px-2 text-right">{i?.qty}</td>
                   <td className="border border-black/30 px-2 text-right">{i ? num(i.rate) : ""}</td>

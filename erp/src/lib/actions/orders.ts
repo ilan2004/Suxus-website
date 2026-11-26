@@ -14,7 +14,9 @@ import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 import { recalcOrder } from "@/lib/order-calc";
 import { wearerFor } from "@/lib/wearer-db";
-import { orderItemsExt, orderItemsVariant } from "@/lib/db/ext";
+import { col, orderItemsExt, orderItemsPrice, orderItemsVariant } from "@/lib/db/ext";
+import { listPriceFor, rateChanged } from "@/lib/stitching-prices";
+import { loadPrices } from "./prices";
 import { variantRequired, variantsFor } from "@/lib/variants";
 import { features } from "@/lib/db/features";
 
@@ -115,6 +117,14 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
       // Items keep their id when an order is edited: a printed bundle label (barcode = item id) and a shared
       // job slip link stay valid. Changed items are updated, new ones added, removed ones deleted.
       const existing = d.id ? (await tx.select({ id: schema.orderItems.id }).from(schema.orderItems).where(eq(schema.orderItems.orderId, order.id))).map((r) => r.id) : [];
+      // what each existing item held before this save (price snapshot kept while garment and variant are unchanged)
+      const prevPrice = new Map<number, { item: string; variant: string | null; rate: number; listRate: number | null; rateChangedBy: string | null }>();
+      if (feat.prices && existing.length)
+        for (const r of await tx
+          .select({ id: schema.orderItems.id, item: schema.orderItems.item, rate: schema.orderItems.rate, variant: col.orderItemVariant, listRate: col.orderItemListRate, rateChangedBy: col.orderItemRateChangedBy })
+          .from(schema.orderItems)
+          .where(eq(schema.orderItems.orderId, order.id)))
+          prevPrice.set(r.id, r);
       const keep = new Set<number>();
       for (const [n, i] of d.items.entries()) {
         if (i.id && existing.includes(i.id) && !keep.has(i.id)) {
@@ -125,6 +135,21 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
       }
       if (hasWearers) for (const [n, itemId] of savedIds.entries()) await tx.update(orderItemsExt).set({ wearerId: wearerIds[n] }).where(eq(orderItemsExt.id, itemId));
       if (feat.variant) for (const [n, itemId] of savedIds.entries()) await tx.update(orderItemsVariant).set({ variant: d.items[n].variant ?? null }).where(eq(orderItemsVariant.id, itemId));
+      // Stitching price: the list price is SNAPSHOT on the item when the garment is added (or its garment / variant
+      // changes) and never looked up again — a later price change leaves this order alone. A charge different from
+      // that list price is marked "rate changed" with who changed it.
+      if (feat.prices) {
+        const prices = await loadPrices();
+        for (const [n, itemId] of savedIds.entries()) {
+          const i = d.items[n];
+          const was = prevPrice.get(itemId);
+          const same = !!was && was.item === i.item && (was.variant ?? null) === (i.variant ?? null);
+          const listRate = same ? was.listRate : listPriceFor(prices, i.item, i.variant);
+          const changed = rateChanged(i.rate, listRate);
+          const rateChangedBy = !changed ? null : same && was.rate === i.rate && was.rateChangedBy ? was.rateChangedBy : user.name;
+          await tx.update(orderItemsPrice).set({ listRate, rateChangedBy }).where(eq(orderItemsPrice.id, itemId));
+        }
+      }
       // Which fabric each garment is cut from (fabric requirement estimate). Never touches stock: only bills do.
       if (feat.itemFabric) {
         await tx.delete(schema.orderItemFabrics).where(inArray(schema.orderItemFabrics.orderItemId, savedIds));

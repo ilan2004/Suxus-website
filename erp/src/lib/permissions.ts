@@ -10,15 +10,16 @@ export type Perm =
   | "settings" // Settings, Import / Backup (Excel download), message templates
   | "users" // add users, set roles, reset other people's PINs
   | "staff" // Staff and Incentive pages
-  | "delete"; // delete / cancel records
+  | "delete" // delete / cancel records
+  | "prices"; // Settings → Stitching Prices (what we charge, the tailor rate and the margin) — partners
 
-const ALL: Perm[] = ["money", "costs", "settings", "users", "staff", "delete"];
+const ALL: Perm[] = ["money", "costs", "settings", "users", "staff", "delete", "prices"];
 
 export const ROLE_PERMS: Record<Role, Perm[]> = {
   owner: ALL,
   // Work side, not the money side: no Setup Expenses, Capital, Opening Stock, cost prices, supplier balances/Pay,
   // Summary, Settings or Import / Backup
-  partner: ["staff", "delete"],
+  partner: ["staff", "delete", "prices"],
   staff: [],
 };
 

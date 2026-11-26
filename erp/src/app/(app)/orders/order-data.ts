@@ -5,6 +5,7 @@ import { getDb, schema } from "@/lib/db";
 import { getSettings } from "@/lib/settings";
 import { customerOptions, fabricsWithStock, staffOptions } from "@/lib/queries";
 import { features } from "@/lib/db/features";
+import { loadPrices } from "@/lib/actions/prices";
 import type { LinkedSale } from "@/components/forms/order-form";
 
 const itemsAgg = sql<string>`coalesce((select string_agg(${c(schema.saleItems.description)} || ' ' || ${c(schema.saleItems.metres)} || 'm', ', ') from ${schema.saleItems} where ${c(schema.saleItems.saleId)} = ${c(schema.sales.id)}),'')`;
@@ -24,7 +25,7 @@ const saleCols = {
 
 export async function loadOrderFormData(saleId?: number | null) {
   const db = await getDb();
-  const [customers, staff, settings, unlinked, stock, feat] = await Promise.all([
+  const [customers, staff, settings, unlinked, stock, feat, prices] = await Promise.all([
     customerOptions(),
     staffOptions(),
     getSettings(),
@@ -36,6 +37,7 @@ export async function loadOrderFormData(saleId?: number | null) {
       .limit(60),
     fabricsWithStock(),
     features(),
+    loadPrices(),
   ]);
   let sale: LinkedSale | null = null;
   if (saleId) {
@@ -56,6 +58,8 @@ export async function loadOrderFormData(saleId?: number | null) {
     rates: settings.pieceRates,
     // Settings → Variants (null until the database has the variant column)
     variants: feat.variant ? settings.variants : null,
+    // Stitching price list (null until the database has it): fills the charge when a garment is added
+    prices: feat.prices ? prices : null,
     days: { normal: settings.shop.normalDays, express: settings.shop.expressDays },
     // Fabric requirement: the tables, the fabrics to choose from (with balance), and whether a garment can have a fabric
     fabricReq: {

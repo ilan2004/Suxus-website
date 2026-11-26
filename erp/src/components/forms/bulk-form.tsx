@@ -12,22 +12,44 @@ import { Field } from "@/components/app/field";
 import { ListSelect, SearchSelect } from "@/components/app/search-select";
 import { saveBulkOrder, type BulkInput } from "@/lib/actions/bulk";
 import { addDays, cn, round2, rupees, today } from "@/lib/utils";
+import { listPriceFor, rateChanged, type PriceRow } from "@/lib/stitching-prices";
+import { variantsFor, type VariantLists } from "@/lib/variants";
+import Link from "next/link";
 
-type Line = { key: string; item: string; description: string; size: string; qty: string; rate: string };
+type Line = { key: string; item: string; description: string; size: string; qty: string; rate: string; variant: string | null; listRate: number | null; rateChangedBy: string | null };
+type Prices = { list: PriceRow[]; variants: VariantLists } | null;
+
+/**
+ * The bulk / institution rate (else the customer rate) filled in — never 0. A rate typed by hand is kept: on a new line
+ * (size grid) it stays as typed, and on a changed line it stays when the new garment has no price.
+ */
+function priced(next: Line, prices: Prices, prev?: Line): Line {
+  if (!prices) return next;
+  const list = listPriceFor(prices.list, next.item, next.variant, true);
+  let rate: string;
+  if (!prev) rate = next.rate !== "" ? next.rate : list != null ? String(list) : "";
+  else if (list != null) rate = String(list);
+  else rate = prev.rate !== "" && Number(prev.rate) !== prev.listRate ? next.rate : "";
+  return { ...next, listRate: list, rate, rateChangedBy: null };
+}
+
 export type BulkInitial = Omit<Partial<BulkInput>, "items"> & {
   id?: number;
   orderNo?: string;
-  items?: { item: string; description: string | null; size: string | null; qty: number; rate: number }[];
+  items?: { item: string; description: string | null; size: string | null; qty: number; rate: number; variant?: string | null; listRate?: number | null; rateChangedBy?: string | null }[];
 };
 
-const newLine = (p: Partial<Line> = {}): Line => ({ key: crypto.randomUUID(), item: "School Shirt", description: "", size: "", qty: "", rate: "", ...p });
+const newLine = (p: Partial<Line> = {}): Line => ({ key: crypto.randomUUID(), item: "School Shirt", description: "", size: "", qty: "", rate: "", variant: null, listRate: null, rateChangedBy: null, ...p });
 
 export function BulkForm({
   initial,
   staff,
   lists,
   institutions,
+  prices = null,
 }: {
+  /** Stitching price list + variants (null before that database update) */
+  prices?: Prices;
   initial?: BulkInitial;
   staff: { id: number; name: string }[];
   lists: { item: string[]; status: string[]; paymentMode: string[] };
@@ -52,14 +74,24 @@ export function BulkForm({
   });
   const [lines, setLines] = React.useState<Line[]>(
     initial?.items?.length
-      ? initial.items.map((i) => newLine({ item: i.item, description: i.description ?? "", size: i.size ?? "", qty: String(i.qty), rate: String(i.rate) }))
-      : [newLine()],
+      ? initial.items.map((i) => newLine({ item: i.item, description: i.description ?? "", size: i.size ?? "", qty: String(i.qty), rate: String(i.rate), variant: i.variant ?? null, listRate: i.listRate ?? null, rateChangedBy: i.rateChangedBy ?? null }))
+      : [priced(newLine(), prices)],
   );
   const [advance, setAdvance] = React.useState("");
   const [advanceMode, setAdvanceMode] = React.useState(lists.paymentMode[0] ?? "Cash");
   const [pending, start] = React.useTransition();
   const set = <K extends keyof typeof v>(k: K, val: (typeof v)[K]) => setV((s) => ({ ...s, [k]: val }));
-  const upd = (key: string, p: Partial<Line>) => setLines((ls) => ls.map((l) => (l.key === key ? { ...l, ...p } : l)));
+  const upd = (key: string, p: Partial<Line>) =>
+    setLines((ls) =>
+      ls.map((l) => {
+        if (l.key !== key) return l;
+        const next = { ...l, ...p };
+        if (prices && "item" in p && next.variant && !variantsFor(next.item, prices.variants).includes(next.variant)) next.variant = null;
+        // a different garment or variant: refill from the price list
+        return prices && (next.item !== l.item || next.variant !== l.variant) ? priced(next, prices, l) : next;
+      }),
+    );
+  const noRate = (l: Line) => !!prices && l.listRate == null && !(Number(l.rate) > 0) && !!l.item;
 
   const subtotal = round2(lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.rate) || 0), 0));
   const taxable = round2(subtotal - (Number(v.discount) || 0));
@@ -71,6 +103,8 @@ export function BulkForm({
     e.preventDefault();
     const filled = lines.filter((l) => l.item && Number(l.qty) > 0);
     if (!filled.length) return void toast.error("Add at least one line with quantity");
+    const unpriced = filled.filter(noRate);
+    if (unpriced.length && !window.confirm(`No stitching rate for ${[...new Set(unpriced.map((l) => `${l.item}${l.variant ? ` (${l.variant})` : ""}`))].join(", ")} — those lines will be ₹0. Save anyway?`)) return;
     start(async () => {
       const r = await saveBulkOrder({
         id: initial?.id,
@@ -78,7 +112,7 @@ export function BulkForm({
         broughtById: v.broughtById,
         discount: Number(v.discount) || 0,
         gstPct: Number(v.gstPct) || 0,
-        items: filled.map((l) => ({ item: l.item, description: l.description || null, size: l.size || null, qty: Number(l.qty), rate: Number(l.rate) || 0 })),
+        items: filled.map((l) => ({ item: l.item, description: l.description || null, size: l.size || null, qty: Number(l.qty), rate: Number(l.rate) || 0, variant: l.variant, listRate: l.listRate, rateChangedBy: l.rateChangedBy })),
         advance: editing ? 0 : Number(advance) || 0,
         advanceMode,
       });
@@ -164,8 +198,18 @@ export function BulkForm({
               Items · one line per size <span className="ml">ഓരോ സൈസിനും ഒരു വരി</span>
             </h2>
             <div className="flex gap-2">
-              <SizeGrid items={lists.item} onAdd={(ls) => setLines((cur) => [...cur.filter((l) => l.qty || l.rate || l.size), ...ls])} />
-              <Button type="button" variant="outline" size="sm" onClick={() => setLines((ls) => [...ls, newLine({ item: ls.at(-1)?.item ?? "School Shirt", description: ls.at(-1)?.description ?? "", rate: ls.at(-1)?.rate ?? "" })])}>
+              <SizeGrid items={lists.item} variants={prices?.variants ?? null} onAdd={(ls) => setLines((cur) => [...cur.filter((l) => l.qty || l.rate || l.size), ...ls.map((l) => priced(l, prices))])} />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() =>
+                  setLines((ls) => {
+                    const last = ls.at(-1);
+                    return [...ls, newLine({ item: last?.item ?? "School Shirt", description: last?.description ?? "", rate: last?.rate ?? "", variant: last?.variant ?? null, listRate: last?.listRate ?? null })];
+                  })
+                }
+              >
                 <Plus /> Line
               </Button>
             </div>
@@ -185,11 +229,47 @@ export function BulkForm({
               <Input value={l.description} onChange={(e) => upd(l.key, { description: e.target.value })} placeholder="e.g. Blue check" className="col-span-3 md:col-span-1" />
               <Input value={l.size} onChange={(e) => upd(l.key, { size: e.target.value })} placeholder="Size" />
               <Input type="number" min={0} value={l.qty} onChange={(e) => upd(l.key, { qty: e.target.value })} className="text-right" placeholder="Qty" />
-              <Input type="number" min={0} value={l.rate} onChange={(e) => upd(l.key, { rate: e.target.value })} className="text-right" placeholder="₹" />
+              <Input
+                type="number"
+                min={0}
+                value={l.rate}
+                aria-label="Rate"
+                onChange={(e) => upd(l.key, { rate: e.target.value })}
+                className={cn("text-right", noRate(l) && "border-warning", rateChanged(Number(l.rate) || 0, l.listRate) && "border-gold")}
+                placeholder={noRate(l) ? "no rate" : "₹"}
+              />
               <span className="self-center text-right text-sm font-medium tabular-nums">{rupees((Number(l.qty) || 0) * (Number(l.rate) || 0))}</span>
               <Button type="button" variant="ghost" size="icon-sm" disabled={lines.length === 1} onClick={() => setLines((ls) => ls.filter((x) => x.key !== l.key))} aria-label="Remove">
                 <Trash2 className="text-muted-foreground" />
               </Button>
+              {prices && variantsFor(l.item, prices.variants).length > 0 && (
+                <div className="col-span-3 flex flex-wrap items-center gap-1.5 md:col-span-7">
+                  <span className="text-xs text-muted-foreground">
+                    <span className="ml">തരം</span> · Variant
+                  </span>
+                  {variantsFor(l.item, prices.variants).map((v) => (
+                    <button key={v} type="button" aria-pressed={l.variant === v} onClick={() => upd(l.key, { variant: l.variant === v ? null : v })} className={cn("h-7 rounded border px-2 text-xs", l.variant === v ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}>
+                      {v}
+                    </button>
+                  ))}
+                </div>
+              )}
+              {noRate(l) && (
+                <p className="col-span-3 rounded-md bg-warning/15 px-2 py-1 text-xs font-medium md:col-span-7" data-testid="no-rate">
+                  ⚠ No stitching rate set for this garment ({l.item}
+                  {l.variant ? ` — ${l.variant}` : ""}). Type the rate, or{" "}
+                  <Link href="/settings/stitching-prices" target="_blank" className="underline">
+                    set it in Stitching Prices
+                  </Link>
+                  .
+                </p>
+              )}
+              {rateChanged(Number(l.rate) || 0, l.listRate) && (
+                <p className="col-span-3 text-xs text-[#8a6a2a] md:col-span-7 dark:text-gold" data-testid="rate-changed">
+                  Rate changed — list price {rupees(l.listRate!)}
+                  {l.rateChangedBy ? ` · changed by ${l.rateChangedBy}` : ""}
+                </p>
+              )}
             </div>
           ))}
           <Field label="Remarks" ml="കുറിപ്പ്">
@@ -240,9 +320,11 @@ export function BulkForm({
   );
 }
 
-function SizeGrid({ items, onAdd }: { items: string[]; onAdd: (lines: Line[]) => void }) {
+function SizeGrid({ items, variants, onAdd }: { items: string[]; variants: VariantLists | null; onAdd: (lines: Line[]) => void }) {
   const [open, setOpen] = React.useState(false);
   const [item, setItem] = React.useState("School Shirt");
+  const [variant, setVariant] = React.useState<string | null>(null);
+  const options = variants ? variantsFor(item, variants) : [];
   const [desc, setDesc] = React.useState("");
   const [rate, setRate] = React.useState("");
   const [sizes, setSizes] = React.useState("22, 24, 26, 28, 30, 32, 34, 36");
@@ -255,16 +337,32 @@ function SizeGrid({ items, onAdd }: { items: string[]; onAdd: (lines: Line[]) =>
       </PopoverTrigger>
       <PopoverContent align="end" className="grid w-80 gap-3">
         <p className="text-sm font-medium">Add one line for every size</p>
-        <ListSelect items={items} value={item} onChange={(x) => setItem(x ?? "")} />
+        <ListSelect
+          items={items}
+          value={item}
+          onChange={(x) => {
+            setItem(x ?? "");
+            setVariant(null);
+          }}
+        />
+        {options.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {options.map((v) => (
+              <button key={v} type="button" onClick={() => setVariant(variant === v ? null : v)} className={cn("h-7 rounded border px-2 text-xs", variant === v ? "border-primary bg-primary text-primary-foreground" : "bg-card")}>
+                {v}
+              </button>
+            ))}
+          </div>
+        )}
         <Input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Description (e.g. Blue check)" />
-        <Input type="number" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="Rate per piece ₹" />
+        <Input type="number" value={rate} onChange={(e) => setRate(e.target.value)} placeholder={variants ? "Rate ₹ (empty = from Stitching Prices)" : "Rate per piece ₹"} />
         <Input value={sizes} onChange={(e) => setSizes(e.target.value)} placeholder="Sizes, comma separated" />
         <Button
           type="button"
           onClick={() => {
             const list = sizes.split(/[,\s]+/).map((s) => s.trim()).filter(Boolean);
             if (!list.length) return;
-            onAdd(list.map((size) => newLine({ item, description: desc, rate, size })));
+            onAdd(list.map((size) => newLine({ item, description: desc, rate, size, variant })));
             setOpen(false);
           }}
         >

@@ -222,9 +222,16 @@ export async function getOrderFull(id: number) {
   const db = await getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, id));
   if (!order) return null;
-  const { wearers: hasWearers, variant: hasVariant } = await features();
+  const { wearers: hasWearers, variant: hasVariant, prices: hasPrices } = await features();
   const items = await db
-    .select({ ...getTableColumns(orderItems), wearerId: when(hasWearers, col.orderItemWearer), variant: when(hasVariant, col.orderItemVariant) })
+    .select({
+      ...getTableColumns(orderItems),
+      wearerId: when(hasWearers, col.orderItemWearer),
+      variant: when(hasVariant, col.orderItemVariant),
+      // stitching price list snapshot: the list price when the charge was filled, and who changed it if different
+      listRate: when(hasPrices, col.orderItemListRate),
+      rateChangedBy: when(hasPrices, col.orderItemRateChangedBy),
+    })
     .from(orderItems)
     .where(eq(orderItems.orderId, id))
     .orderBy(asc(orderItems.id));
@@ -305,7 +312,17 @@ export async function getBulkFull(id: number) {
   const db = await getDb();
   const [o] = await db.select().from(schema.bulkOrders).where(eq(schema.bulkOrders.id, id));
   if (!o) return null;
-  const items = await db.select().from(schema.bulkOrderItems).where(eq(schema.bulkOrderItems.bulkOrderId, id)).orderBy(asc(schema.bulkOrderItems.id));
+  const hasPrices = (await features()).prices;
+  const items = await db
+    .select({
+      ...getTableColumns(schema.bulkOrderItems),
+      variant: when(hasPrices, col.bulkItemVariant),
+      listRate: when(hasPrices, col.bulkItemListRate),
+      rateChangedBy: when(hasPrices, col.bulkItemRateChangedBy),
+    })
+    .from(schema.bulkOrderItems)
+    .where(eq(schema.bulkOrderItems.bulkOrderId, id))
+    .orderBy(asc(schema.bulkOrderItems.id));
   const pays = await db.select().from(payments).where(eq(payments.bulkOrderId, id)).orderBy(asc(payments.id));
   const [b] = o.broughtById ? await db.select({ name: staff.name }).from(staff).where(eq(staff.id, o.broughtById)) : [];
   const paid = pays.reduce((s, p) => s + p.amount, 0);

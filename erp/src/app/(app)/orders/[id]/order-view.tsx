@@ -1,6 +1,7 @@
 "use client";
 
 import { variantRequired } from "@/lib/variants";
+import { rateChanged } from "@/lib/stitching-prices";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,7 +43,10 @@ export function OrderView({
   slips,
   slipLog,
   fabricPlan,
+  pricesOn = false,
 }: {
+  /** the stitching price list exists (the "no rate" warning applies) */
+  pricesOn?: boolean;
   order: OrderFull;
   shop: ShopInfo;
   statuses: string[];
@@ -290,12 +294,28 @@ export function OrderView({
                       )}
                     </TableCell>
                     <TableCell className="text-right">{i.qty}</TableCell>
-                    <TableCell className="text-right tabular-nums">{rupees(i.rate)}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {rupees(i.rate)}
+                      {rateChanged(i.rate, i.listRate) && (
+                        <span className="block text-[10px] font-normal text-[#8a6a2a] dark:text-gold" data-testid="rate-changed" title={`List price ${rupees(i.listRate!)}${i.rateChangedBy ? ` · changed by ${i.rateChangedBy}` : ""}`}>
+                          rate changed · list {rupees(i.listRate!)}
+                          {i.rateChangedBy ? ` · ${i.rateChangedBy}` : ""}
+                        </span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right tabular-nums">{rupees(i.amount)}</TableCell>
                   </TableRow>
                   {/* Bundle label + job slip PDF for this garment */}
                   <TableRow className="hover:bg-transparent">
                     <TableCell colSpan={5} className="pt-0 pb-3">
+                      {i.listRate == null && !(i.rate > 0) && pricesOn && (
+                        <p className="mb-2 w-fit rounded-md bg-warning/15 px-2 py-1 text-sm font-medium" data-testid="no-rate">
+                          ⚠ No stitching rate set for this garment —{" "}
+                          <Link href="/settings/stitching-prices" className="underline">
+                            Stitching Prices
+                          </Link>
+                        </p>
+                      )}
                       {fabricPlan?.items[i.id] && <ItemFabricReq plan={fabricPlan.items[i.id]} qty={i.qty} totals={fabricPlan.totals} />}
                       {slips.items[i.id] && <JobSlipActions orderId={order.id} itemId={i.id} link={slips.items[i.id]} />}
                     </TableCell>

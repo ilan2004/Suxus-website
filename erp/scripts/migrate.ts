@@ -38,6 +38,9 @@ const REQUIRED: [string, string][] = [
   ["job_slip_events", "id"],
   ["order_item_fabrics", "fabric_id"],
   ["order_items", "variant"],
+  ["stitching_prices", "id"],
+  ["order_items", "list_rate"],
+  ["bulk_order_items", "list_rate"],
 ];
 
 async function main() {

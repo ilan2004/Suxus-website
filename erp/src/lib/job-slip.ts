@@ -12,6 +12,7 @@ import { getOrderFull } from "./queries";
 import { GARMENTS, WHOLE_ML, fieldsFor, mlOf, enOf, wholeOf, type GarmentField } from "./measurements";
 import { formatPhone } from "./phone";
 import { fmtDate } from "./utils";
+import { variantMl, variantRequired } from "./variants";
 
 /** Printed at the top of every job slip page. */
 export const JOB_SLIP_SHOP = { name: "SUXUS Heritage Tailor", line: "Pallikkal Bazar · Ph 95443 76072" };
@@ -54,19 +55,6 @@ function garmentsFor(item: string, garments: string[]) {
   if (exact.length) return exact;
   const words = (s: string) => s.toLowerCase().split(/[^a-z]+/).filter((w) => w.length >= 4);
   return garments.filter((g) => words(g).some((w) => it.includes(w)) || words(item).some((w) => g.toLowerCase().includes(w)));
-}
-
-/** "Full sleeve" / "Half sleeve" when the shirt record holds only one sleeve length; the item's own " - variant" otherwise. */
-function variantOf(item: string, m: Measure | undefined) {
-  const dash = item.match(/\s[-–—]\s(.+)$/);
-  if (dash) return dash[1];
-  if (m?.garmentType === "Shirt") {
-    const full = m.values["Sleeve full"] != null;
-    const half = m.values["Sleeve half"] != null;
-    if (full && !half) return "Full sleeve";
-    if (half && !full) return "Half sleeve";
-  }
-  return null;
 }
 
 /** One page per order item (or just the one item), each complete on its own. */
@@ -118,8 +106,9 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
       phone: order.phone ? formatPhone(order.phone) : "",
       wearer: i.wearerName ?? order.customerName ?? "—",
       wearerDetail: w ? (w.isSelf ? "Self · സ്വന്തം" : [w.relation !== "Other" ? w.relation : null, w.school].filter(Boolean).join(" · ")) : "",
-      item: i.item.replace(/\s[-–—]\s.+$/, ""),
-      variant: variantOf(i.item, measures[0]),
+      item: i.item,
+      // the order item's own variant (തരം) — never worked out from the measurements; null = not set (older item)
+      variant: i.variant ?? null,
       qty: i.qty,
       tailor: i.tailor,
       measures,
@@ -129,7 +118,7 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
       requirement: (() => {
         const r = plan.items[i.id]?.req;
         if (!r) return null;
-        return r.ok ? { text: requirementText(r, i.qty), rule: r.rule + (r.sleeveGuessed ? " · ഫുൾ കൈ കണക്കാക്കി" : "") } : { missing: r.missing };
+        return r.ok ? { text: requirementText(r, i.qty), rule: r.rule } : { missing: r.missing };
       })(),
       remarks: [...measures.map((m) => m.remarks).filter((r): r is string => !!r), ...(order.remarks ? [`Order: ${order.remarks}`] : [])],
     };
@@ -220,7 +209,8 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
     text(p.wearer.toUpperCase(), 38, "B", { lineGap: -6 });
     if (p.wearerDetail) text(p.wearerDetail, 15, "M");
     doc.y += 2;
-    text(`${p.item}${p.variant ? ` — ${p.variant}` : ""}${p.qty > 1 ? `  ×  ${p.qty}` : ""}`, 22);
+    text(`${p.item}${p.variant ? ` — ${p.variant}` : variantRequired(p.item) ? " — variant not set" : ""}${p.qty > 1 ? `  ×  ${p.qty}` : ""}`, 22);
+    if (p.variant && variantMl(p.variant) !== p.variant) text(`തരം: ${variantMl(p.variant)}`, 16);
     text(`Tailor  ${p.tailor ?? "Not assigned yet"}`, 18);
     doc.y += 4;
     rule(3);

@@ -16,11 +16,13 @@ import { measurementsForRequirement } from "@/lib/actions/fabric-req";
 import { fabricRequirement, measureFor, metres, requirementText, shortText, type FabricRequirementTables, type ReqMeasure, type Requirement } from "@/lib/fabric-requirement";
 import type { CustomerLite } from "./customer-dialog";
 import { saveOrder, type OrderInput } from "@/lib/actions/orders";
+import { previousVariants, type PreviousVariant } from "@/lib/actions/order-help";
+import { variantMl, variantRequired, variantsFor, type VariantLists } from "@/lib/variants";
 import { addDays, cn, fmtDate, num, round2, rupees, today } from "@/lib/utils";
 
-type Item = { key: string; /** existing order item (kept on save, so its bundle label stays valid) */ id?: number; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null; /** fabric it is cut from (fabric requirement) */ fabricId?: number | null };
+type Item = { key: string; /** existing order item (kept on save, so its bundle label stays valid) */ id?: number; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null; /** fabric it is cut from (fabric requirement) */ fabricId?: number | null; /** തരം: Full sleeve / Half sleeve … (null = not chosen) */ variant: string | null };
 export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null; /** fabric + metres on the bill */ fabrics?: { fabricId: number | null; metres: number }[] };
-export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null; fabricId?: number | null }[] };
+export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null; fabricId?: number | null; variant?: string | null }[] };
 
 export function OrderForm({
   initial,
@@ -32,6 +34,7 @@ export function OrderForm({
   rates,
   days,
   fabricReq,
+  variants,
 }: {
   initial?: OrderInitial;
   customers: CustomerLite[];
@@ -43,6 +46,8 @@ export function OrderForm({
   days: { normal: number; express: number };
   /** Fabric requirement: tables (Settings), fabrics with balance, and whether a garment can have its own fabric */
   fabricReq?: { tables: FabricRequirementTables; enabled: boolean; fabrics: { id: number; code: string; name: string; balance: number }[] };
+  /** Settings → Variants; null = the database does not have variants yet (no variant field) */
+  variants: VariantLists | null;
 }) {
   const router = useRouter();
   const editing = !!initial?.id;
@@ -65,8 +70,8 @@ export function OrderForm({
   const [remarks, setRemarks] = React.useState(initial?.remarks ?? "");
   const [items, setItems] = React.useState<Item[]>(
     initial?.items?.length
-      ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, fabricId: i.fabricId ?? null, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null }))
-      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null }],
+      ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, fabricId: i.fabricId ?? null, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null, variant: i.variant ?? null }))
+      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null, variant: null }],
   );
   // People measured under this customer: the "whose garment" picker appears once there is more than Self
   const people = useWearers(customer?.id);
@@ -82,6 +87,34 @@ export function OrderForm({
     setAddingPerson(false);
   }, [customer?.id]);
   const [pending, start] = React.useTransition();
+  // ── Variant (തരം): a new item starts with the wearer's previous variant for that garment ──
+  const [prevVariants, setPrevVariants] = React.useState<PreviousVariant[]>([]);
+  React.useEffect(() => {
+    let live = true;
+    if (!customer?.id || !variants) return void setPrevVariants([]);
+    previousVariants(customer.id).then((d) => live && setPrevVariants(d));
+    return () => {
+      live = false;
+    };
+  }, [customer?.id, variants]);
+  const previousFor = React.useCallback(
+    (item: string, wearerId: number | null) => {
+      const who = wearerId ?? people.self?.id ?? null;
+      return prevVariants.find((p) => p.item === item && (p.wearerId ?? people.self?.id ?? null) === who)?.variant ?? null;
+    },
+    [prevVariants, people.self?.id],
+  );
+  // Fill empty variants from the previous order once those are known (never overwrites a choice)
+  React.useEffect(() => {
+    if (!variants || !prevVariants.length) return;
+    setItems((is) =>
+      is.map((i) => {
+        if (i.variant || i.id) return i;
+        const v = previousFor(i.item, i.wearerId);
+        return v && variantsFor(i.item, variants).includes(v) ? { ...i, variant: v } : i;
+      }),
+    );
+  }, [prevVariants, previousFor, variants]);
   // ── Fabric requirement (estimate only — stock is reduced by the bill, never by the order) ──
   const [reqData, setReqData] = React.useState<{ measures: ReqMeasure[]; selfId: number | null }>({ measures: [], selfId: null });
   React.useEffect(() => {
@@ -109,7 +142,7 @@ export function OrderForm({
     const sums = new Map<number, number>();
     for (const i of items) {
       const m = measureFor(reqData.measures, i.item, customer ? (i.wearerId ?? reqData.selfId) : null, reqData.selfId);
-      const req = fabricRequirement(fabricReq.tables, i.item, Number(i.qty) || 1, m);
+      const req = fabricRequirement(fabricReq.tables, i.item, Number(i.qty) || 1, m, i.variant);
       const fabricId = i.fabricId ?? onlyBill;
       per.set(i.key, { req, fabricId });
       if (fabricId && req?.ok) sums.set(fabricId, (sums.get(fabricId) ?? 0) + req.total);
@@ -125,7 +158,23 @@ export function OrderForm({
   const total = round2(stitching + fabric - (Number(discount) || 0));
   const adv = Number(advance) || 0;
 
-  const updateItem = (key: string, patch: Partial<Item>) => setItems((is) => is.map((i) => (i.key === key ? { ...i, ...patch } : i)));
+  const updateItem = (key: string, patch: Partial<Item>) =>
+    setItems((is) =>
+      is.map((i) => {
+        if (i.key !== key) return i;
+        const next = { ...i, ...patch };
+        // A different garment or person: the variant follows (kept if still valid, else that person's previous one)
+        if (variants && ("item" in patch || "wearerId" in patch) && !("variant" in patch)) {
+          const allowed = variantsFor(next.item, variants);
+          if (!next.variant || !allowed.includes(next.variant) || "wearerId" in patch) {
+            const prev = previousFor(next.item, next.wearerId);
+            next.variant = prev && allowed.includes(prev) ? prev : next.variant && allowed.includes(next.variant) ? next.variant : null;
+          }
+        }
+        return next;
+      }),
+    );
+  const missingVariant = (i: Item) => !!variants && !i.variant && variantRequired(i.item) && !(i.id && initial?.items?.find((x) => x.id === i.id)?.item === i.item);
   const tailors = staff;
   const tailorName = (id: number | null) => (id ? (staff.find((x) => x.id === id)?.name ?? "?") : null);
   // A new item takes the tailor picked last — one tap for the usual "same tailor for everything"
@@ -143,6 +192,8 @@ export function OrderForm({
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (items.some((i) => !i.item || !(Number(i.qty) > 0))) return void toast.error("Every item needs a name and quantity");
+    const noVariant = items.find(missingVariant);
+    if (noVariant) return void toast.error(`Choose the variant (തരം) for ${noVariant.item}`);
     start(async () => {
       const r = await saveOrder({
         id: initial?.id,
@@ -159,7 +210,7 @@ export function OrderForm({
         saleId: linked?.id ?? null,
         discount: Number(discount) || 0,
         remarks: remarks || null,
-        items: items.map((i) => ({ id: i.id, fabricId: fabricReq?.enabled ? (i.fabricId ?? null) : null, item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId, wearerId: customer ? whoOf(i) : null })),
+        items: items.map((i) => ({ id: i.id, fabricId: fabricReq?.enabled ? (i.fabricId ?? null) : null, item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId, wearerId: customer ? whoOf(i) : null, variant: variants ? i.variant : null })),
         advance: editing ? 0 : adv,
         advanceMode,
       });
@@ -246,7 +297,7 @@ export function OrderForm({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null, wearerId: is.at(-1)?.wearerId ?? null }])}
+              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null, wearerId: is.at(-1)?.wearerId ?? null, variant: variants ? previousFor("Pant", is.at(-1)?.wearerId ?? null) : null }])}
             >
               <Plus /> Add item
             </Button>
@@ -298,6 +349,7 @@ export function OrderForm({
               >
                 <Trash2 className="text-muted-foreground" />
               </Button>
+              {variants && <VariantPicker item={i.item} options={variantsFor(i.item, variants)} value={i.variant} missing={missingVariant(i)} wasOld={!!i.id && !i.variant && variantRequired(i.item)} onChange={(v) => updateItem(i.key, { variant: v })} />}
               {fabricReq && fabricPlan && (
                 <FabricReqLine
                   plan={fabricPlan.per.get(i.key)}
@@ -324,7 +376,7 @@ export function OrderForm({
                   // a new item row for the new person (existing items keep their person)
                   setItems((is) => {
                     const last = is.at(-1);
-                    return [...is, { key: crypto.randomUUID(), item: last?.item ?? "Shirt", qty: "1", rate: "", tailorId: last?.tailorId ?? null, wearerId: w.id }];
+                    return [...is, { key: crypto.randomUUID(), item: last?.item ?? "Shirt", qty: "1", rate: "", tailorId: last?.tailorId ?? null, wearerId: w.id, variant: null }];
                   });
                 }}
               />
@@ -460,6 +512,32 @@ function Sum({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
+/** Variant (തരം) of one garment: large buttons, Malayalam first. Required for shirts and pants. */
+function VariantPicker({ item, options, value, missing, wasOld, onChange }: { item: string; options: string[]; value: string | null; missing: boolean; wasOld: boolean; onChange: (v: string | null) => void }) {
+  if (!options.length) return null;
+  const required = variantRequired(item);
+  return (
+    <div className="col-span-3 flex flex-wrap items-center gap-1.5 sm:col-span-6" data-testid="variant-picker">
+      <span className={cn("shrink-0 text-xs", missing ? "font-semibold text-destructive" : "text-muted-foreground")}>
+        <span className="ml">തരം</span> · Variant{required ? " *" : ""}
+      </span>
+      {options.map((v) => (
+        <button
+          key={v}
+          type="button"
+          aria-pressed={value === v}
+          onClick={() => onChange(value === v && !required ? null : v)}
+          className={cn("h-9 rounded-md border px-3 text-sm", value === v ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent", missing && "border-destructive/60")}
+        >
+          {variantMl(v) !== v && <span className="ml mr-1 !text-inherit">{variantMl(v)}</span>}
+          <span className={variantMl(v) !== v ? "text-xs opacity-80" : ""}>{v}</span>
+        </button>
+      ))}
+      {wasOld && <span className="rounded border border-dashed border-warning/60 px-1.5 py-0.5 text-[10px] text-warning">not set on this older item</span>}
+    </div>
+  );
+}
+
 /**
  * Under a garment: "തുണി വേണ്ടത്: 1.70 മീറ്റർ" with the rule that decided it, the fabric it is cut from, and a warning
  * (never a block) when that fabric is short.
@@ -492,10 +570,7 @@ function FabricReqLine({
         {req?.ok ? (
           <>
             <span className="ml text-sm font-semibold !text-foreground">{requirementText(req, qty)}</span>
-            <span className="ml text-xs">
-              ({req.rule}
-              {req.sleeveGuessed ? ` · ഫുൾ കൈ കണക്കാക്കി — ഹാഫ് കൈ ${metres((req.halfPerPiece ?? 0) * qty)}` : ""})
-            </span>
+            <span className="ml text-xs">({req.rule})</span>
           </>
         ) : req ? (
           <span className="ml text-sm font-semibold !text-warning">{req.missing}</span>

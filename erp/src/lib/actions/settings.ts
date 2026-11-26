@@ -48,6 +48,7 @@ const schemas = {
     shirtLength: z.array(band).min(1, "Shirt length table needs at least one row"),
     pant: z.array(z.object({ width: z.coerce.number<number>().positive(), model: z.enum(["Regular", "Loose"]), metres: z.coerce.number<number>().positive().max(20) })),
   }),
+  variants: z.record(z.string(), z.array(z.string().trim().min(1)).max(20)),
 } satisfies Record<keyof AppSettings, z.ZodType>;
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<Result<null>> {

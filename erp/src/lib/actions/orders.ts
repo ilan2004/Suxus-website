@@ -14,7 +14,8 @@ import { intlOrAsTyped } from "@/lib/phone";
 import { fail, money, ok, optDate, optId, optText, reqDate, zodError, type Result } from "./util";
 import { recalcOrder } from "@/lib/order-calc";
 import { wearerFor } from "@/lib/wearer-db";
-import { orderItemsExt } from "@/lib/db/ext";
+import { orderItemsExt, orderItemsVariant } from "@/lib/db/ext";
+import { variantRequired, variantsFor } from "@/lib/variants";
 import { features } from "@/lib/db/features";
 
 const OrderInput = z.object({
@@ -34,7 +35,7 @@ const OrderInput = z.object({
   remarks: optText,
   items: z
     // Each item has its own tailor (piece-rate wages follow the item); empty = not given out yet
-    .array(z.object({ id: optId, item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId, fabricId: optId }))
+    .array(z.object({ id: optId, item: z.string().min(1), qty: z.coerce.number<number>().int().positive(), rate: z.coerce.number<number>().min(0), tailorId: optId, wearerId: optId, fabricId: optId, variant: optText }))
     .min(1, "Add at least one item"),
   advance: money,
   advanceMode: z.string().default("Cash"),
@@ -48,6 +49,22 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
   const d = parsed.data;
   if (!d.customerId && !d.customerName) return fail("Choose a customer or type a name");
   const db = await getDb();
+  const feat = await features();
+
+  // Variant (തരം): required for shirts and pants. An older item saved before variants existed may stay "not set"
+  // while it is unchanged; a new item, or one whose garment was changed, must have one.
+  if (feat.variant) {
+    const lists = await getSetting("variants");
+    const before = d.id
+      ? new Map((await db.select({ id: schema.orderItems.id, item: schema.orderItems.item }).from(schema.orderItems).where(eq(schema.orderItems.orderId, d.id))).map((r) => [r.id, r.item]))
+      : new Map<number, string>();
+    for (const i of d.items) {
+      const allowed = variantsFor(i.item, lists);
+      if (i.variant && allowed.length && !allowed.includes(i.variant) && before.get(i.id ?? -1) !== i.item) return fail(`"${i.variant}" is not a variant of ${i.item} (Settings → Variants)`);
+      const untouchedOld = !!i.id && before.get(i.id) === i.item;
+      if (!i.variant && variantRequired(i.item) && !untouchedOld) return fail(`Choose the variant (തരം) for ${i.item}: ${allowed.join(" / ")}`);
+    }
+  }
 
   try {
     const res = await db.transaction(async (tx) => {
@@ -91,7 +108,7 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
 
       // Each item is someone's garment: one of the customer's wearers (empty = Self). Walk-ins without a customer have none.
       // Whose garment each item is (Wearers) — only once the database has it
-      const hasWearers = (await features()).wearers;
+      const hasWearers = feat.wearers;
       const wearerIds = await Promise.all(d.items.map((i) => (d.customerId && hasWearers ? wearerFor(tx, d.customerId, i.wearerId) : null)));
       const rows = d.items.map((i) => ({ orderId: order.id, item: i.item, qty: i.qty, rate: i.rate, amount: round2(i.qty * i.rate), tailorId: i.tailorId ?? null }));
       const savedIds: number[] = [];
@@ -107,8 +124,9 @@ export async function saveOrder(input: OrderInput): Promise<Result<{ id: number;
         } else savedIds.push((await tx.insert(schema.orderItems).values(rows[n]).returning({ id: schema.orderItems.id }))[0].id);
       }
       if (hasWearers) for (const [n, itemId] of savedIds.entries()) await tx.update(orderItemsExt).set({ wearerId: wearerIds[n] }).where(eq(orderItemsExt.id, itemId));
+      if (feat.variant) for (const [n, itemId] of savedIds.entries()) await tx.update(orderItemsVariant).set({ variant: d.items[n].variant ?? null }).where(eq(orderItemsVariant.id, itemId));
       // Which fabric each garment is cut from (fabric requirement estimate). Never touches stock: only bills do.
-      if ((await features()).itemFabric) {
+      if (feat.itemFabric) {
         await tx.delete(schema.orderItemFabrics).where(inArray(schema.orderItemFabrics.orderItemId, savedIds));
         const pairs = savedIds.map((itemId, n) => ({ orderItemId: itemId, fabricId: d.items[n].fabricId ?? null })).filter((x): x is { orderItemId: number; fabricId: number } => !!x.fabricId);
         if (pairs.length) await tx.insert(schema.orderItemFabrics).values(pairs);

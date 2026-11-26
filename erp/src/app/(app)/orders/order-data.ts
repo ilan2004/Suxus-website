@@ -54,6 +54,8 @@ export async function loadOrderFormData(saleId?: number | null) {
     unlinkedSales: unlinked as LinkedSale[],
     sale: sale ?? null,
     rates: settings.pieceRates,
+    // Settings → Variants (null until the database has the variant column)
+    variants: feat.variant ? settings.variants : null,
     days: { normal: settings.shop.normalDays, express: settings.shop.expressDays },
     // Fabric requirement: the tables, the fabrics to choose from (with balance), and whether a garment can have a fabric
     fabricReq: {

@@ -6,9 +6,12 @@
  * to `upTo` inches" (the last row has no limit). Figures are per piece, for a fabric width (default 58 in).
  *
  * Shirt: look up BOTH tables — by recorded chest (the quarter, not the shirt round) and by shirt length — and take the
- * HIGHER figure. A tall thin man needs the length figure, a short heavy man the chest figure.
- * Pant / trouser: Regular or Loose model (the measurement's fit).
+ * HIGHER figure. A tall thin man needs the length figure, a short heavy man the chest figure. Full or half sleeve comes
+ * from the order item's variant (തരം) — never guessed from the measurements.
+ * Pant / trouser: Regular or Loose model — the order item's variant.
  */
+import { kindOf, pantModelOfVariant, sleeveOfVariant } from "./variants";
+
 export type BandRow = { width: number; upTo: number | null; full: number; half: number };
 export type PantRow = { width: number; model: "Regular" | "Loose"; metres: number };
 export type FabricRequirementTables = { shirtChest: BandRow[]; shirtLength: BandRow[]; pant: PantRow[] };
@@ -37,7 +40,7 @@ export const DEFAULT_FABRIC_REQUIREMENT: FabricRequirementTables = {
 export type Sleeve = "full" | "half";
 export type Requirement =
   /** metres per piece and for the whole item (× qty), and which rule decided it */
-  | { ok: true; perPiece: number; total: number; rule: string; ruleEn: string; sleeve?: Sleeve; sleeveGuessed?: boolean; halfPerPiece?: number }
+  | { ok: true; perPiece: number; total: number; rule: string; ruleEn: string; sleeve?: Sleeve }
   /** a measurement the tables need is missing */
   | { ok: false; missing: string; missingEn: string };
 
@@ -56,23 +59,7 @@ function bandFigure(rows: BandRow[], width: number, value: number, sleeve: Sleev
 }
 
 /** Which garment table applies to an order item name ("Shirt", "School Shirt" → shirt; "Pant", "School Pant" → pant). */
-export function tableKindOf(item: string): "shirt" | "pant" | null {
-  const i = item.toLowerCase();
-  if (/shirt/.test(i) && !/t-shirt|tshirt/.test(i) && !/pant/.test(i)) return "shirt";
-  if (/pant|trouser/.test(i) && !/shirt/.test(i)) return "pant";
-  return null;
-}
-
-/** "Full" / "Half" in the item name, else the record: only one sleeve length entered tells which; else not known. */
-export function sleeveOf(item: string, values: Record<string, number | null> | undefined): Sleeve | null {
-  if (/half/i.test(item)) return "half";
-  if (/full/i.test(item)) return "full";
-  const full = values?.["Sleeve full"] != null;
-  const half = values?.["Sleeve half"] != null;
-  if (full && !half) return "full";
-  if (half && !full) return "half";
-  return null;
-}
+export const tableKindOf = kindOf;
 
 /**
  * The requirement for one order item, from the person's latest measurement of that garment.
@@ -83,29 +70,31 @@ export function fabricRequirement(
   item: string,
   qty: number,
   m: { values: Record<string, number | null>; fit?: string | null } | null | undefined,
+  /** the order item's variant (തരം): Full sleeve / Half sleeve, Regular / Loose model */
+  variant: string | null | undefined,
   width = DEFAULT_WIDTH,
 ): Requirement | null {
   const kind = tableKindOf(item);
   if (!kind) return null;
   const pieces = Math.max(1, qty || 1);
   if (kind === "pant") {
-    const loose = (m?.fit ?? "").toLowerCase() === "loose";
-    const model = loose ? "Loose" : "Regular";
+    const model = pantModelOfVariant(variant);
+    if (!model) return { ok: false, missing: "തരം ഇല്ല (സാധാരണ / ലൂസ്)", missingEn: "variant not set (Regular / Loose model)" };
+    const loose = model === "Loose";
     const rows = tables.pant.filter((r) => r.width === width);
     const row = (rows.length ? rows : tables.pant.filter((r) => r.width === DEFAULT_WIDTH)).find((r) => r.model === model);
     if (!row) return { ok: false, missing: "പട്ടികയിൽ ഇല്ല", missingEn: `no ${model} figure in Settings` };
     return { ok: true, perPiece: row.metres, total: row.metres * pieces, rule: loose ? "ലൂസ് മോഡൽ" : "സാധാരണ മോഡൽ", ruleEn: `${model} model` };
   }
-  // Shirt: both tables, the higher figure wins
+  // Shirt: both tables, the higher figure wins. Full or half sleeve: the order item's variant only.
+  const sleeve = sleeveOfVariant(variant);
+  if (!sleeve) return { ok: false, missing: "തരം ഇല്ല (ഫുൾ / ഹാഫ് കൈ)", missingEn: "variant not set (Full / Half sleeve)" };
   const chest = m?.values?.Chest ?? null;
   const length = m?.values?.Length ?? null;
   if (chest == null || length == null) {
     const what = [chest == null && ["നെഞ്ചളവ്", "chest"], length == null && ["നീളം", "length"]].filter(Boolean) as string[][];
     return { ok: false, missing: `അളവ് ഇല്ല (${what.map((w) => w[0]).join(", ")})`, missingEn: `no ${what.map((w) => w[1]).join(" / ")} measurement` };
   }
-  const known = sleeveOf(item, m?.values);
-  // Not known which sleeve: the full-sleeve figure is used for totals and warnings (the larger), and both are shown
-  const sleeve: Sleeve = known ?? "full";
   const byChest = bandFigure(tables.shirtChest, width, chest, sleeve);
   const byLength = bandFigure(tables.shirtLength, width, length, sleeve);
   if (byChest == null || byLength == null) return { ok: false, missing: "പട്ടികയിൽ ഇല്ല", missingEn: "the Settings table has no row for this size" };
@@ -113,8 +102,7 @@ export function fabricRequirement(
   const rule =
     byChest === byLength ? `നെഞ്ചളവ് ${inch(chest)}, നീളം ${inch(length)} — രണ്ടും` : byChest > byLength ? `നെഞ്ചളവ് ${inch(chest)} പ്രകാരം` : `നീളം ${inch(length)} പ്രകാരം`;
   const ruleEn = byChest === byLength ? `chest ${inch(chest)} and length ${inch(length)} — both` : byChest > byLength ? `by chest ${inch(chest)}` : `by length ${inch(length)}`;
-  const half = known ? undefined : Math.max(bandFigure(tables.shirtChest, width, chest, "half") ?? 0, bandFigure(tables.shirtLength, width, length, "half") ?? 0);
-  return { ok: true, perPiece, total: perPiece * pieces, rule, ruleEn, sleeve, sleeveGuessed: !known, halfPerPiece: half };
+  return { ok: true, perPiece, total: perPiece * pieces, rule, ruleEn, sleeve };
 }
 
 /** "തുണി വേണ്ടത്: 1.70 മീറ്റർ" (+ "2 × 1.70" for several pieces). */

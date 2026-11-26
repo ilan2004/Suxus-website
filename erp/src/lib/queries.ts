@@ -111,10 +111,12 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
   // Tailor is per item: each line with who has it (null = not given out yet)
   // wearer: whose garment, only when it is not the customer themself (Self → null)
   // Whose garment (Wearers) — a plain null until the database has it
-  const wearerName = (await features()).wearers
+  const feat = await features();
+  const wearerName = feat.wearers
     ? sql`(select case when "wearers"."is_self" then null else "wearers"."name" end from "wearers" where "wearers"."id" = "order_items"."wearer_id")`
     : sql`null`;
-  const itemTailors = sql<{ item: string; qty: number; tailorId: number | null; tailor: string | null; wearer: string | null }[]>`coalesce((select json_agg(json_build_object('item', ${c(orderItems.item)}, 'qty', ${c(orderItems.qty)}, 'tailorId', ${c(orderItems.tailorId)}, 'tailor', (select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orderItems.tailorId)}), 'wearer', ${wearerName}) order by ${c(orderItems.id)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}), '[]'::json)`;
+  const variantCol = feat.variant ? sql`"order_items"."variant"` : sql`null`;
+  const itemTailors = sql<{ item: string; qty: number; tailorId: number | null; tailor: string | null; wearer: string | null; variant: string | null }[]>`coalesce((select json_agg(json_build_object('item', ${c(orderItems.item)}, 'qty', ${c(orderItems.qty)}, 'tailorId', ${c(orderItems.tailorId)}, 'tailor', (select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orderItems.tailorId)}), 'wearer', ${wearerName}, 'variant', ${variantCol}) order by ${c(orderItems.id)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}), '[]'::json)`;
   const pieces = sql<number>`coalesce((select sum(${c(orderItems.qty)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemNames = sql<string>`coalesce((select string_agg(distinct ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   const altPhone = sql<string | null>`(select ${c(schema.customers.altPhone)} from ${schema.customers} where ${c(schema.customers.id)} = ${c(orders.customerId)})`;
@@ -144,7 +146,7 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
     .where(where)
     .orderBy(desc(orders.id));
   return rows.map((r) => {
-    const lines = (typeof r.itemTailors === "string" ? JSON.parse(r.itemTailors) : r.itemTailors) as { item: string; qty: number; tailorId: number | null; tailor: string | null; wearer: string | null }[];
+    const lines = (typeof r.itemTailors === "string" ? JSON.parse(r.itemTailors) : r.itemTailors) as { item: string; qty: number; tailorId: number | null; tailor: string | null; wearer: string | null; variant: string | null }[];
     return { ...r, itemTailors: lines, tailorName: tailorSummary(lines), balance: Math.round((r.total - r.paid) * 100) / 100 };
   });
 }
@@ -220,9 +222,9 @@ export async function getOrderFull(id: number) {
   const db = await getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, id));
   if (!order) return null;
-  const { wearers: hasWearers } = await features();
+  const { wearers: hasWearers, variant: hasVariant } = await features();
   const items = await db
-    .select({ ...getTableColumns(orderItems), wearerId: when(hasWearers, col.orderItemWearer) })
+    .select({ ...getTableColumns(orderItems), wearerId: when(hasWearers, col.orderItemWearer), variant: when(hasVariant, col.orderItemVariant) })
     .from(orderItems)
     .where(eq(orderItems.orderId, id))
     .orderBy(asc(orderItems.id));

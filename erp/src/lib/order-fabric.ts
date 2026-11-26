@@ -46,7 +46,7 @@ export type OrderFabricPlan = {
 export async function orderFabricPlan(order: {
   customerId: number | null;
   sale: { cancelled: boolean; items: { fabricId: number | null; metres: number }[] } | null;
-  items: { id: number; item: string; qty: number; wearerId?: number | null; fabricId?: number | null }[];
+  items: { id: number; item: string; qty: number; wearerId?: number | null; fabricId?: number | null; variant?: string | null }[];
 }): Promise<OrderFabricPlan> {
   const tables = await getSetting("fabricRequirement");
   const { measures, selfId } = order.customerId ? await latestMeasurements(order.customerId) : { measures: [], selfId: null };
@@ -65,7 +65,7 @@ export async function orderFabricPlan(order: {
   const sums = new Map<number, { need: number; garments: number }>();
   for (const i of order.items) {
     const m = measureFor(measures, i.item, i.wearerId ?? null, selfId);
-    const req = fabricRequirement(tables, i.item, i.qty, m);
+    const req = fabricRequirement(tables, i.item, i.qty, m, i.variant);
     const fabric = lite(i.fabricId ?? onlyBillFabric);
     items[i.id] = { req, fabric };
     if (fabric && req?.ok) {

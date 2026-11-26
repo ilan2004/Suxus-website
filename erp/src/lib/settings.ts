@@ -1,6 +1,7 @@
 import "server-only";
 import { eq, inArray } from "drizzle-orm";
 import { DEFAULT_FABRIC_REQUIREMENT, type FabricRequirementTables } from "./fabric-requirement";
+import { DEFAULT_VARIANTS, type VariantLists } from "./variants";
 import { getDb, schema } from "./db";
 import {
   DEFAULT_COMPOSITIONS,
@@ -26,6 +27,8 @@ export type AppSettings = {
   measureOptions: { autoAdvance: boolean };
   /** Settings → Fabric requirement: metres per garment (shirt chest / length tables, pant), per fabric width */
   fabricRequirement: FabricRequirementTables;
+  /** Settings → Variants: the variants (തരം) each garment can have on an order item */
+  variants: VariantLists;
 };
 
 const DEFAULTS: AppSettings = {
@@ -38,6 +41,7 @@ const DEFAULTS: AppSettings = {
   measureOrder: {},
   measureOptions: { autoAdvance: false },
   fabricRequirement: DEFAULT_FABRIC_REQUIREMENT,
+  variants: DEFAULT_VARIANTS,
 };
 
 export async function getSettings(): Promise<AppSettings> {

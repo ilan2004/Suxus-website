@@ -11,13 +11,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Field } from "@/components/app/field";
 import { ListSelect, SearchSelect } from "@/components/app/search-select";
 import { CustomerPicker } from "./customer-picker";
+import { AddPersonForm, WearerSelect, useWearers } from "./wearer-picker";
 import type { CustomerLite } from "./customer-dialog";
 import { saveOrder, type OrderInput } from "@/lib/actions/orders";
 import { addDays, cn, fmtDate, num, round2, rupees, today } from "@/lib/utils";
 
-type Item = { key: string; item: string; qty: string; rate: string; tailorId: number | null };
+type Item = { key: string; /** existing order item (kept on save, so its bundle label stays valid) */ id?: number; item: string; qty: string; rate: string; tailorId: number | null; /** whose garment (null = Self) */ wearerId: number | null };
 export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null };
-export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { item: string; qty: number; rate: number; tailorId?: number | null }[] };
+export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null }[] };
 
 export function OrderForm({
   initial,
@@ -59,9 +60,22 @@ export function OrderForm({
   const [remarks, setRemarks] = React.useState(initial?.remarks ?? "");
   const [items, setItems] = React.useState<Item[]>(
     initial?.items?.length
-      ? initial.items.map((i) => ({ key: crypto.randomUUID(), item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null }))
-      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null }],
+      ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null }))
+      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null }],
   );
+  // People measured under this customer: the "whose garment" picker appears once there is more than Self
+  const people = useWearers(customer?.id);
+  const [addingPerson, setAddingPerson] = React.useState(false);
+  const showWho = !!customer && people.many;
+  const whoOf = (i: Item) => i.wearerId ?? people.self?.id ?? null;
+  // A different customer → their people; items go back to Self
+  const prevCustomer = React.useRef(customer?.id);
+  React.useEffect(() => {
+    if (prevCustomer.current === customer?.id) return;
+    prevCustomer.current = customer?.id;
+    setItems((is) => is.map((i) => ({ ...i, wearerId: null })));
+    setAddingPerson(false);
+  }, [customer?.id]);
   const [pending, start] = React.useTransition();
 
   // Expected delivery = order date + 2 days (Normal) or + 1 day (Express), unless typed by hand.
@@ -108,7 +122,7 @@ export function OrderForm({
         saleId: linked?.id ?? null,
         discount: Number(discount) || 0,
         remarks: remarks || null,
-        items: items.map((i) => ({ item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId })),
+        items: items.map((i) => ({ id: i.id, item: i.item, qty: Number(i.qty), rate: Number(i.rate) || 0, tailorId: i.tailorId, wearerId: customer ? whoOf(i) : null })),
         advance: editing ? 0 : adv,
         advanceMode,
       });
@@ -195,7 +209,7 @@ export function OrderForm({
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null }])}
+              onClick={() => setItems((is) => [...is, { key: crypto.randomUUID(), item: "Pant", qty: "1", rate: "", tailorId: lastTailor.current ?? is.findLast((x) => x.tailorId)?.tailorId ?? null, wearerId: is.at(-1)?.wearerId ?? null }])}
             >
               <Plus /> Add item
             </Button>
@@ -210,6 +224,12 @@ export function OrderForm({
           </div>
           {items.map((i) => (
             <div key={i.key} className="grid grid-cols-[1fr_70px_90px] gap-2 border-b pb-3 last:border-0 last:pb-0 sm:grid-cols-[1fr_70px_100px_150px_100px_36px] sm:items-center sm:border-0 sm:pb-0">
+              {showWho && (
+                <div className="col-span-3 flex items-center gap-2 sm:col-span-6">
+                  <span className="shrink-0 text-xs text-muted-foreground">For · ആൾ</span>
+                  <WearerSelect wearers={people.wearers} value={whoOf(i)} onChange={(id) => updateItem(i.key, { wearerId: id })} className="flex-1 sm:max-w-xs" />
+                </div>
+              )}
               <ListSelect items={lists.item} value={i.item} onChange={(v) => updateItem(i.key, { item: v ?? "" })} className="col-span-3 sm:col-span-1" />
               <Input type="number" min={1} step={1} value={i.qty} onChange={(e) => updateItem(i.key, { qty: e.target.value })} className="text-right" />
               <Input type="number" min={0} step={10} value={i.rate} onChange={(e) => updateItem(i.key, { rate: e.target.value })} className="text-right" placeholder="0" />
@@ -243,6 +263,26 @@ export function OrderForm({
               </Button>
             </div>
           ))}
+          {customer && people.wearers.length > 0 &&
+            (addingPerson ? (
+              <AddPersonForm
+                customerId={customer.id}
+                onCancel={() => setAddingPerson(false)}
+                onAdded={(w) => {
+                  people.add(w);
+                  setAddingPerson(false);
+                  // a new item row for the new person (existing items keep their person)
+                  setItems((is) => {
+                    const last = is.at(-1);
+                    return [...is, { key: crypto.randomUUID(), item: last?.item ?? "Shirt", qty: "1", rate: "", tailorId: last?.tailorId ?? null, wearerId: w.id }];
+                  });
+                }}
+              />
+            ) : (
+              <button type="button" onClick={() => setAddingPerson(true)} className="inline-flex w-fit items-center gap-1.5 text-xs font-medium text-primary hover:underline">
+                <Plus className="size-3.5" /> Add another person (son, daughter…)
+              </button>
+            ))}
         </section>
 
         {(workType === "Shop Fabric Stitching" || linked) && (

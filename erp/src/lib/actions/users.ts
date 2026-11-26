@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { and, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { staffExt } from "@/lib/db/ext";
+import { features } from "@/lib/db/features";
 import { PIN_RE, checkPin, hashPin, requireUser, startSession } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextNumber } from "@/lib/numbering";
@@ -24,6 +26,8 @@ export type UserRow = {
   status: string;
   lockedUntil: string | null;
   failedPins: number;
+  /** Simple measurement mode */
+  simple: boolean;
 };
 
 /** Everyone in Staff — those with a sign-in first. People without one can be given one ("Add user"). */
@@ -45,6 +49,10 @@ export async function listUsers(): Promise<UserRow[]> {
     })
     .from(schema.staff)
     .orderBy(schema.staff.code);
+  // Simple measurement mode per user (none until the database has the column)
+  const simpleIds = new Set<number>();
+  if ((await features()).simple)
+    for (const r of await db.select({ id: staffExt.id }).from(staffExt).where(eq(staffExt.simpleMode, true))) simpleIds.add(r.id);
   return rows.map((r) => ({
     id: r.id,
     code: r.code,
@@ -56,6 +64,7 @@ export async function listUsers(): Promise<UserRow[]> {
     status: r.status,
     lockedUntil: r.lockedUntil && r.lockedUntil.getTime() > Date.now() ? r.lockedUntil.toISOString() : null,
     failedPins: r.failedPins,
+    simple: simpleIds.has(r.id),
   }));
 }
 

@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { getDb, schema } from "@/lib/db";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { audit } from "@/lib/audit";
 import { nextNumber, pad } from "@/lib/numbering";
@@ -77,8 +78,11 @@ export async function saveFabric(input: FabricInput): Promise<Result<{ id: numbe
   if (!parsed.success) return fail(zodError(parsed.error));
   const { id, photos, ...all } = parsed.data;
   // Without the cost-price / money permissions those fields were never shown — keep what is stored
-  const { costPerMtr, broughtInBy, ...others } = all;
-  const rest = { ...others, ...(can(user.role, "costs") ? { costPerMtr } : {}), ...(can(user.role, "money") ? { broughtInBy } : {}) };
+  const { costPerMtr, broughtInBy, purchaseMtr, ...others } = all;
+  // Bought is set once when the fabric is created — after that only Add stock / Adjust stock change it
+  // (before the Add stock database update, the form still edits it, as it always did)
+  const lockBought = !!id && (await features()).stock;
+  const rest = { ...others, ...(lockBought ? {} : { purchaseMtr }), ...(can(user.role, "costs") ? { costPerMtr } : {}), ...(can(user.role, "money") ? { broughtInBy } : {}) };
   if (photos?.some((p) => !isOurPhotoUrl(p.url) || !isOurPhotoUrl(p.thumb) || (p.original && !isOurPhotoUrl(p.original)))) return fail("Photo link not recognised — please upload again");
   // Pattern size only belongs to checks and stripes
   if (rest.pattern && rest.pattern !== "Check" && rest.pattern !== "Stripe") (rest.patternMm = null), (rest.patternMmSource = null);

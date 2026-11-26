@@ -78,3 +78,66 @@ export function measureText(field: GarmentField, value: number | null | undefine
 export function fieldsFor(garmentType: string, values: Record<string, unknown> = {}): GarmentField[] {
   return GARMENTS[garmentType] ?? f(...Object.keys(values).map((k) => `${k}:`));
 }
+
+/** Simple mode: a garment's fields in the order the tape goes (Settings); fields not in the list keep their place at the end. */
+export function measuringOrder(garmentType: string, order: Record<string, string[]> | undefined): GarmentField[] {
+  const fields = GARMENTS[garmentType] ?? GARMENTS.Other;
+  const want = order?.[garmentType] ?? [];
+  const pos = (k: string) => {
+    const i = want.indexOf(k);
+    return i < 0 ? want.length + fields.findIndex((f) => f.key === k) : i;
+  };
+  return [...fields].sort((a, b) => pos(a.key) - pos(b.key));
+}
+
+/**
+ * Size chart → a garment's fields. Rows are matched by name (Full Chest → Chest, Sleeve Length → Sleeve full,
+ * Front Length → Length, Neck → Neck). A part-of-whole field (Shirt chest = ¼) gets (whole − add) ÷ factor,
+ * rounded to the nearest ¼ inch.
+ */
+const CHART_ROW: Record<string, string[]> = {
+  "full chest": ["Chest"],
+  chest: ["Chest"],
+  "sleeve length": ["Sleeve full", "Sleeve"],
+  sleeve: ["Sleeve full", "Sleeve"],
+  neck: ["Neck"],
+  "front length": ["Length"],
+  length: ["Length"],
+  waist: ["Waist"],
+  shoulder: ["Shoulder"],
+};
+export function fromSizeChart(garmentType: string, chart: { sizes: string[]; rows: { label: string; values: number[] }[] }, sizeIndex: number) {
+  const fields = GARMENTS[garmentType] ?? GARMENTS.Other;
+  const out: Record<string, number> = {};
+  for (const row of chart.rows) {
+    const v = row.values[sizeIndex];
+    if (v == null || Number.isNaN(Number(v))) continue;
+    const f = (CHART_ROW[row.label.trim().toLowerCase()] ?? []).map((k) => fields.find((x) => x.key === k)).find(Boolean);
+    if (!f || out[f.key] != null) continue;
+    out[f.key] = f.part ? Math.round(((Number(v) - (f.part.add ?? 0)) / f.part.factor) * 4) / 4 : Number(v);
+  }
+  return out;
+}
+
+/** Big Malayalam name per field key (part-of-whole fields carry a "how to measure" text instead of a name). */
+export const KEY_ML: Record<string, string> = {
+  Length: "നീളം",
+  Chest: "നെഞ്ച്",
+  Waist: "അര",
+  Shoulder: "തോൾ",
+  Seat: "സീറ്റ്",
+  Thigh: "തുട",
+  Knee: "മുട്ട്",
+  Bottom: "ബോട്ടം",
+  Hip: "ഇടുപ്പ്",
+  Sleeve: "കൈ നീളം",
+  Armhole: "കൈക്കുഴി",
+  Neck: "കഴുത്ത്",
+  Cuff: "കഫ്",
+  Ankle: "കണങ്കാൽ",
+};
+export const mlOf = (f: GarmentField) => (f.part ? (KEY_ML[f.key] ?? f.ml) : f.ml || KEY_ML[f.key] || f.en);
+export const enOf = (f: GarmentField) => (f.part ? f.key : f.en);
+
+/** Malayalam for the derived whole of a part-of-whole field ("shirt round"). */
+export const WHOLE_ML: Record<string, string> = { "shirt round": "ഷർട്ട് ചുറ്റളവ്" };

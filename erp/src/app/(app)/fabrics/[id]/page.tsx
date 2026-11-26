@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { can } from "@/lib/permissions";
 import { asc, desc, eq } from "drizzle-orm";
 import { getDb, schema } from "@/lib/db";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { getSettings } from "@/lib/settings";
 import { fabricsWithStock, withoutFabricCosts } from "@/lib/queries";
@@ -16,7 +17,9 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
   if (!fabric) notFound();
   const db = await getDb();
   const s = schema;
-  const [lines, settings, suppliers] = await Promise.all([
+  // Add stock / Adjust stock and the stock history appear once the database has them
+  const { stock } = await features();
+  const [lines, settings, suppliers, moves] = await Promise.all([
     db
       .select({
         saleId: s.sales.id,
@@ -38,12 +41,37 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       .orderBy(desc(s.sales.date), desc(s.sales.id)),
     getSettings(),
     db.select({ id: s.suppliers.id, name: s.suppliers.name }).from(s.suppliers).orderBy(asc(s.suppliers.name)),
+    !stock ? Promise.resolve([]) : db
+      .select({
+        id: s.fabricStockMoves.id,
+        kind: s.fabricStockMoves.kind,
+        date: s.fabricStockMoves.date,
+        metres: s.fabricStockMoves.metres,
+        rate: s.fabricStockMoves.rate,
+        supplier: s.suppliers.name,
+        supplierId: s.fabricStockMoves.supplierId,
+        billNo: s.fabricStockMoves.billNo,
+        remarks: s.fabricStockMoves.remarks,
+        boughtAfter: s.fabricStockMoves.boughtAfter,
+        balanceAfter: s.fabricStockMoves.balanceAfter,
+        rateBefore: s.fabricStockMoves.rateBefore,
+        rateAfter: s.fabricStockMoves.rateAfter,
+        createdBy: s.fabricStockMoves.createdBy,
+      })
+      .from(s.fabricStockMoves)
+      .leftJoin(s.suppliers, eq(s.suppliers.id, s.fabricStockMoves.supplierId))
+      .where(eq(s.fabricStockMoves.fabricId, id))
+      .orderBy(asc(s.fabricStockMoves.id)),
   ]);
+  const seesCost = can(session.role, "costs");
   const supplier = suppliers.find((x) => x.id === fabric.supplierId) ?? null;
   return (
     <FabricDetail
       fabric={fabric}
       lines={lines}
+      moves={seesCost ? moves : moves.map((m) => ({ ...m, rate: null, rateBefore: null, rateAfter: null }))}
+      canAdjust={can(session.role, "delete")}
+      stockEnabled={stock}
       supplier={supplier}
       suppliers={suppliers}
       lists={{ fabricType: settings.lists.fabricType, colourFamily: settings.lists.colourFamily, partner: settings.lists.partner }}

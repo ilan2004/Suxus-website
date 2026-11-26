@@ -1,7 +1,9 @@
 import "server-only";
 import { c } from "@/lib/db/sql";
-import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, ne, sql } from "drizzle-orm";
 import { getDb, schema } from "./db";
+import { col, when } from "./db/ext";
+import { features } from "./db/features";
 
 const { staff, customers, fabrics, saleItems, sales, orders, orderItems, payments } = schema;
 
@@ -17,7 +19,15 @@ export async function staffOptions(activeOnly = true) {
 export async function customerOptions() {
   const db = await getDb();
   return db
-    .select({ id: customers.id, code: customers.code, name: customers.name, phone: customers.phone, place: customers.place })
+    .select({
+      id: customers.id,
+      code: customers.code,
+      name: customers.name,
+      phone: customers.phone,
+      place: customers.place,
+      // Other people measured under this customer (children etc.) — so searching "Anas" finds his parent's account
+      people: when((await features()).wearers, sql<string | null>`(select string_agg(${c(schema.wearers.name)}, ', ' order by ${c(schema.wearers.id)}) from ${schema.wearers} where ${c(schema.wearers.customerId)} = ${c(customers.id)} and not ${c(schema.wearers.isSelf)})`),
+    })
     .from(customers)
     .orderBy(asc(customers.name));
 }
@@ -33,6 +43,7 @@ function soldSubquery() {
 
 export async function fabricsWithStock() {
   const db = await getDb();
+  const { stock } = await features();
   const sold = soldSubquery();
   const rows = await db
     .select({
@@ -48,6 +59,8 @@ export async function fabricsWithStock() {
       purchaseDate: fabrics.purchaseDate,
       purchaseMtr: fabrics.purchaseMtr,
       costPerMtr: fabrics.costPerMtr,
+      // First-entry snapshot (Add stock) — null until the database has it
+      ...(stock ? { openingMtr: col.fabricOpeningMtr, openingCostPerMtr: col.fabricOpeningCost } : { openingMtr: sql<number | null>`null`, openingCostPerMtr: sql<number | null>`null` }),
       saleRate: fabrics.saleRate,
       remarks: fabrics.remarks,
       active: fabrics.active,
@@ -73,8 +86,8 @@ export async function fabricsWithStock() {
 }
 
 /** For people without the "costs" permission: cost price, stock value and capital source never leave the server. */
-export function withoutFabricCosts<T extends { costPerMtr: number; stockValue: number; totalCost: number; broughtInBy?: string | null }>(rows: T[]): T[] {
-  return rows.map((r) => ({ ...r, costPerMtr: 0, stockValue: 0, totalCost: 0, broughtInBy: null }));
+export function withoutFabricCosts<T extends { costPerMtr: number; openingCostPerMtr?: number | null; stockValue: number; totalCost: number; broughtInBy?: string | null }>(rows: T[]): T[] {
+  return rows.map((r) => ({ ...r, costPerMtr: 0, openingCostPerMtr: null, stockValue: 0, totalCost: 0, broughtInBy: null }));
 }
 export type FabricRow = Awaited<ReturnType<typeof fabricsWithStock>>[number];
 
@@ -96,7 +109,12 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
   const paid = sql<number>`coalesce((select sum(${c(payments.amount)}) from ${payments} where ${c(payments.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemsSummary = sql<string>`coalesce((select string_agg(${c(orderItems.qty)} || ' × ' || ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   // Tailor is per item: each line with who has it (null = not given out yet)
-  const itemTailors = sql<{ item: string; qty: number; tailorId: number | null; tailor: string | null }[]>`coalesce((select json_agg(json_build_object('item', ${c(orderItems.item)}, 'qty', ${c(orderItems.qty)}, 'tailorId', ${c(orderItems.tailorId)}, 'tailor', (select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orderItems.tailorId)})) order by ${c(orderItems.id)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}), '[]'::json)`;
+  // wearer: whose garment, only when it is not the customer themself (Self → null)
+  // Whose garment (Wearers) — a plain null until the database has it
+  const wearerName = (await features()).wearers
+    ? sql`(select case when "wearers"."is_self" then null else "wearers"."name" end from "wearers" where "wearers"."id" = "order_items"."wearer_id")`
+    : sql`null`;
+  const itemTailors = sql<{ item: string; qty: number; tailorId: number | null; tailor: string | null; wearer: string | null }[]>`coalesce((select json_agg(json_build_object('item', ${c(orderItems.item)}, 'qty', ${c(orderItems.qty)}, 'tailorId', ${c(orderItems.tailorId)}, 'tailor', (select ${c(staff.name)} from ${staff} where ${c(staff.id)} = ${c(orderItems.tailorId)}), 'wearer', ${wearerName}) order by ${c(orderItems.id)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}), '[]'::json)`;
   const pieces = sql<number>`coalesce((select sum(${c(orderItems.qty)}) from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),0)`.mapWith(Number);
   const itemNames = sql<string>`coalesce((select string_agg(distinct ${c(orderItems.item)}, ', ') from ${orderItems} where ${c(orderItems.orderId)} = ${c(orders.id)}),'')`;
   const altPhone = sql<string | null>`(select ${c(schema.customers.altPhone)} from ${schema.customers} where ${c(schema.customers.id)} = ${c(orders.customerId)})`;
@@ -126,7 +144,7 @@ export async function ordersWithBalance(where?: ReturnType<typeof eq>) {
     .where(where)
     .orderBy(desc(orders.id));
   return rows.map((r) => {
-    const lines = (typeof r.itemTailors === "string" ? JSON.parse(r.itemTailors) : r.itemTailors) as { item: string; qty: number; tailorId: number | null; tailor: string | null }[];
+    const lines = (typeof r.itemTailors === "string" ? JSON.parse(r.itemTailors) : r.itemTailors) as { item: string; qty: number; tailorId: number | null; tailor: string | null; wearer: string | null }[];
     return { ...r, itemTailors: lines, tailorName: tailorSummary(lines), balance: Math.round((r.total - r.paid) * 100) / 100 };
   });
 }
@@ -202,11 +220,27 @@ export async function getOrderFull(id: number) {
   const db = await getDb();
   const [order] = await db.select().from(orders).where(eq(orders.id, id));
   if (!order) return null;
-  const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id)).orderBy(asc(orderItems.id));
+  const { wearers: hasWearers } = await features();
+  const items = await db
+    .select({ ...getTableColumns(orderItems), wearerId: when(hasWearers, col.orderItemWearer) })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, id))
+    .orderBy(asc(orderItems.id));
   const pays = await db.select().from(payments).where(eq(payments.orderId, id)).orderBy(asc(payments.id));
   const itemTailorIds = [...new Set(items.map((i) => i.tailorId).filter((x): x is number => !!x))];
   const itemPeople = itemTailorIds.length ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, itemTailorIds)) : [];
-  const itemsWithTailor = items.map((i) => ({ ...i, tailor: itemPeople.find((p) => p.id === i.tailorId)?.name ?? null }));
+  const wearerIds = [...new Set(items.map((i) => i.wearerId).filter((x): x is number => !!x))];
+  const itemWearers = wearerIds.length && hasWearers
+    ? await db
+        .select({ id: schema.wearers.id, name: schema.wearers.name, relation: schema.wearers.relation, school: schema.wearers.school, isSelf: schema.wearers.isSelf })
+        .from(schema.wearers)
+        .where(inArray(schema.wearers.id, wearerIds))
+    : [];
+  const itemsWithTailor = items.map((i) => {
+    const w = itemWearers.find((x) => x.id === i.wearerId) ?? null;
+    // wearerName: whose garment, as printed for the tailor (Self = the customer's own name)
+    return { ...i, tailor: itemPeople.find((p) => p.id === i.tailorId)?.name ?? null, wearer: w, wearerName: w ? (w.isSelf ? (order.customerName ?? "Self") : w.name) : null };
+  });
   const ids = [order.tailorId, order.broughtById].filter(Boolean) as number[];
   const people = ids.length ? await db.select({ id: staff.id, name: staff.name }).from(staff).where(inArray(staff.id, ids)) : [];
   const sale = order.saleId ? await getSaleFull(order.saleId) : null;
@@ -214,6 +248,8 @@ export async function getOrderFull(id: number) {
   return {
     ...order,
     items: itemsWithTailor,
+    /** More than one person's garments in this order (or someone other than Self) — show whose each item is. */
+    showWearers: itemWearers.some((w) => !w.isSelf),
     payments: pays,
     sale,
     tailorName: tailorSummary(itemsWithTailor),

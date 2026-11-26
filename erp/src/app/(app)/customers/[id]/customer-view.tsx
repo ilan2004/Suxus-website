@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { MapPin, MessageCircle, Pencil, Phone, Plus, Ruler, Scissors, ShoppingBag, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,9 @@ import { StatCard } from "@/components/app/stat-card";
 import { StatusBadge } from "@/components/app/status-badge";
 import { Empty } from "@/components/app/empty";
 import { CustomerDialog } from "@/components/forms/customer-dialog";
-import { MeasurementCard, MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
+import { MeasurementDialog, type MeasurementRow } from "@/components/forms/measurement-dialog";
+import { PeopleMeasurements } from "./people-measurements";
+import type { WearerLite } from "@/lib/wearers";
 import { deleteCustomer } from "@/lib/actions/customers";
 import { fmtDate, rupees } from "@/lib/utils";
 import { formatPhone } from "@/lib/phone";
@@ -39,6 +41,7 @@ export function CustomerView({
   orders,
   bills,
   measurements,
+  wearers,
   messages,
   lists,
   canDelete,
@@ -47,11 +50,15 @@ export function CustomerView({
   orders: OrderRow[];
   bills: Bill[];
   measurements: MeasurementRow[];
+  /** People measured under this customer (Self first). */
+  wearers: WearerLite[];
   messages: SentMessage[];
   lists: { customerType: string[]; fit: string[] };
   canDelete: boolean;
 }) {
   const router = useRouter();
+  // ?tab=measurements (a person found in search opens straight on their measurements)
+  const tab = useSearchParams().get("tab");
   const [editing, setEditing] = React.useState(false);
   const [mDialog, setMDialog] = React.useState<Partial<MeasurementRow> | null>(null);
   // Order details for {order_no} {item} {date} {balance}: the latest open order, else the latest order.
@@ -141,7 +148,7 @@ export function CustomerView({
         </Button>
       </div>
 
-      <Tabs defaultValue="orders">
+      <Tabs defaultValue={tab && ["orders", "bills", "measurements", "messages"].includes(tab) ? tab : "orders"}>
         <TabsList>
           <TabsTrigger value="orders">Orders ({orders.length})</TabsTrigger>
           <TabsTrigger value="bills">Bills ({bills.length})</TabsTrigger>
@@ -221,19 +228,7 @@ export function CustomerView({
           )}
         </TabsContent>
         <TabsContent value="measurements">
-          {measurements.length ? (
-            <div className="grid gap-3 md:grid-cols-2">
-              {measurements.map((m) => (
-                <MeasurementCard key={m.id} m={m} onEdit={() => setMDialog(m)} />
-              ))}
-            </div>
-          ) : (
-            <Empty icon={Ruler} title="No measurements yet">
-              <Button className="mt-3" variant="outline" onClick={() => setMDialog({ customerId: customer.id })}>
-                <Plus /> Add measurements
-              </Button>
-            </Empty>
-          )}
+          <PeopleMeasurements customerId={customer.id} measurements={measurements} wearers={wearers} onMeasure={setMDialog} />
         </TabsContent>
         <TabsContent value="messages">
           {messages.length ? (

@@ -1,7 +1,9 @@
 import "server-only";
 import ExcelJS from "exceljs";
-import { eq, isNull, sql } from "drizzle-orm";
+import { eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { getDb, schema, type DB } from "./db";
+import { fabricsExt } from "./db/ext";
+import { features } from "./db/features";
 import { counters } from "./db/schema";
 import { nextNumber } from "./numbering";
 import { intlOrAsTyped } from "./phone";
@@ -509,6 +511,10 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
         key: `code:${keyText(e.code)}`,
         values: { ...e, q: qKey(e.brand, e.shade, supplierOf(e.remarks)) } as unknown as Record<string, unknown>,
       }));
+      // Fabrics with Add stock / Adjust stock entries (first-entry snapshot taken) — empty before that migration
+      const movedFabrics = new Set<number>(
+        (await features()).stock ? (await db.select({ id: fabricsExt.id }).from(fabricsExt).where(isNotNull(fabricsExt.openingMtr))).map((r) => r.id) : [],
+      );
       const prefixOf = new Map(parsed.map((x) => [x.values, x.prefix]));
       const codeOf = new Map(parsed.map((x) => [x.values, x.code]));
       const stats = await mergeRows({
@@ -530,7 +536,14 @@ export async function importWorkbook(buffer: ArrayBuffer, mode: ImportMode = "fi
           await db.insert(schema.fabrics).values({ ...(v as object), code } as typeof schema.fabrics.$inferInsert);
         },
         update: async (id, v) => {
-          await db.update(schema.fabrics).set({ ...(v as object), updatedAt: new Date() }).where(eq(schema.fabrics.id, id));
+          // Fabrics with Add stock / Adjust stock entries: the ERP owns Bought and the (weighted average) cost now —
+          // a re-import of the old sheet must not put the first-entry figures back
+          const moved = movedFabrics.has(id);
+          const { purchaseMtr, costPerMtr, ...other } = v as Record<string, unknown>;
+          await db
+            .update(schema.fabrics)
+            .set({ ...other, ...(moved ? {} : { purchaseMtr, costPerMtr }), updatedAt: new Date() } as never)
+            .where(eq(schema.fabrics.id, id));
         },
       });
       report["Fabric Stock"] = statLine(stats);

@@ -26,10 +26,16 @@ const stop = (msg: string): never => {
 /** Columns / tables the app reads directly (a missing one would take pages down) — checked after migrating. */
 const REQUIRED: [string, string][] = [
   ["staff", "session_version"],
-  ["measurements", "values"],
-  ["order_items", "tailor_id"],
   ["fabrics", "pattern"],
-  ["settings", "key"],
+  ["fabrics", "opening_mtr"],
+  ["fabric_stock_moves", "id"],
+  ["wearers", "id"],
+  ["measurements", "wearer_id"],
+  ["order_items", "wearer_id"],
+  ["staff", "simple_mode"],
+  ["measurement_drafts", "id"],
+  ["job_slip_links", "token"],
+  ["job_slip_events", "id"],
 ];
 
 async function main() {

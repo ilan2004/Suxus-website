@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-const PUBLIC = ["/login", "/setup", "/api/health"];
+// /j/<token>: a shared job slip PDF — the long random token is the only key; it reaches that one PDF and nothing else
+const PUBLIC = ["/login", "/setup", "/api/health", "/j"];
 
 /** Cheap gate: no session cookie → login. Signature is verified server-side in requireUser(). */
 export function proxy(req: NextRequest) {

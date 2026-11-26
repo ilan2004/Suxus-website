@@ -1,8 +1,9 @@
 "use server";
 
-import { desc, ilike, or, sql } from "drizzle-orm";
+import { and, desc, eq, ilike, not, or, sql } from "drizzle-orm";
 import { can } from "@/lib/permissions";
 import { getDb, schema } from "@/lib/db";
+import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 
 export type SearchHit = { type: string; label: string; sub: string; href: string; thumb?: string | null };
@@ -16,12 +17,21 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
   const digits = term.replace(/\D/g, "");
   const db = await getDb();
   const s = schema;
-  const [customers, sales, orders, bulk, fabrics, suppliers, staff] = await Promise.all([
+  const [customers, wearers, sales, orders, bulk, fabrics, suppliers, staff] = await Promise.all([
     db
       .select({ id: s.customers.id, name: s.customers.name, phone: s.customers.phone, code: s.customers.code, place: s.customers.place })
       .from(s.customers)
       .where(or(ilike(s.customers.name, like), ilike(s.customers.code, like), digits.length >= 4 ? ilike(s.customers.phone, `%${digits}%`) : sql`false`))
       .limit(6),
+    // People measured under a customer (a parent's children…) — found by their own name
+    (await features()).wearers
+      ? db
+          .select({ name: s.wearers.name, relation: s.wearers.relation, school: s.wearers.school, customerId: s.customers.id, customer: s.customers.name, phone: s.customers.phone })
+          .from(s.wearers)
+          .innerJoin(s.customers, eq(s.customers.id, s.wearers.customerId))
+          .where(and(not(s.wearers.isSelf), ilike(s.wearers.name, like)))
+          .limit(6)
+      : Promise.resolve([]),
     db
       .select({ id: s.sales.id, billNo: s.sales.billNo, name: s.sales.customerName, net: s.sales.net, date: s.sales.date })
       .from(s.sales)
@@ -57,6 +67,12 @@ export async function globalSearch(q: string): Promise<SearchHit[]> {
   const rs = (n: number) => "₹" + new Intl.NumberFormat("en-IN").format(Math.round(n));
   return [
     ...customers.map((c) => ({ type: "Customer", label: c.name, sub: [c.code, c.phone, c.place].filter(Boolean).join(" · "), href: `/customers/${c.id}` })),
+    ...wearers.map((w) => ({
+      type: "Person",
+      label: `${w.name}${[w.relation !== "Other" ? w.relation : null, w.school].filter(Boolean).length ? ` (${[w.relation !== "Other" ? w.relation : null, w.school].filter(Boolean).join(", ")})` : ""}`,
+      sub: `of ${w.customer}${w.phone ? ` · ${w.phone}` : ""}`,
+      href: `/customers/${w.customerId}?tab=measurements`,
+    })),
     ...orders.map((o) => ({ type: "Order", label: `${o.orderNo} · ${o.name ?? ""}`, sub: `${o.status} · ${rs(o.total)}`, href: `/orders/${o.id}` })),
     ...sales.map((x) => ({ type: "Bill", label: `${x.billNo} · ${x.name ?? "Walk-in"}`, sub: `${x.date} · ${rs(x.net)}`, href: `/sales/${x.id}` })),
     ...bulk.map((b) => ({ type: "Bulk order", label: `${b.orderNo} · ${b.name}`, sub: b.status, href: `/bulk/${b.id}` })),

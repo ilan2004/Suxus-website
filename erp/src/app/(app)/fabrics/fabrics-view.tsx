@@ -23,6 +23,7 @@ import type { ColourSuggestion } from "@/lib/colour-detect";
 import type { FabricAnalysis } from "@/lib/fabric-analysis";
 import { PatternColourFields } from "@/components/forms/fabric-colour-fields";
 import { PATTERNS, hasRepeat } from "@/lib/fabric-patterns";
+import { StockDialog } from "@/components/forms/stock-dialogs";
 
 /** A fabric row → the edit form's values. */
 export function fabricToInput(f: FabricRow): FabricInput {
@@ -62,8 +63,11 @@ export function FabricsView({
   lowStock,
   showCost,
   photosEnabled,
+  stockEnabled = false,
 }: {
   photosEnabled: boolean;
+  /** Add stock (the database has it): "+ Stock" on each row, Scan opens Add stock */
+  stockEnabled?: boolean;
   rows: FabricRow[];
   suppliers: { id: number; name: string }[];
   lists: { fabricType: string[]; colourFamily: string[]; partner: string[] };
@@ -76,6 +80,8 @@ export function FabricsView({
   const [showInactive, setShowInactive] = React.useState(false);
   const [selected, setSelected] = React.useState<Set<number>>(new Set());
   const [camera, setCamera] = React.useState(false);
+  /** Add stock dialog — `scan` = opened from a barcode scan (offers "Save & scan next"). */
+  const [adding, setAdding] = React.useState<{ id: number; scan: boolean } | null>(null);
 
   const [patternFilter, setPatternFilter] = React.useState<string>("all");
   const data = rows.filter((r) => (showInactive || r.active) && (patternFilter === "all" || (patternFilter === "none" ? !r.pattern : r.pattern === patternFilter)));
@@ -185,6 +191,27 @@ export function FabricsView({
     ...(showCost
       ? ([{ accessorKey: "stockValue", header: "Value", meta: { align: "right" }, cell: ({ row }) => rupees(row.original.stockValue) }] as ColumnDef<FabricRow>[])
       : []),
+    ...(!stockEnabled ? [] : [{
+      id: "addStock",
+      header: () => <span className="sr-only">Add stock</span>,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          data-no-row-click
+          className="h-7 gap-1 px-2 text-xs"
+          title="Add stock · സ്റ്റോക്ക് ചേർക്കുക"
+          onClick={(e) => {
+            e.stopPropagation();
+            setAdding({ id: row.original.id, scan: false });
+          }}
+        >
+          <Plus className="size-3.5" /> Stock
+        </Button>
+      ),
+    } as ColumnDef<FabricRow>]),
   ];
 
   return (
@@ -233,17 +260,29 @@ export function FabricsView({
       <BarcodeScanner
         open={camera}
         onClose={() => setCamera(false)}
-        title="Scan to find a fabric"
+        title={stockEnabled ? "Scan a fabric to add stock" : "Scan to find a fabric"}
         onResult={(code) => {
           const q = code.trim().toLowerCase();
           const f = rows.find((r) => r.code.toLowerCase() === q || (r.barcode && r.barcode.toLowerCase() === q));
           setCamera(false);
-          if (f) router.push(`/fabrics/${f.id}`);
+          // Known fabric → straight into its Add stock form, cursor in Metres (fast while unloading a delivery)
+          if (f) {
+            if (stockEnabled) setAdding({ id: f.id, scan: true });
+            else router.push(`/fabrics/${f.id}`);
+          }
           else {
             toast.info(`New barcode ${code} — add the fabric`);
             setEditing({ brand: "", composition: "Linen", barcode: code, purchaseDate: today(), purchaseMtr: 0, costPerMtr: 0, saleRate: 0, active: true });
           }
         }}
+      />
+      <StockDialog
+        mode="add"
+        fabric={adding ? (rows.find((r) => r.id === adding.id) ?? null) : null}
+        onClose={() => setAdding(null)}
+        suppliers={suppliers}
+        showCost={showCost}
+        onScanNext={adding?.scan ? () => setCamera(true) : undefined}
       />
       <FabricSheet
         value={editing}
@@ -255,6 +294,7 @@ export function FabricsView({
         photosEnabled={photosEnabled}
         onSaved={() => router.refresh()}
         row={editing && "id" in editing ? rows.find((r) => r.id === editing.id) : undefined}
+        stockEnabled={stockEnabled}
       />
     </>
   );
@@ -269,6 +309,7 @@ export function FabricSheet({
   showCost,
   onSaved,
   row,
+  stockEnabled = false,
   photosEnabled,
 }: {
   photosEnabled: boolean;
@@ -280,6 +321,8 @@ export function FabricSheet({
   showCost: boolean;
   onSaved: () => void;
   row?: FabricRow;
+  /** Bought is read-only after creation only once Add stock exists (otherwise it stays editable, as before) */
+  stockEnabled?: boolean;
 }) {
   const [v, setV] = React.useState<FabricInput | null>(value);
   const [photos, setPhotos] = React.useState<PhotoItem[]>([]);
@@ -478,9 +521,16 @@ export function FabricSheet({
             <Field label="Purchase date" ml="വാങ്ങിയ തീയതി">
               <Input type="date" value={v.purchaseDate ?? ""} onChange={(e) => set("purchaseDate", e.target.value)} />
             </Field>
-            <Field label="Purchased metres" ml="വാങ്ങിയ മീറ്റർ">
-              <Input type="number" step="0.01" min={0} value={v.purchaseMtr ?? ""} onChange={(e) => set("purchaseMtr", e.target.value as unknown as number)} />
-            </Field>
+            {v.id && stockEnabled ? (
+              // Bought is never typed again after the first entry — the app adds receipts and corrections to it
+              <Field label="Bought (total)" ml="വാങ്ങിയത്" hint="Use “+ Stock” for new cloth, “Adjust stock” for corrections">
+                <div className="flex h-9 items-center rounded-md border bg-muted/40 px-3 text-sm tabular-nums">{num(Number(v.purchaseMtr ?? 0))} m</div>
+              </Field>
+            ) : (
+              <Field label="Purchased metres" ml="വാങ്ങിയ മീറ്റർ">
+                <Input type="number" step="0.01" min={0} value={v.purchaseMtr ?? ""} onChange={(e) => set("purchaseMtr", e.target.value as unknown as number)} />
+              </Field>
+            )}
             {showCost && (
               <Field label="Cost / metre" ml="മുടക്ക്" hint={`Total cost ${rupees(Number(v.purchaseMtr || 0) * Number(v.costPerMtr || 0))}`}>
                 <Input type="number" step="0.01" min={0} value={v.costPerMtr ?? ""} onChange={(e) => set("costPerMtr", e.target.value as unknown as number)} />
@@ -496,7 +546,7 @@ export function FabricSheet({
                 className="sm:col-span-2"
                 hint={
                   v.broughtInBy
-                    ? `Counts as ${v.broughtInBy}'s opening stock & capital: ${rupees(Number(v.purchaseMtr || 0) * Number(v.costPerMtr || 0))}${Number(v.costPerMtr || 0) ? "" : " — enter Cost / metre to value it"}`
+                    ? `Counts as ${v.broughtInBy}'s opening stock & capital: ${rupees(Number(row?.openingMtr ?? v.purchaseMtr ?? 0) * Number(row?.openingCostPerMtr ?? v.costPerMtr ?? 0))}${row?.openingMtr != null ? " (first entry — stock added later is a business purchase)" : ""}${Number(v.costPerMtr || 0) ? "" : " — enter Cost / metre to value it"}`
                     : "Bought with business money — not opening stock"
                 }
               >

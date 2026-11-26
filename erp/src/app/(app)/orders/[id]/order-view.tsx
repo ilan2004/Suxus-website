@@ -716,27 +716,32 @@ function SlipRecord({ log }: { log: { id: number; action: string; via: string; s
   );
 }
 
-/** Under a garment on the order: metres needed (and which rule decided it), its fabric, and a warning if short. */
+/** Under a garment on the order: its own fabric (swatch, code, name), the metres needed, and a warning if short. */
 function ItemFabricReq({ plan, qty, totals }: { plan: OrderFabricPlan["items"][number]; qty: number; totals: OrderFabricPlan["totals"] }) {
   const { req, fabric } = plan;
-  if (!req) return null;
+  if (!req && !fabric) return null;
   const total = fabric ? totals.find((t) => t.fabric.id === fabric.id) : undefined;
   return (
     <div className="mb-2 grid gap-1 text-sm" data-testid="fabric-req">
-      <p className="flex flex-wrap items-baseline gap-x-2">
-        {req.ok ? (
-          <>
-            <b className="font-ml">{requirementText(req, qty)}</b>
-            <span className="font-ml text-xs text-muted-foreground">({req.rule})</span>
-          </>
-        ) : (
-          <b className="font-ml text-warning">{req.missing}</b>
-        )}
-        {fabric && (
-          <span className="text-xs text-muted-foreground">
-            · {fabric.code} {fabric.name}
+      <p className="flex flex-wrap items-center gap-x-2">
+        {fabric ? (
+          <span className="inline-flex items-center gap-1.5" data-testid="item-fabric">
+            {fabric.hex && <span className="inline-block size-4 rounded-sm border border-foreground/40" style={{ background: fabric.hex }} />}
+            <b>{fabric.code}</b> <span className="text-muted-foreground">{fabric.name}</span>
           </span>
+        ) : (
+          <span className="text-xs text-muted-foreground">Fabric: customer&apos;s own / not chosen</span>
         )}
+        {req &&
+          (req.ok ? (
+            <>
+              <span className="text-muted-foreground">·</span>
+              <b className="font-ml">{requirementText(req, qty)}</b>
+              <span className="font-ml text-xs text-muted-foreground">({req.rule})</span>
+            </>
+          ) : (
+            <b className="font-ml text-warning">· {req.missing}</b>
+          ))}
       </p>
       {total?.short && <p className="w-fit rounded-md bg-warning/15 px-2 py-1 font-ml font-semibold">⚠ {shortText(total.available, total.need)}</p>}
     </div>

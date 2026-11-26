@@ -24,6 +24,12 @@ type Item = { key: string; /** existing order item (kept on save, so its bundle 
 export type LinkedSale = { id: number; billNo: string; date: string; net: number; items: string; customerId: number | null; customerName: string | null; phone: string | null; /** fabric + metres on the bill */ fabrics?: { fabricId: number | null; metres: number }[] };
 export type OrderInitial = Omit<Partial<OrderInput>, "items"> & { id?: number; orderNo?: string; items?: { id?: number; item: string; qty: number; rate: number; tailorId?: number | null; wearerId?: number | null; fabricId?: number | null; variant?: string | null }[] };
 
+/** The one shop fabric on a bill (null when it has none or several — then each garment's fabric is chosen by hand). */
+const onlyFabricOf = (sale: LinkedSale | null | undefined) => {
+  const ids = [...new Set((sale?.fabrics ?? []).map((f) => f.fabricId).filter((x): x is number => !!x))];
+  return ids.length === 1 ? ids[0] : null;
+};
+
 export function OrderForm({
   initial,
   customers,
@@ -71,7 +77,7 @@ export function OrderForm({
   const [items, setItems] = React.useState<Item[]>(
     initial?.items?.length
       ? initial.items.map((i) => ({ key: crypto.randomUUID(), id: i.id, fabricId: i.fabricId ?? null, item: i.item, qty: String(i.qty), rate: String(i.rate), tailorId: i.tailorId ?? null, wearerId: i.wearerId ?? null, variant: i.variant ?? null }))
-      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null, variant: null }],
+      : [{ key: crypto.randomUUID(), item: workType === "Alteration" ? "Alteration - Other" : "Shirt", qty: "1", rate: "", tailorId: null, wearerId: null, variant: null, fabricId: fabricReq?.enabled ? onlyFabricOf(sale) : null }],
   );
   // People measured under this customer: the "whose garment" picker appears once there is more than Self
   const people = useWearers(customer?.id);
@@ -137,13 +143,13 @@ export function OrderForm({
     // the order's bill: those metres are already off the stock balance but set aside for this order
     const billed = new Map<number, number>();
     for (const f of linked?.fabrics ?? []) if (f.fabricId) billed.set(f.fabricId, (billed.get(f.fabricId) ?? 0) + Number(f.metres));
-    const onlyBill = billed.size === 1 ? [...billed.keys()][0] : null;
     const per = new Map<string, { req: Requirement | null; fabricId: number | null }>();
     const sums = new Map<number, number>();
     for (const i of items) {
       const m = measureFor(reqData.measures, i.item, customer ? (i.wearerId ?? reqData.selfId) : null, reqData.selfId);
       const req = fabricRequirement(fabricReq.tables, i.item, Number(i.qty) || 1, m, i.variant);
-      const fabricId = i.fabricId ?? onlyBill;
+      // this garment's own fabric only
+      const fabricId = i.fabricId ?? null;
       per.set(i.key, { req, fabricId });
       if (fabricId && req?.ok) sums.set(fabricId, (sums.get(fabricId) ?? 0) + req.total);
     }
@@ -152,7 +158,7 @@ export function OrderForm({
       const available = round2((f?.balance ?? 0) + (billed.get(id) ?? 0));
       return { id, code: f?.code ?? "?", name: f?.name ?? "", need: round2(need), available, short: available < need };
     });
-    return { per, totals, onlyBill };
+    return { per, totals, billFabrics: [...billed.keys()] };
   }, [fabricReq, items, reqData, linked, customer]);
   const fabric = linked?.net ?? 0;
   const total = round2(stitching + fabric - (Number(discount) || 0));
@@ -358,7 +364,7 @@ export function OrderForm({
                   enabled={fabricReq.enabled}
                   fabrics={fabricReq.fabrics}
                   value={i.fabricId ?? null}
-                  fromBill={fabricPlan.onlyBill}
+                  billFabrics={fabricPlan.billFabrics}
                   onChange={(id) => updateItem(i.key, { fabricId: id })}
                 />
               )}
@@ -411,7 +417,13 @@ export function OrderForm({
               <SearchSelect
                 options={candidateSales.map((s) => ({ value: String(s.id), label: `${s.billNo} · ${s.customerName ?? "Walk-in"}`, sub: `${rupees(s.net)} · ${s.items}` }))}
                 value={null}
-                onChange={(v) => setLinked(candidateSales.find((s) => String(s.id) === v) ?? null)}
+                onChange={(v) => {
+                  const sale = candidateSales.find((s) => String(s.id) === v) ?? null;
+                  setLinked(sale);
+                  // a bill with one fabric: every garment without a fabric is cut from it (shown, and changeable per garment)
+                  const only = fabricReq?.enabled ? onlyFabricOf(sale) : null;
+                  if (only) setItems((is) => is.map((i) => (i.fabricId ? i : { ...i, fabricId: only })));
+                }}
                 placeholder="Link an existing fabric bill (FS-…)"
               />
               {editing && initial?.id ? (
@@ -549,7 +561,7 @@ function FabricReqLine({
   enabled,
   fabrics,
   value,
-  fromBill,
+  billFabrics,
   onChange,
 }: {
   plan: { req: Requirement | null; fabricId: number | null } | undefined;
@@ -558,7 +570,8 @@ function FabricReqLine({
   enabled: boolean;
   fabrics: { id: number; code: string; name: string; balance: number }[];
   value: number | null;
-  fromBill: number | null;
+  /** fabrics on the linked bill — listed first */
+  billFabrics: number[];
   onChange: (id: number | null) => void;
 }) {
   const req = plan?.req ?? null;
@@ -581,12 +594,12 @@ function FabricReqLine({
           aria-label="Fabric for this garment"
           value={value ?? ""}
           onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-          className="h-8 w-full max-w-md rounded-md border border-input bg-card px-2 text-xs sm:w-fit"
+          className={cn("h-9 w-full max-w-md rounded-md border border-input bg-card px-2 text-sm sm:w-fit", !value && "text-muted-foreground")}
         >
-          <option value="">{fromBill ? `Fabric: from the linked bill (${fabrics.find((f) => f.id === fromBill)?.code ?? ""})` : "Fabric: not chosen"}</option>
-          {fabrics.map((f) => (
+          <option value="">Fabric · തുണി: customer&apos;s own / not chosen</option>
+          {[...fabrics].sort((a, b) => Number(billFabrics.includes(b.id)) - Number(billFabrics.includes(a.id))).map((f) => (
             <option key={f.id} value={f.id}>
-              {f.code} · {f.name} — {metres(f.balance)} m in stock
+              Fabric · {f.code} · {f.name} — {metres(f.balance)} m in stock{billFabrics.includes(f.id) ? " (on the bill)" : ""}
             </option>
           ))}
         </select>

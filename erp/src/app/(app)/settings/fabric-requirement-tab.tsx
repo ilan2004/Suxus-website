@@ -42,7 +42,7 @@ export function FabricRequirementTab({ value }: { value: FabricRequirementTables
         </p>
         <p className="text-muted-foreground">
           Metres per garment before cutting — an estimate shown on stitching orders and job slips. Stock is still reduced only by the bill. For a shirt both tables are looked up and the
-          higher figure is used.
+          higher figure is used. Full or half sleeve, and Regular or Loose model, come from the order item&apos;s variant (തരം).
         </p>
       </div>
 
@@ -159,7 +159,7 @@ function PantTable({ rows, onChange }: { rows: PantRow[]; onChange: (r: PantRow[
         <p className="font-medium">
           Pant / Trouser <span className="ml">പാന്റ്</span>
         </p>
-        <p className="text-xs text-muted-foreground">Loose model = the measurement&apos;s fit is &quot;Loose&quot;; otherwise Regular.</p>
+        <p className="text-xs text-muted-foreground">The order item&apos;s variant (തരം): Regular or Loose model.</p>
       </div>
       <table className="w-full text-sm">
         <thead className="text-left text-xs text-muted-foreground">
@@ -208,7 +208,7 @@ function TryIt({ tables }: { tables: FabricRequirementTables }) {
   const [chest, setChest] = React.useState("13");
   const [length, setLength] = React.useState("28");
   const [sleeve, setSleeve] = React.useState<"full" | "half">("full");
-  const r = fabricRequirement(tables, sleeve === "full" ? "Shirt - Full sleeve" : "Shirt - Half sleeve", 1, { values: { Chest: num(chest), Length: num(length) } });
+  const r = fabricRequirement(tables, "Shirt", 1, { values: { Chest: num(chest), Length: num(length) } }, sleeve === "full" ? "Full sleeve" : "Half sleeve");
   return (
     <section className="rounded-xl border border-dashed bg-card p-4 text-sm">
       <p className="mb-2 font-medium">

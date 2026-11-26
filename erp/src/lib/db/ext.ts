@@ -1,5 +1,5 @@
 import "server-only";
-import { boolean, integer, numeric, pgTable } from "drizzle-orm/pg-core";
+import { boolean, integer, numeric, pgTable, text } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 /*
@@ -17,11 +17,14 @@ export const fabricsExt = pgTable("fabrics", { id: integer("id").primaryKey(), o
 export const measurementsExt = pgTable("measurements", { id: integer("id").primaryKey(), wearerId: integer("wearer_id") });
 /** order_items.wearer_id — Wearers */
 export const orderItemsExt = pgTable("order_items", { id: integer("id").primaryKey(), wearerId: integer("wearer_id") });
+/** order_items.variant — Garment variant (തരം) */
+export const orderItemsVariant = pgTable("order_items", { id: integer("id").primaryKey(), variant: text("variant") });
 
 /** For a select list on the un-aliased table: e.g. { wearerId: col.measurementWearer } */
 export const col = {
   measurementWearer: sql<number | null>`"measurements"."wearer_id"`.mapWith((v) => (v == null ? null : Number(v))),
   orderItemWearer: sql<number | null>`"order_items"."wearer_id"`.mapWith((v) => (v == null ? null : Number(v))),
+  orderItemVariant: sql<string | null>`"order_items"."variant"`,
   fabricOpeningMtr: sql<number | null>`"fabrics"."opening_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
   fabricOpeningCost: sql<number | null>`"fabrics"."opening_cost_per_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
 };

@@ -37,6 +37,7 @@ const REQUIRED: [string, string][] = [
   ["job_slip_links", "token"],
   ["job_slip_events", "id"],
   ["order_item_fabrics", "fabric_id"],
+  ["order_items", "variant"],
 ];
 
 async function main() {

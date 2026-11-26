@@ -1,5 +1,6 @@
 "use client";
 
+import { variantRequired } from "@/lib/variants";
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -93,7 +94,7 @@ export function OrderView({
     fabricLines.length ? `\nFabric${order.sale ? ` (bill ${order.sale.billNo})` : ""}:` : "",
     ...fabricLines,
     `\nStitching:`,
-    ...order.items.map((i) => `• ${i.qty} × ${i.item}${i.wearer && !i.wearer.isSelf ? ` — ${i.wearer.name}` : ""}`),
+    ...order.items.map((i) => `• ${i.qty} × ${i.item}${i.variant ? ` (${i.variant})` : ""}${i.wearer && !i.wearer.isSelf ? ` — ${i.wearer.name}` : ""}`),
     "",
     `Total: ₹${num(order.total)}`,
     order.paid > 0 ? `Advance paid: ₹${num(order.paid)}` : "",
@@ -267,6 +268,7 @@ export function OrderView({
                   <TableRow className="border-b-0">
                     <TableCell className="font-medium">
                       {i.item}
+                      <VariantTag item={i.item} variant={i.variant} />
                       {order.showWearers && i.wearerName && (
                         <span className="ml-2 rounded-full bg-gold/15 px-2 py-0.5 text-xs font-semibold">
                           {i.wearerName}
@@ -725,10 +727,7 @@ function ItemFabricReq({ plan, qty, totals }: { plan: OrderFabricPlan["items"][n
         {req.ok ? (
           <>
             <b className="font-ml">{requirementText(req, qty)}</b>
-            <span className="font-ml text-xs text-muted-foreground">
-              ({req.rule}
-              {req.sleeveGuessed ? ` · ഫുൾ കൈ കണക്കാക്കി — ഹാഫ് കൈ ${metres((req.halfPerPiece ?? 0) * qty)}` : ""})
-            </span>
+            <span className="font-ml text-xs text-muted-foreground">({req.rule})</span>
           </>
         ) : (
           <b className="font-ml text-warning">{req.missing}</b>
@@ -741,5 +740,16 @@ function ItemFabricReq({ plan, qty, totals }: { plan: OrderFabricPlan["items"][n
       </p>
       {total?.short && <p className="w-fit rounded-md bg-warning/15 px-2 py-1 font-ml font-semibold">⚠ {shortText(total.available, total.need)}</p>}
     </div>
+  );
+}
+
+/** The order item's variant (തരം) next to the garment; a shirt / pant saved before variants shows a small "not set". */
+function VariantTag({ item, variant }: { item: string; variant: string | null }) {
+  if (variant) return <span className="ml-1.5 text-sm font-normal text-muted-foreground">· {variant}</span>;
+  if (!variantRequired(item)) return null;
+  return (
+    <span className="ml-1.5 rounded border border-dashed border-warning/60 px-1.5 py-0.5 align-middle text-[10px] font-normal text-warning" title="Saved before variants existed — edit the order to set it">
+      variant not set
+    </span>
   );
 }

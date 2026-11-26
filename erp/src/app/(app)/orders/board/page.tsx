@@ -4,6 +4,9 @@ import { getDb, schema } from "@/lib/db";
 import { ordersWithBalance } from "@/lib/queries";
 import { PageHeader } from "@/components/app/page-header";
 import { addDays, today } from "@/lib/utils";
+import { variantRequired } from "@/lib/variants";
+
+const withVariant = (item: string, v: string | null) => (v ? `${item} (${v})` : variantRequired(item) ? `${item} (variant not set)` : item);
 import { OrderBoard } from "./board-view";
 
 export const metadata = { title: "Order board" };
@@ -35,7 +38,8 @@ export default async function OrderBoardPage({ searchParams }: { searchParams: P
           itemNames: o.itemNames,
           items: o.items,
           pieces: o.pieces,
-          lines: o.itemTailors.map((l) => ({ item: l.item, qty: l.qty, tailor: l.tailor, wearer: l.wearer })),
+          // the variant (തരം) next to the garment: "Shirt (Half sleeve)"; a shirt / pant saved before variants: "(variant not set)"
+          lines: o.itemTailors.map((l) => ({ item: withVariant(l.item, l.variant), qty: l.qty, tailor: l.tailor, wearer: l.wearer })),
           deliveryDate: o.deliveryDate,
           deliveredOn: o.deliveredOn,
           status: o.status,

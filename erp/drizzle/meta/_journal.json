@@ -169,6 +169,13 @@
       "when": 1795513024467,
       "tag": "0023_order_item_fabrics",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1795715716712,
+      "tag": "0024_item_variant",
+      "breakpoints": true
     }
   ]
 }

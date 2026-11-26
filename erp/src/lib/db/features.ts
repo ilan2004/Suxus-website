@@ -10,8 +10,9 @@ import { getDb } from "./index";
  *   simple   0021  Simple measurement mode           staff.simple_mode, measurement_drafts
  *   jobSlip  0022  Bundle label + job slip PDF       job_slip_links, job_slip_events
  *   itemFabric 0023 Fabric per order item (fabric requirement)   order_item_fabrics
+ *   variant  0024  Garment variant on the order item   order_items.variant
  */
-export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean };
+export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean };
 
 const NEEDS: Record<keyof Features, string[]> = {
   stock: ["fabrics.opening_mtr", "fabrics.opening_cost_per_mtr", "fabric_stock_moves.id"],
@@ -19,6 +20,7 @@ const NEEDS: Record<keyof Features, string[]> = {
   simple: ["staff.simple_mode", "measurement_drafts.id"],
   jobSlip: ["job_slip_links.token", "job_slip_events.id"],
   itemFabric: ["order_item_fabrics.order_item_id", "order_item_fabrics.fabric_id"],
+  variant: ["order_items.variant"],
 };
 
 const g = globalThis as unknown as { __suxusFeatures?: { at: number; f: Features } };
@@ -27,7 +29,7 @@ export async function features(): Promise<Features> {
   const c = g.__suxusFeatures;
   const all = c && Object.values(c.f).every(Boolean);
   if (c && (all || Date.now() - c.at < 60_000)) return c.f;
-  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false };
+  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false };
   try {
     const db = await getDb();
     const res = await db.execute(sql`select table_name || '.' || column_name as k from information_schema.columns where table_schema = current_schema()

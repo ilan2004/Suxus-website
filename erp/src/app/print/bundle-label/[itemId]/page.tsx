@@ -6,6 +6,7 @@ import { AutoPrint } from "@/components/print/auto-print";
 import { Barcode } from "@/app/print/labels/barcode";
 import { jobSlipPages, logJobSlip } from "@/lib/job-slip";
 import { fmtDate } from "@/lib/utils";
+import { variantRequired } from "@/lib/variants";
 
 export const metadata = { title: "Bundle label" };
 
@@ -75,7 +76,7 @@ export default async function BundleLabel({ params, searchParams }: { params: Pr
           </div>
           <div className="what">
             {p.item}
-            {p.variant ? ` - ${p.variant}` : ""}
+            {p.variant ? ` - ${p.variant}` : variantRequired(p.item) ? " - (variant not set)" : ""}
             {p.qty > 1 ? ` × ${p.qty}` : ""}
           </div>
           <div className="code">

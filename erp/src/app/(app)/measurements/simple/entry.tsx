@@ -8,6 +8,8 @@ import { measuringOrder, wholeOf, type GarmentField } from "@/lib/measurements";
 import { saveDraft, deleteDraft, type Draft } from "@/lib/actions/drafts";
 import { deleteMeasurement, saveMeasurement } from "@/lib/actions/measurements";
 import { today } from "@/lib/utils";
+import { cleanPocket, hasPocket, pocketWords, type Pocket } from "@/lib/pocket";
+import { PocketDrawing, PocketFields } from "@/components/forms/pocket-fields";
 
 export { KEY_ML, mlOf, enOf } from "@/lib/measurements";
 import { mlOf, enOf } from "@/lib/measurements";
@@ -24,7 +26,7 @@ export type EntryState = {
   wearerId: number | null;
   /** Editing an existing record (its id and what it held, for Undo). */
   measurementId?: number | null;
-  original?: { date: string; size: string | null; fit: string | null; remarks: string | null; values: Record<string, number | null> } | null;
+  original?: { date: string; size: string | null; fit: string | null; remarks: string | null; values: Record<string, number | null>; pocket?: Pocket | null } | null;
   garmentType: string;
   size: string | null;
   fit: string | null;
@@ -32,6 +34,8 @@ export type EntryState = {
   values: Record<string, number | null>;
   /** Values the entry started from ("same as last time") — shown as "last time" on each field. */
   previous?: Record<string, number | null> | null;
+  /** Pocket choices (shirt): null = not recorded */
+  pocket?: Pocket | null;
   step: number;
 };
 
@@ -45,6 +49,7 @@ export const fromDraft = (d: Draft): EntryState => ({
   fit: d.fit,
   remarks: d.remarks,
   values: d.values,
+  pocket: d.pocket ?? null,
   step: d.step,
 });
 
@@ -57,9 +62,12 @@ export function SimpleEntry({
   who,
   order,
   autoAdvance = false,
+  pocketOn = false,
   onClose,
   onSaved,
 }: {
+  /** the database has the pocket field: shirts get a pocket step after the numbers */
+  pocketOn?: boolean;
   initial: EntryState;
   /** "Anas · Shirt" — whose and what, shown at the top. */
   who: string;
@@ -80,7 +88,11 @@ export function SimpleEntry({
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const draftId = React.useRef<number | undefined>(initial.draftId);
   const total = fields.length;
-  const atSummary = s.step >= total;
+  // Shirt: one picture step for the pocket after the numbers, then the final check
+  const withPocket = pocketOn && hasPocket(initial.garmentType);
+  const totalSteps = total + (withPocket ? 1 : 0);
+  const atSummary = s.step >= totalSteps;
+  const atPocket = withPocket && s.step === total;
   const field = fields[Math.min(s.step, total - 1)];
   const value = s.values[field?.key] ?? null;
 
@@ -96,13 +108,14 @@ export function SimpleEntry({
       fit: st.fit,
       remarks: st.remarks,
       values: st.values,
+      ...(withPocket ? { pocket: st.pocket ?? null } : {}),
       step: st.step,
     });
     if (r.ok) {
       draftId.current = r.data.id;
       setDraftError(false);
     } else setDraftError(true);
-  }, []);
+  }, [withPocket]);
   const saveTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   React.useEffect(() => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
@@ -128,7 +141,7 @@ export function SimpleEntry({
   const go = (step: number) => {
     stopTimer();
     setTyped(null);
-    setS((x) => ({ ...x, step: Math.max(0, Math.min(total, step)) }));
+    setS((x) => ({ ...x, step: Math.max(0, Math.min(totalSteps, step)) }));
   };
   const setValue = (v: number | null) => setS((x) => ({ ...x, values: { ...x.values, [field.key]: v } }));
   /** After a change (only when auto-advance is on in Settings): move on by itself, unless another tap comes first. */
@@ -185,6 +198,7 @@ export function SimpleEntry({
       fit: s.fit ?? "Regular",
       values,
       remarks: s.remarks,
+      ...(withPocket ? { pocket: cleanPocket(s.pocket ?? null) } : {}),
     });
     setSaving(false);
     if (!r.ok) return void toast.error(r.error);
@@ -201,7 +215,7 @@ export function SimpleEntry({
           toast.error(u.error);
           return null;
         }
-        return { ...saved, step: total };
+        return { ...saved, step: totalSteps };
       },
     });
   };
@@ -214,7 +228,7 @@ export function SimpleEntry({
 
   // Hardware keyboard (or a Bluetooth keypad) works too
   React.useEffect(() => {
-    if (atSummary) return;
+    if (atSummary || atPocket) return;
     const onKey = (e: KeyboardEvent) => {
       if (/^\d$/.test(e.key) || e.key === ".") press(e.key);
       else if (e.key === "Backspace") press("back");
@@ -242,10 +256,10 @@ export function SimpleEntry({
           <p className="truncate text-lg leading-tight font-semibold">{who}</p>
           <div className="mt-1 flex items-center gap-2">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
-              <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${(Math.min(s.step, total) / total) * 100}%` }} />
+              <div className="h-2 rounded-full bg-primary transition-all" style={{ width: `${(Math.min(s.step, totalSteps) / totalSteps) * 100}%` }} />
             </div>
             <span className="shrink-0 text-base font-semibold tabular-nums" aria-label="progress">
-              {atSummary ? `${total} / ${total}` : `${s.step + 1} / ${total}`}
+              {atSummary ? `${totalSteps} / ${totalSteps}` : `${s.step + 1} / ${totalSteps}`}
             </span>
           </div>
         </div>
@@ -259,9 +273,28 @@ export function SimpleEntry({
           onPick={go}
           saving={saving}
           onSave={finish}
-          onBack={() => go(total - 1)}
+          onBack={() => go(totalSteps - 1)}
           onRemarks={(remarks) => setS((x) => ({ ...x, remarks }))}
+          pocket={withPocket ? { value: s.pocket ?? null, step: total } : null}
         />
+      ) : atPocket ? (
+        <>
+          {/* Pocket: pictures, Malayalam first — one screen */}
+          <div className="flex-1 overflow-y-auto px-3 py-3" data-testid="pocket-step">
+            <p className="mb-3 text-center font-ml text-4xl leading-tight font-bold">
+              പോക്കറ്റ് <span className="block font-sans text-lg font-normal text-muted-foreground">Pocket</span>
+            </p>
+            <PocketFields value={s.pocket ?? null} onChange={(pocket) => setS((x) => ({ ...x, pocket }))} big />
+          </div>
+          <div className="grid grid-cols-[1fr_2fr] gap-2 border-t p-3">
+            <button type="button" onClick={() => go(s.step - 1)} className="flex h-16 items-center justify-center gap-2 rounded-2xl border-2 text-lg font-semibold">
+              <ArrowLeft className="size-6" /> Back
+            </button>
+            <button type="button" onClick={() => go(s.step + 1)} className="flex h-16 items-center justify-center gap-2 rounded-2xl bg-primary text-xl font-bold text-primary-foreground">
+              Check · നോക്കുക <ArrowRight className="size-6" />
+            </button>
+          </div>
+        </>
       ) : (
         <>
           {/* The field: Malayalam big, English small; the number huge */}
@@ -319,7 +352,7 @@ export function SimpleEntry({
               <ArrowLeft className="size-6" /> Back
             </button>
             <button type="button" onClick={() => go(s.step + 1)} className="flex h-16 items-center justify-center gap-2 rounded-2xl bg-primary text-xl font-bold text-primary-foreground">
-              {s.step === total - 1 ? "Check · നോക്കുക" : "Next · അടുത്തത്"} <ArrowRight className="size-6" />
+              {s.step === totalSteps - 1 ? "Check · നോക്കുക" : "Next · അടുത്തത്"} <ArrowRight className="size-6" />
             </button>
           </div>
         </>
@@ -357,7 +390,10 @@ function Summary({
   onBack,
   saving,
   onRemarks,
+  pocket,
 }: {
+  /** shirt: the pocket choices and the step that changes them */
+  pocket: { value: Pocket | null; step: number } | null;
   fields: GarmentField[];
   s: EntryState;
   onPick: (step: number) => void;
@@ -387,6 +423,15 @@ function Summary({
             );
           })}
         </div>
+        {pocket && (
+          <button type="button" onClick={() => onPick(pocket.step)} className={cn("mt-2 flex min-h-20 w-full items-center gap-3 rounded-2xl border-2 bg-card px-3 py-2 text-left", !pocket.value && "border-dashed")} data-testid="pocket-summary">
+            {pocket.value && pocket.value.count !== "none" && pocket.value.shape && <PocketDrawing shape={pocket.value.shape} className="size-14 shrink-0 rounded-lg border" />}
+            <span className="min-w-0">
+              <span className="block font-ml text-lg leading-tight font-semibold">പോക്കറ്റ്</span>
+              <span className="block text-sm text-muted-foreground">{pocket.value ? pocketWords(pocket.value)!.map((l) => l.ml).join(" · ") : "Not recorded · രേഖപ്പെടുത്തിയിട്ടില്ല"}</span>
+            </span>
+          </button>
+        )}
         <details className="mt-3 rounded-2xl border p-3">
           <summary className="flex min-h-14 cursor-pointer items-center gap-1 text-base font-medium">
             Note <span className="font-ml text-sm text-muted-foreground">കുറിപ്പ്</span> {s.remarks ? `· ${s.remarks}` : "(optional)"}

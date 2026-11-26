@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { can } from "@/lib/permissions";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, getTableColumns } from "drizzle-orm";
+import { col, when } from "@/lib/db/ext";
 import { features } from "@/lib/db/features";
 import { requireUser } from "@/lib/auth";
 import { getDb, schema } from "@/lib/db";
@@ -17,7 +18,11 @@ export default async function OrderPage({ params, searchParams }: { params: Prom
   const settings = await getSettings();
   const db = await getDb();
   const measurements = order.customerId
-    ? await db.select().from(schema.measurements).where(eq(schema.measurements.customerId, order.customerId)).orderBy(desc(schema.measurements.date))
+    ? await db
+        .select({ ...getTableColumns(schema.measurements), pocket: when((await features()).pocket, col.measurementPocket) })
+        .from(schema.measurements)
+        .where(eq(schema.measurements.customerId, order.customerId))
+        .orderBy(desc(schema.measurements.date))
     : [];
   const [last] = await db
     .select()

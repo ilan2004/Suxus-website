@@ -3,8 +3,8 @@
  * columns the app reaches only through ./ext.ts. The app itself never imports this file.
  * Local declarations below take precedence over the `export *` names, so drizzle-kit sees the full tables.
  */
-import { boolean, integer, numeric, pgTable, text } from "drizzle-orm/pg-core";
-import { bulkOrderItemsColumns, fabricsColumns, fabricsIndexes, measurementsColumns, measurementsIndexes, orderItemsColumns, staffColumns, wearers } from "./schema";
+import { boolean, integer, jsonb, numeric, pgTable, text } from "drizzle-orm/pg-core";
+import { measurementDraftsColumns, measurementDraftsIndexes, bulkOrderItemsColumns, fabricsColumns, fabricsIndexes, measurementsColumns, measurementsIndexes, orderItemsColumns, staffColumns, wearers } from "./schema";
 
 export * from "./schema";
 
@@ -53,6 +53,18 @@ export const measurements = pgTable(
     ...measurementsColumns(),
     /** Whose measurements — migration 0020 */
     wearerId: integer("wearer_id").references(() => wearers.id, { onDelete: "set null" }),
+    /** Pocket choices on a shirt record (null = not recorded) — migration 0026 */
+    pocket: jsonb("pocket"),
   },
   measurementsIndexes,
+);
+
+export const measurementDrafts = pgTable(
+  "measurement_drafts",
+  {
+    ...measurementDraftsColumns(),
+    /** Pocket choices of the entry in progress — migration 0026 */
+    pocket: jsonb("pocket"),
+  },
+  measurementDraftsIndexes,
 );

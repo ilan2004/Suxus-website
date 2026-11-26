@@ -4,7 +4,7 @@ import fs from "node:fs";
 import crypto from "node:crypto";
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { getDb, schema } from "./db";
-import { col } from "./db/ext";
+import { col, when } from "./db/ext";
 import { features } from "./db/features";
 import { orderFabricPlan } from "./order-fabric";
 import { requirementText } from "./fabric-requirement";
@@ -13,6 +13,7 @@ import { GARMENTS, WHOLE_ML, fieldsFor, mlOf, enOf, wholeOf, type GarmentField }
 import { formatPhone } from "./phone";
 import { fmtDate } from "./utils";
 import { variantMl, variantRequired } from "./variants";
+import { POCKET_HEM, POCKET_PATHS, pocketWords, type Pocket } from "./pocket";
 
 /** Printed at the top of every job slip page. */
 export const JOB_SLIP_SHOP = { name: "SUXUS Heritage Tailor", line: "Pallikkal Bazar · Ph 95443 76072" };
@@ -20,7 +21,7 @@ export const JOB_SLIP_SHOP = { name: "SUXUS Heritage Tailor", line: "Pallikkal B
 import { itemCode } from "./job-slip-code";
 export { itemCode, parseItemCode } from "./job-slip-code";
 
-type Measure = { id: number; garmentType: string; date: string; size: string | null; fit: string | null; values: Record<string, number | null>; remarks: string | null };
+type Measure = { id: number; garmentType: string; date: string; size: string | null; fit: string | null; values: Record<string, number | null>; remarks: string | null; pocket?: Pocket | null };
 export type JobSlipPage = {
   orderId: number;
   itemId: number;
@@ -46,6 +47,8 @@ export type JobSlipPage = {
   fabric: { code: string; name: string; hex: string | null } | null;
   /** Fabric requirement for this garment ("തുണി വേണ്ടത്: 1.70 മീറ്റർ" + the rule), or the missing measurement */
   requirement: { text: string; rule: string } | { missing: string } | null;
+  /** Pocket choices from the shirt record (null = not recorded → the section is left out) */
+  pocket: Pocket | null;
   remarks: string[];
 };
 
@@ -69,7 +72,7 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
   const db = await getDb();
   const all: Measure[] = order.customerId
     ? await db
-        .select({ id: schema.measurements.id, garmentType: schema.measurements.garmentType, date: schema.measurements.date, size: schema.measurements.size, fit: schema.measurements.fit, values: schema.measurements.values, remarks: schema.measurements.remarks, wearerId: col.measurementWearer })
+        .select({ id: schema.measurements.id, garmentType: schema.measurements.garmentType, date: schema.measurements.date, size: schema.measurements.size, fit: schema.measurements.fit, values: schema.measurements.values, remarks: schema.measurements.remarks, wearerId: col.measurementWearer, pocket: when((await features()).pocket, col.measurementPocket) })
         .from(schema.measurements)
         .where(eq(schema.measurements.customerId, order.customerId))
         .orderBy(desc(schema.measurements.date), desc(schema.measurements.id))
@@ -114,6 +117,7 @@ export async function jobSlipPages(orderId: number, itemId?: number | null): Pro
         if (!r) return null;
         return r.ok ? { text: requirementText(r, i.qty), rule: r.rule } : { missing: r.missing };
       })(),
+      pocket: measures.find((m) => m.garmentType === "Shirt" && m.pocket)?.pocket ?? null,
       remarks: [...measures.map((m) => m.remarks).filter((r): r is string => !!r), ...(order.remarks ? [`Order: ${order.remarks}`] : [])],
     };
   });
@@ -219,7 +223,11 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
     // What comes after the measurements (fabric, remarks) — reserved so the page holds everything
     doc.font("B").fontSize(16);
     const remarksH = p.remarks.reduce((h, r) => h + doc.heightOfString(r, { width: W }) + 2, p.remarks.length ? 22 : 0);
-    const footerH = 16 + (p.fabric ? 18 + 40 : 22) + (p.requirement ? 44 : 0) + remarksH;
+    const pocketLines = pocketWords(p.pocket);
+    // heights as drawn below (pocket: heading + a Malayalam and an English line per choice, beside the drawing)
+    const pocketH = pocketLines ? 40 + Math.max(pocketLines.length * 29, p.pocket?.shape && p.pocket.count !== "none" ? 92 : 0) : 0;
+    // fabric: heading + swatch block (the metres sit beside the name); requirement: the one rule line under it
+    const footerH = 24 + (p.fabric ? 60 : 22 + (p.requirement ? 22 : 0)) + (p.requirement ? 18 : 0) + remarksH + pocketH;
     const rows = p.measures.reduce((n, m) => n + 1 + (GARMENTS[m.garmentType] ? GARMENTS[m.garmentType] : fieldsFor(m.garmentType, m.values)).filter((f) => m.values[f.key] != null).length, 0);
     // Row height from the space left: large when there is room, never smaller than readable on a phone
     const rowH = Math.max(34, Math.min(48, (BOTTOM - doc.y - footerH) / Math.max(1, rows)));
@@ -252,6 +260,31 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
     ensure(footerH);
     doc.y += 2;
     rule(3);
+    // Pocket: the choices in words (Malayalam large, English under) and the chosen bottom shape drawn beside them
+    if (pocketLines && p.pocket) {
+      text("Pocket · പോക്കറ്റ്", 13, "M");
+      const top = doc.y + 2;
+      const drawW = p.pocket.shape && p.pocket.count !== "none" ? 96 : 0;
+      let y = top;
+      for (const l of pocketLines) {
+        // Malayalam large, the English small on the same line
+        doc.font("B").fontSize(17).fillColor(black).text(l.ml, L, y, { width: W - drawW - 12, continued: true }).font("M").fontSize(10.5).text(`   ${l.en}`);
+        y = doc.y + 7;
+      }
+      if (drawW && p.pocket.shape) {
+        const size = 88;
+        const x = L + W - size;
+        doc.save();
+        doc.rect(x - 2, top - 2, size + 4, size + 4).lineWidth(0.8).strokeColor(black).stroke();
+        doc.translate(x, top).scale(size / 100);
+        doc.path(POCKET_PATHS[p.pocket.shape]).lineWidth(4).lineJoin("round").strokeColor(black).stroke();
+        doc.path(POCKET_HEM).lineWidth(2).dash(5, { space: 4 }).strokeColor(black).stroke();
+        doc.undash();
+        doc.restore();
+      }
+      doc.y = Math.max(y, top + drawW) + 6;
+      rule(1.5);
+    }
     // Required metres next to the fabric name (one fabric), or on its own line
     const reqText = p.requirement ? ("text" in p.requirement ? `${p.requirement.text.replace("തുണി വേണ്ടത്: ", "വേണ്ടത് ")}` : p.requirement.missing) : null;
     if (p.fabric) {

@@ -17,8 +17,9 @@ export async function POST(req: NextRequest) {
   if (!(await features()).tryon) return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
   const { device, ip } = await deviceOf();
   const tester = await isShopTester();
-  const before = tester ? { left: 2, limit: 2 } : await usage(device, ip);
-  if (before.left <= 0) return NextResponse.json({ ok: false, error: "limit", ...before }, { status: 429 });
+  const before = await usage(device, ip, tester);
+  // the controls in Settings > Try-on: off, monthly cap, whole shop per day, per person per day
+  if (before.blocked || before.left <= 0) return NextResponse.json({ ok: false, error: before.blocked ?? "limit", ...before }, { status: before.blocked === "off" ? 503 : 429 });
   let form: FormData;
   try {
     form = await req.formData();
@@ -35,11 +36,11 @@ export async function POST(req: NextRequest) {
   try {
     const photo = await normalisePhoto(Buffer.from(await file.arrayBuffer()));
     const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin });
-    const after = tester ? before : await usage(device, ip);
-    return NextResponse.json({ ok: true, image: `/api/tryon/image/${r.resultId}`, ms: r.ms, ...after }, { headers: { "Cache-Control": "no-store" } });
+    const after = await usage(device, ip, tester);
+    return NextResponse.json({ ok: true, image: `/api/tryon/image/${r.resultId}`, ms: r.ms, ...after, blocked: null }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     const code = e instanceof TryonError ? e.code : "api";
-    const after = tester ? before : await usage(device, ip).catch(() => before);
+    const after = await usage(device, ip, tester).catch(() => before);
     return NextResponse.json({ ok: false, error: code, ...after }, { status: code === "bad_photo" ? 400 : 502 });
   }
 }

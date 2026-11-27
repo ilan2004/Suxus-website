@@ -11,6 +11,6 @@ export async function GET() {
   const { device, ip } = await deviceOf();
   // photos older than 7 days go whenever anyone opens the page (and daily by the cron)
   await cleanupOld().catch(() => {});
-  const u = (await isShopTester()) ? { left: 2, limit: 2 } : await usage(device, ip);
+  const u = await usage(device, ip, await isShopTester());
   return NextResponse.json({ ok: true, ...u }, { headers: { "Cache-Control": "no-store" } });
 }

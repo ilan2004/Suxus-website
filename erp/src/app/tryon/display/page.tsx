@@ -14,10 +14,13 @@ export const dynamic = "force-dynamic";
  */
 const CSS = `
 html,body{margin:0;height:100%;overflow:hidden;background:#0f2b24;color:#f7f3e8;font-family:var(--font-display-face),var(--font-inter),Arial,sans-serif}
-.tv{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;gap:5vw;padding:4vh 5vw;box-sizing:border-box}
+.tv{position:fixed;top:0;left:0;right:0;bottom:0;display:flex;align-items:center;justify-content:center;padding:4vh 5vw;box-sizing:border-box}
+/* spacing with margins, not flex "gap" — older TV browsers ignore gap */
+.tv>*+*{margin-left:5vw}
 .qr{background:#fff;padding:1.6vh;border-radius:2vh;height:72vh;width:72vh;box-sizing:border-box;flex:none}
 .qr svg{width:100%;height:100%;display:block}
-.txt{display:flex;flex-direction:column;gap:3vh;max-width:48vw}
+.txt{display:flex;flex-direction:column;max-width:48vw}
+.txt>*+*{margin-top:3vh}
 .brand{font-size:4.6vh;white-space:nowrap;font-weight:700;letter-spacing:.18em;color:#c8a96a}
 .tvml{font-family:var(--font-ml-face),sans-serif;font-size:6.4vh;line-height:1.25;font-weight:600}
 .en{font-size:4.6vh;line-height:1.2;opacity:.9}
@@ -28,14 +31,17 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f2b24;color:#f7f3e8;
 .code{font-size:12vh;font-weight:700;letter-spacing:.04em;line-height:1}
 .name{font-size:5.4vh;line-height:1.2}
 .meta{font-size:4vh;opacity:.85}
-.mini{display:flex;align-items:center;gap:2vw;margin-top:2vh}
+.mini{display:flex;align-items:center}
+.txt>.mini{margin-top:4vh}
+.mini>*+*{margin-left:2.5vw}
 .mini .qr{height:22vh;width:22vh;padding:.8vh;border-radius:1vh}
 .bar{height:.9vh;background:rgba(255,255,255,.18);border-radius:1vh;overflow:hidden;width:100%}
 .bar i{display:block;height:100%;width:100%;background:#c8a96a;transform-origin:left}
 `;
 
 const PAIR_CSS = `
-.pair{flex-direction:column;text-align:center;gap:3.2vh}
+.pair{flex-direction:column;text-align:center}
+.pair>*+*{margin-left:0;margin-top:3.2vh}
 .pcode{font-size:24vh;font-weight:700;letter-spacing:.08em;line-height:1;color:#fff;background:rgba(255,255,255,.08);border-radius:3vh;padding:3vh 6vh}
 `;
 
@@ -57,28 +63,37 @@ const PAIR_SCRIPT = (nonce: string) => `
 })();
 `;
 
-/** ES5 only (old TV browsers): poll every 4 s; a newly shown result stays 45 s; a removed one leaves at once. */
+/**
+ * ES5 only (old TV browsers): poll every 4 s; a newly shown result stays 45 s; a removed one leaves at once.
+ * The page elements are looked up afresh and the state re-applied twice a second, so nothing is lost if the page is
+ * re-created after loading.
+ */
 const SCRIPT = (key: string) => `
 (function(){
   var KEY=${JSON.stringify(key)}, SHOW_MS=45000, POLL_MS=4000;
-  var idle=document.getElementById('idle'), show=document.getElementById('show'), img=document.getElementById('img');
-  var code=document.getElementById('code'), name=document.getElementById('name'), meta=document.getElementById('meta'), bar=document.getElementById('bar');
-  var lastAt=Date.now()-60000, current=null, until=0;
   var q=KEY?('key='+encodeURIComponent(KEY)):'';
-  function toIdle(){ current=null; show.style.display='none'; idle.style.display='flex'; img.removeAttribute('src'); }
-  function present(it){
-    current=it; until=Date.now()+SHOW_MS; lastAt=it.at;
-    code.textContent=it.code; name.textContent=it.name;
-    var v=it.variant==='Full sleeve'?'\\u0D2B\\u0D41\\u0D7E \\u0D15\\u0D48 \\u00B7 Full sleeve':(it.variant==='Half sleeve'?'\\u0D39\\u0D3E\\u0D2B\\u0D4D \\u0D15\\u0D48 \\u00B7 Half sleeve':(it.variant||''));
-    meta.textContent=v+(it.rate>0?(' \\u00B7 \\u20B9'+it.rate+' / m'):'');
-    img.onload=function(){ idle.style.display='none'; show.style.display='flex'; };
-    img.src='/api/tryon/tv-image/'+it.id+'?'+q+'&t='+it.at;
-  }
-  function tick(){
-    if(current){
-      var left=Math.max(0,until-Date.now()); bar.style.transform='scaleX('+(left/SHOW_MS)+')';
-      if(left<=0) toIdle();
+  var lastAt=Date.now()-60000, current=null, until=0, loaded='';
+  function el(id){ return document.getElementById(id); }
+  function variantText(v){ return v==='Full sleeve'?'ഫുൾ കൈ · Full sleeve':(v==='Half sleeve'?'ഹാഫ് കൈ · Half sleeve':(v||'')); }
+  function render(){
+    var idle=el('idle'), show=el('show'), img=el('img');
+    if(!idle||!show||!img) return;
+    if(current&&Date.now()>=until) current=null;
+    if(!current){
+      if(show.style.display!=='none') show.style.display='none';
+      if(idle.style.display!=='flex') idle.style.display='flex';
+      return;
     }
+    var src='/api/tryon/tv-image/'+current.id+'?'+q+'&t='+current.at;
+    if(img.getAttribute('src')!==src){ loaded=''; img.onload=function(){ loaded=src; render(); }; img.setAttribute('src',src); }
+    if(img.complete&&img.naturalWidth>0) loaded=src;
+    var code=el('code'), name=el('name'), meta=el('meta'), bar=el('bar');
+    if(code&&code.textContent!==current.code) code.textContent=current.code;
+    if(name&&name.textContent!==current.name) name.textContent=current.name;
+    var m=variantText(current.variant)+(current.rate>0?(' · ₹'+current.rate+' / m'):'');
+    if(meta&&meta.textContent!==m) meta.textContent=m;
+    if(bar) bar.style.transform='scaleX('+(Math.max(0,until-Date.now())/SHOW_MS)+')';
+    if(loaded===src){ idle.style.display='none'; show.style.display='flex'; }
   }
   function poll(){
     var x=new XMLHttpRequest();
@@ -86,16 +101,17 @@ const SCRIPT = (key: string) => `
     x.timeout=15000;
     x.onload=function(){
       if(x.status===403){ location.reload(); return; }
-      try{ var d=JSON.parse(x.responseText); }catch(e){ return; }
+      var d; try{ d=JSON.parse(x.responseText); }catch(e){ return; }
       var items=(d&&d.items)||[];
-      if(current){ var still=false; for(var i=0;i<items.length;i++) if(items[i].id===current.id) still=true; if(!still){ toIdle(); } }
+      if(current){ var still=false; for(var i=0;i<items.length;i++) if(items[i].id===current.id) still=true; if(!still) current=null; }
       if(!current||Date.now()>until-SHOW_MS+15000){
-        for(var j=items.length-1;j>=0;j--){ if(items[j].at>lastAt){ present(items[j]); break; } }
+        for(var j=items.length-1;j>=0;j--){ if(items[j].at>lastAt){ current=items[j]; lastAt=items[j].at; until=Date.now()+SHOW_MS; break; } }
       }
+      render();
     };
     x.send();
   }
-  setInterval(poll,POLL_MS); setInterval(tick,500); poll();
+  setInterval(poll,POLL_MS); setInterval(render,500); poll();
   // keep the screen awake where the browser allows it; reload twice a day to pick up updates
   function awake(){ try{ var p=navigator.wakeLock.request('screen'); if(p&&p['catch']) p['catch'](function(){}); }catch(e){} }
   if(navigator.wakeLock){ awake(); document.addEventListener('visibilitychange',function(){ if(document.visibilityState==='visible') awake(); }); }
@@ -134,7 +150,7 @@ export default async function TryonDisplay({ searchParams }: { searchParams: Pro
     <>
       <meta httpEquiv="refresh" content="43200" />
       <style>{CSS}</style>
-      <div id="idle" className="tv" data-testid="tv-idle">
+      <div id="idle" className="tv" data-testid="tv-idle" suppressHydrationWarning>
         <div className="qr" dangerouslySetInnerHTML={{ __html: qr }} />
         <div className="txt">
           <div className="brand">SUXUS HERITAGE TAILOR</div>
@@ -144,16 +160,16 @@ export default async function TryonDisplay({ searchParams }: { searchParams: Pro
           <div className="small">{TRYON_URL.replace("https://", "")}</div>
         </div>
       </div>
-      <div id="show" className="tv" data-testid="tv-show">
+      <div id="show" className="tv" data-testid="tv-show" suppressHydrationWarning>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img id="img" alt="" />
+        <img id="img" alt="" suppressHydrationWarning />
         <div className="txt">
           <div className="brand">SUXUS HERITAGE TAILOR</div>
-          <div id="code" className="code" />
-          <div id="name" className="name" />
-          <div id="meta" className="meta" />
+          <div id="code" className="code" suppressHydrationWarning />
+          <div id="name" className="name" suppressHydrationWarning />
+          <div id="meta" className="meta" suppressHydrationWarning />
           <div className="bar">
-            <i id="bar" />
+            <i id="bar" suppressHydrationWarning />
           </div>
           <div className="mini">
             <div className="qr" dangerouslySetInnerHTML={{ __html: qr }} />

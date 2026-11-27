@@ -3,6 +3,7 @@
 import * as React from "react";
 import { ArrowLeft, Camera, Check, Download, Image as ImageIcon, Loader2, RefreshCw, Search, Shirt, Sparkles, SwitchCamera, Tv, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { DEFAULT_STYLE, POCKETS, SLEEVES, TUCKS, sleeveOfVariantName, styleSummary, variantOfSleeve, type TryonStyle } from "@/lib/tryon-style";
 
 /* ───────────────────────── Words (Malayalam first, English second) ───────────────────────── */
 
@@ -24,6 +25,8 @@ const W = {
   gallery: ["ഗാലറിയിൽ നിന്ന്", "Choose from gallery"],
   standHint: ["മുഖവും തോളും വരയ്ക്കുള്ളിൽ വരട്ടെ", "Keep your face and shoulders inside the outline"],
   toBack: ["പിൻ ക്യാമറ", "Back camera"],
+  waistHint: ["ഇൻസൈഡ് സ്റ്റൈൽ വേണമെങ്കിൽ അരക്കെട്ട് വരുന്ന ഫോട്ടോ എടുക്കൂ (മുട്ടുവരെ)", "For the tucked-in style, take a photo down to the knees"],
+  tuckNote: ["മുഴുവൻ ശരീരം വരുന്ന ഫോട്ടോ എടുത്താൽ ഇൻസൈഡ് സ്റ്റൈൽ കാണിക്കാം.", "If the shirt came out untucked, a photo showing your waist lets us show the tucked-in style."],
   toFront: ["മുൻ ക്യാമറ", "Front camera"],
   capture: ["ഫോട്ടോ എടുക്കുക", "Take photo"],
   retake: ["വീണ്ടും എടുക്കുക", "Retake"],
@@ -99,6 +102,11 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
   const [want, setWant] = React.useState(false);
   /** why no try-on can be made now (Settings > Try-on: off / monthly cap / whole shop per day / this phone's limit) */
   const [blocked, setBlocked] = React.useState<string | null>(null);
+  /** styling chips (sleeve / tuck / pocket) — shown when switched on for customers, or for owner / partner testing */
+  const [stylesOn, setStylesOn] = React.useState(false);
+  const [style, setStyle] = React.useState<TryonStyle>(DEFAULT_STYLE);
+  /** the style the shown result was made with (for the result screen and the share caption) */
+  const [resultStyle, setResultStyle] = React.useState<TryonStyle | null>(null);
 
   const loadStatus = React.useCallback(async () => {
     try {
@@ -107,6 +115,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
       if (j.ok) {
         setLeft({ left: j.left, limit: j.limit });
         setBlocked(j.blocked ?? null);
+        setStylesOn(!!j.styles);
       }
       else if (j.error === "unavailable") setError({ code: "unavailable", back: "welcome" });
     } catch {
@@ -143,7 +152,13 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
     const fd = new FormData();
     fd.append("photo", blob, "photo.jpg");
     fd.append("fabricId", String(f.id));
-    fd.append("variant", variant);
+    fd.append("variant", stylesOn ? variantOfSleeve(style.sleeve) : variant);
+    // one press = one image: the chosen style only changes the words of that one request
+    if (stylesOn) {
+      fd.append("sleeve", style.sleeve);
+      fd.append("tuck", style.tuck);
+      fd.append("pocket", style.pocket);
+    }
     try {
       const r = await fetch("/api/tryon/generate", { method: "POST", body: fd, signal: AbortSignal.timeout(130_000) });
       const j = await r.json().catch(() => ({ ok: false, error: "generic" }));
@@ -151,6 +166,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
       if ("blocked" in j) setBlocked(j.blocked ?? null);
       if (!j.ok) return fail(j.error ?? "generic", j.error === "blocked" || j.error === "bad_photo" ? "camera" : "preview");
       setResult({ url: j.image });
+      setResultStyle(stylesOn ? style : null);
       setWant(false);
       setStep("result");
     } catch (e) {
@@ -228,6 +244,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                     type="button"
                     onClick={() => {
                       setVariant(v);
+                      setStyle((x) => ({ ...x, sleeve: sleeveOfVariantName(v) }));
                       setStep("fabric");
                     }}
                     data-testid={`variant-${v}`}
@@ -253,8 +270,10 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               onPick={(f) => {
                 setFabric(f);
                 // "Try another fabric": the same photo, straight to the new shirt
-                if (photo) void generate(photo.blob, f);
-                else setStep("consent");
+                if (photo) {
+                  if (stylesOn) setStep("preview");
+                  else void generate(photo.blob, f);
+                } else setStep("consent");
               }}
             />
           )}
@@ -277,6 +296,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
             <CameraStep
               lang={lang}
               t={t}
+              waistHint={stylesOn}
               onPhoto={(blob) => {
                 setPhoto((p) => {
                   if (p) URL.revokeObjectURL(p.url);
@@ -290,7 +310,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
             />
           )}
 
-          {step === "preview" && photo && fabric && (
+          {step === "preview" && photo && fabric && !stylesOn && (
             <div className="grid gap-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={photo.url} alt="" className="aspect-[3/4] w-full rounded-2xl bg-muted object-contain" data-testid="preview-image" />
@@ -305,13 +325,51 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
             </div>
           )}
 
-          {step === "generating" && fabric && <Generating lang={lang} t={t} fabric={fabric} variant={variant} />}
+          {step === "preview" && photo && fabric && stylesOn && (
+            // Style screen: fabric above, the three choices, the summary, then Create — on one phone screen
+            <div className="grid gap-3" data-testid="style-screen">
+              <div className="flex items-stretch gap-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={photo.url} alt="" className="aspect-[3/4] w-20 shrink-0 rounded-xl bg-muted object-cover" data-testid="preview-image" />
+                <div className="grid min-w-0 flex-1 content-between gap-1">
+                  <button type="button" onClick={() => setStep("fabric")} className="text-left" aria-label="Change fabric">
+                    <FabricChip f={fabric} variant={null} lang={lang} />
+                  </button>
+                  <button type="button" onClick={() => setStep("camera")} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground underline">
+                    <RefreshCw className="size-3" /> {t(W.retake).join(" · ")}
+                  </button>
+                </div>
+              </div>
+              <ChipRow title={["കൈ", "Sleeve"]} lang={lang} items={SLEEVES} value={style.sleeve} onChange={(sleeve) => (setStyle((x) => ({ ...x, sleeve })), setVariant(variantOfSleeve(sleeve)))} testid="chips-sleeve" />
+              <ChipRow title={["ഇടൽ", "Tuck"]} lang={lang} items={TUCKS} value={style.tuck} onChange={(tuck) => setStyle((x) => ({ ...x, tuck }))} testid="chips-tuck" />
+              <ChipRow title={["പോക്കറ്റ്", "Pocket"]} lang={lang} items={POCKETS} value={style.pocket} onChange={(pocket) => setStyle((x) => ({ ...x, pocket }))} testid="chips-pocket" />
+              <p className={cn("rounded-xl bg-muted px-3 py-2 text-center text-sm font-medium", lang === "ml" && "font-ml")} data-testid="style-summary">
+                {styleSummary(style, lang)}
+              </p>
+              {counter}
+              <Big onClick={() => void generate(photo.blob, fabric)} testid="use-photo">
+                <Sparkles className="size-5" /> <Label w={t(W.usePhoto)} lang={lang} />
+              </Big>
+            </div>
+          )}
+
+          {step === "generating" && fabric && <Generating lang={lang} t={t} fabric={fabric} variant={variant} styleText={stylesOn ? styleSummary(style, lang) : null} />}
 
           {step === "result" && result && fabric && (
             <div className="grid gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={result.url} alt="" className="w-full rounded-2xl border shadow-sm" data-testid="result-image" />
-              <FabricChip f={fabric} variant={variant} lang={lang} />
+              <FabricChip f={fabric} variant={resultStyle ? null : variant} lang={lang} />
+              {resultStyle && (
+                <p className={cn("text-center text-sm font-medium", lang === "ml" && "font-ml")} data-testid="result-style">
+                  {styleSummary(resultStyle, lang)}
+                </p>
+              )}
+              {resultStyle?.tuck === "tucked" && (
+                <p className={cn("rounded-xl border border-dashed px-3 py-2 text-xs text-muted-foreground", lang === "ml" && "font-ml")} data-testid="tuck-note">
+                  {t(W.tuckNote)[0]} <span className={cn(lang === "ml" ? "font-sans" : "font-ml")}>· {t(W.tuckNote)[1]}</span>
+                </p>
+              )}
               <p className="rounded-xl bg-muted px-3 py-2 text-sm" data-testid="disclaimer">
                 <span className={cn("block", lang === "ml" && "font-ml")}>{t(W.disclaimer)[0]}</span>
                 <span className={cn("block text-xs text-muted-foreground", lang === "en" && "font-ml")}>{t(W.disclaimer)[1]}</span>
@@ -328,7 +386,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 <Big variant="outline" onClick={() => void saveImage(result.url, fabric.code)}>
                   <Download className="size-5" /> <Label w={t(W.save)} lang={lang} small />
                 </Big>
-                <Big variant="outline" onClick={() => void shareImage(result.url, fabric, phone)}>
+                <Big variant="outline" onClick={() => void shareImage(result.url, fabric, phone, resultStyle)}>
                   <WhatsAppIcon /> <Label w={t(W.share)} lang={lang} small />
                 </Big>
               </div>
@@ -486,6 +544,7 @@ const savedFacing = (): Facing => {
 function CameraStep({
   lang,
   t,
+  waistHint = false,
   onPhoto,
   onDenied,
   onBadFile,
@@ -493,6 +552,8 @@ function CameraStep({
 }: {
   lang: "ml" | "en";
   t: (w: readonly [string, string]) => [string, string];
+  /** styling chips are on: say how to get the tucked-in look */
+  waistHint?: boolean;
   onPhoto: (b: Blob) => void;
   onDenied: () => void;
   onBadFile: () => void;
@@ -622,6 +683,11 @@ function CameraStep({
           <Camera className="size-5" /> <Label w={t(W.capture)} lang={lang} />
         </Big>
         <GalleryButton lang={lang} t={t} onPhoto={onPhoto} onBad={onBadFile} />
+        {waistHint && (
+          <p className={cn("text-center text-xs text-muted-foreground", lang === "ml" && "font-ml")} data-testid="waist-hint">
+            {t(W.waistHint)[0]}
+          </p>
+        )}
         <BackLink onClick={onBack} w={t(W.back)} />
       </div>
     </div>
@@ -658,7 +724,7 @@ function GalleryButton({ lang, t, onPhoto, onBad }: { lang: "ml" | "en"; t: (w: 
  * The ~15 s wait: the chosen fabric fills the screen with its name and code, and a calm line with a moving bar.
  * No percentage — the model gives no progress, so none is invented.
  */
-function Generating({ lang, t, fabric, variant }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; fabric: Fabric; variant: string | null }) {
+function Generating({ lang, t, fabric, variant, styleText }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; fabric: Fabric; variant: string | null; styleText?: string | null }) {
   const [s, setS] = React.useState(0);
   React.useEffect(() => {
     const i = setInterval(() => setS((x) => x + 1), 1000);
@@ -679,7 +745,7 @@ function Generating({ lang, t, fabric, variant }: { lang: "ml" | "en"; t: (w: re
             </p>
             <p className="text-lg">{fabric.name}</p>
             <p className="text-sm opacity-80">
-              {[v, fabric.colour, fabric.pattern, fabric.rate > 0 ? `₹${fabric.rate}/m` : null].filter(Boolean).join(" · ")}
+              {[styleText ?? v, fabric.colour, fabric.pattern, fabric.rate > 0 ? `₹${fabric.rate}/m` : null].filter(Boolean).join(" · ")}
             </p>
           </div>
           <div className="h-1 overflow-hidden rounded-full bg-white/25">
@@ -806,6 +872,32 @@ function WantForm({ lang, t, fabric, image }: { lang: "ml" | "en"; t: (w: readon
 }
 
 /* ───────────────────────── Pieces ───────────────────────── */
+
+/** One single-select row of chips (Malayalam first). */
+function ChipRow<T extends string>({ title, lang, items, value, onChange, testid }: { title: [string, string]; lang: "ml" | "en"; items: { v: T; ml: string; en: string }[]; value: T; onChange: (v: T) => void; testid: string }) {
+  return (
+    <div className="grid gap-1" data-testid={testid}>
+      <p className="text-xs text-muted-foreground">
+        <span className={cn(lang === "ml" && "font-ml font-medium text-foreground")}>{lang === "ml" ? title[0] : title[1]}</span> · <span className={cn(lang === "en" && "font-ml")}>{lang === "ml" ? title[1] : title[0]}</span>
+      </p>
+      <div className="flex flex-wrap gap-1.5" role="radiogroup" aria-label={title[1]}>
+        {items.map((x) => (
+          <button
+            key={x.v}
+            type="button"
+            role="radio"
+            aria-checked={value === x.v}
+            onClick={() => onChange(x.v)}
+            data-value={x.v}
+            className={cn("min-h-10 rounded-full border-2 px-3.5 text-sm leading-tight", value === x.v ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
+          >
+            <span className={cn(lang === "ml" && "font-ml font-medium")}>{lang === "ml" ? x.ml : x.en}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Title({ w, lang, big }: { w: [string, string]; lang: "ml" | "en"; big?: boolean }) {
   return (
@@ -941,8 +1033,8 @@ async function saveImage(url: string, code: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 /** The image itself goes with the share (no link to it exists — nobody else can open it). */
-async function shareImage(url: string, fabric: Fabric, phone: string) {
-  const text = `SUXUS Heritage Tailor — ${fabric.name} (${fabric.code}). ${phone}`;
+async function shareImage(url: string, fabric: Fabric, phone: string, style: TryonStyle | null) {
+  const text = `SUXUS Heritage Tailor — ${fabric.name} (${fabric.code})${style ? ` · ${styleSummary(style, "ml")}` : ""}. ${phone.split("|")[0].replace(/\s/g, "")}`;
   const f = await imageFile(url, fabric.code).catch(() => null);
   if (f && navigator.canShare?.({ files: [f] })) {
     try {

@@ -10,17 +10,17 @@ import { Switch } from "@/components/ui/switch";
 import { newTvLink, pairTv, saveTryonControls } from "@/lib/actions/tryon";
 import { cn, rupees } from "@/lib/utils";
 
-type C = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number };
+type C = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number; styles: boolean };
 
 /** Settings > Try-on: the four controls (apply at once — no deploy) and the shop TV link. */
 export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; spentInr: number; todayOk: number; tvLink: string | null }) {
   const router = useRouter();
   const [v, setV] = React.useState({ ...value, shopPerDay: String(value.shopPerDay), monthlyCapInr: String(value.monthlyCapInr) });
   const [pending, start] = React.useTransition();
-  const dirty = v.enabled !== value.enabled || v.perDevice !== value.perDevice || Number(v.shopPerDay) !== value.shopPerDay || Number(v.monthlyCapInr) !== value.monthlyCapInr;
+  const dirty = v.styles !== value.styles || v.enabled !== value.enabled || v.perDevice !== value.perDevice || Number(v.shopPerDay) !== value.shopPerDay || Number(v.monthlyCapInr) !== value.monthlyCapInr;
   const save = (next = v) =>
     start(async () => {
-      const r = await saveTryonControls({ enabled: next.enabled, perDevice: next.perDevice, shopPerDay: Number(next.shopPerDay), monthlyCapInr: Number(next.monthlyCapInr) });
+      const r = await saveTryonControls({ enabled: next.enabled, perDevice: next.perDevice, shopPerDay: Number(next.shopPerDay), monthlyCapInr: Number(next.monthlyCapInr), styles: next.styles });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Saved — applies now");
       router.refresh();
@@ -44,6 +44,27 @@ export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; 
             disabled={pending}
             onCheckedChange={(enabled) => {
               const next = { ...v, enabled };
+              setV(next);
+              save(next);
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 p-3" data-testid="styles-switch">
+          <div>
+            <p className="text-sm font-medium">
+              Styling options for customers <span className="ml">സ്റ്റൈൽ</span>
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Sleeve (half / full / rolled), tuck (inside / outside) and pocket chips before Generate — still one image per press. Off: customers get today&apos;s
+              instruction unchanged. Owner and partners always see the chips, for testing.
+            </p>
+          </div>
+          <Switch
+            aria-label="Styling options for customers"
+            checked={v.styles}
+            disabled={pending}
+            onCheckedChange={(styles) => {
+              const next = { ...v, styles };
               setV(next);
               save(next);
             }}

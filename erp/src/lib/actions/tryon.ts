@@ -28,6 +28,7 @@ const Controls = z.object({
   perDevice: z.union([z.literal(1), z.literal(2)]),
   shopPerDay: z.coerce.number<number>().int().min(0).max(10000),
   monthlyCapInr: z.coerce.number<number>().min(0).max(10_000_000),
+  styles: z.boolean(),
 });
 
 /** Settings > Try-on: master switch and limits. Read on every request, so they apply at once. Partners only. */
@@ -38,7 +39,7 @@ export async function saveTryonControls(input: z.input<typeof Controls>): Promis
   const before = await getSetting("tryon");
   await saveSetting("tryon", { ...before, ...parsed.data });
   const d = parsed.data;
-  await audit(await getDb(), user, "update", "settings", "tryon", `Try-on ${d.enabled ? "ON" : "OFF"} · ${d.perDevice}/person/day · ${d.shopPerDay}/shop/day · cap ₹${d.monthlyCapInr}/month`);
+  await audit(await getDb(), user, "update", "settings", "tryon", `Try-on ${d.enabled ? "ON" : "OFF"} · ${d.perDevice}/person/day · ${d.shopPerDay}/shop/day · cap ₹${d.monthlyCapInr}/month · styles for customers ${d.styles ? "ON" : "OFF"}`);
   revalidatePath("/settings/tryon");
   return ok(null);
 }

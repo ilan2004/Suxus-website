@@ -55,6 +55,7 @@ const schemas = {
     shopPerDay: z.coerce.number<number>().int().min(0).max(10000),
     monthlyCapInr: z.coerce.number<number>().min(0).max(10_000_000),
     displayToken: z.string(),
+    styles: z.boolean(),
   }),
 } satisfies Record<keyof AppSettings, z.ZodType>;
 

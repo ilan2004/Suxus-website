@@ -3,6 +3,7 @@ import { features } from "@/lib/db/features";
 import { getSetting } from "@/lib/settings";
 import { variantsFor } from "@/lib/variants";
 import { sleeveOfVariant } from "@/lib/variants";
+import { isStyle, variantOfSleeve } from "@/lib/tryon-style";
 import { TryonError, generateTryon, normalisePhoto, usage } from "@/lib/tryon";
 import { deviceOf, isShopTester } from "../_device";
 
@@ -28,14 +29,20 @@ export async function POST(req: NextRequest) {
   }
   const file = form.get("photo");
   const fabricId = Number(form.get("fabricId"));
-  const variant = String(form.get("variant") ?? "");
+  let variant = String(form.get("variant") ?? "");
+  // Styling choices: only when switched on for customers (Settings > Try-on) or for owner / partner testing.
+  // They change the words of the ONE call — never the number of calls or the limits above.
+  const c = await getSetting("tryon");
+  const wanted = { sleeve: form.get("sleeve"), tuck: form.get("tuck"), pocket: form.get("pocket") };
+  const style = (c.styles || tester) && (await features()).tryonStyle && isStyle(wanted) ? wanted : null;
+  if (style) variant = variantOfSleeve(style.sleeve);
   const allowed = variantsFor("Shirt", await getSetting("variants"));
   const sleeve = sleeveOfVariant(variant);
   if (!(file instanceof Blob) || file.size === 0 || file.size > MAX_UPLOAD) return NextResponse.json({ ok: false, error: "bad_photo" }, { status: 400 });
   if (!Number.isInteger(fabricId) || !allowed.includes(variant) || !sleeve) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   try {
     const photo = await normalisePhoto(Buffer.from(await file.arrayBuffer()));
-    const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin });
+    const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin, style });
     const after = await usage(device, ip, tester);
     return NextResponse.json({ ok: true, image: `/api/tryon/image/${r.resultId}`, ms: r.ms, ...after, blocked: null }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

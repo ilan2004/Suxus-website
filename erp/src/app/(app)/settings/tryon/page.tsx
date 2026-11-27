@@ -59,7 +59,7 @@ export default async function TryonSettingsPage() {
 
         <section className="grid content-start gap-4">
           <TryonControls
-            value={{ enabled: controls.enabled, perDevice: controls.perDevice, shopPerDay: controls.shopPerDay, monthlyCapInr: controls.monthlyCapInr }}
+            value={{ enabled: controls.enabled, perDevice: controls.perDevice, shopPerDay: controls.shopPerDay, monthlyCapInr: controls.monthlyCapInr, styles: controls.styles }}
             spentInr={spent}
             todayOk={stats?.today.ok ?? 0}
             tvLink={tvLink}

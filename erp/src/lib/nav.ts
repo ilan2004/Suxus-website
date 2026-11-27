@@ -19,11 +19,13 @@ import {
   BarChart3,
   Settings,
   Tags,
+  Shirt,
+  QrCode,
   type LucideIcon,
 } from "lucide-react";
 import type { Perm } from "./permissions";
 
-export type NavItem = { href: string; en: string; ml: string; icon: LucideIcon; perm?: Perm; soon?: boolean };
+export type NavItem = { href: string; en: string; ml: string; icon: LucideIcon; perm?: Perm; soon?: boolean; /** opens in a new tab (a shortcut to a public page) */ newTab?: boolean };
 export type NavGroup = { label: string; items: NavItem[] };
 
 export const NAV: NavGroup[] = [
@@ -36,6 +38,8 @@ export const NAV: NavGroup[] = [
       { href: "/orders/board", en: "Order board", ml: "ഓർഡർ ബോർഡ്", icon: KanbanSquare },
       { href: "/bulk", en: "Bulk Orders", ml: "ബൾക്ക് ഓർഡർ", icon: Building2 },
       { href: "/cash-book", en: "Cash Book", ml: "ക്യാഷ് ബുക്ക്", icon: BookOpen },
+      // the customers' public try-on page — only a shortcut, opens in a new tab
+      { href: "/tryon", en: "Try-on", ml: "ട്രൈ-ഓൺ", icon: Shirt, newTab: true },
     ],
   },
   {
@@ -63,6 +67,7 @@ export const NAV: NavGroup[] = [
       { href: "/opening-stock", en: "Opening Stock", ml: "ആസ്തി", icon: Package, perm: "money" },
       { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, perm: "money" },
       { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, perm: "money" },
+      { href: "/settings/tryon", en: "Try-on QR & enquiries", ml: "ട്രൈ-ഓൺ", icon: QrCode, perm: "prices" },
       { href: "/settings/stitching-prices", en: "Stitching Prices", ml: "തുന്നൽക്കൂലി നിരക്ക്", icon: Tags, perm: "prices" },
       { href: "/settings", en: "Settings", ml: "സെറ്റിംഗ്സ്", icon: Settings, perm: "settings" },
     ],

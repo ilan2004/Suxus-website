@@ -29,12 +29,19 @@ const W = {
   retake: ["വീണ്ടും എടുക്കുക", "Retake"],
   usePhoto: ["ഈ ഫോട്ടോ മതി — ഉണ്ടാക്കുക", "Use this photo — create"],
   generating: ["നിങ്ങളുടെ ഷർട്ട് ഉണ്ടാക്കുന്നു…", "Making your shirt…"],
-  generatingNote: ["സാധാരണ 15–40 സെക്കൻഡ് എടുക്കും. ഈ പേജ് അടയ്ക്കരുത്.", "This usually takes 15–40 seconds. Please keep this page open."],
+  generatingNote: ["ഏകദേശം 15 സെക്കൻഡ് — ഈ പേജ് അടയ്ക്കരുത്", "About 15 seconds — please keep this page open"],
   save: ["സേവ് ചെയ്യുക", "Save"],
   share: ["WhatsApp-ൽ അയക്കുക", "Share on WhatsApp"],
   another: ["മറ്റൊരു തുണി നോക്കാം", "Try another fabric"],
   want: ["എനിക്ക് ഇത് വേണം", "I want this"],
   wantNote: ["ഈ സ്ക്രീൻ കൗണ്ടറിൽ കാണിക്കുക", "Show this screen at the counter"],
+  wantAsk: ["പേരും ഫോൺ നമ്പറും തരൂ — ഞങ്ങൾ ബന്ധപ്പെടാം", "Your name and phone — we will contact you"],
+  name: ["പേര്", "Name"],
+  phone: ["ഫോൺ നമ്പർ", "Phone number"],
+  send: ["അയക്കുക", "Send"],
+  thanks: ["നന്ദി! ഞങ്ങൾ ഉടൻ ബന്ധപ്പെടും.", "Thank you! We will contact you soon."],
+  badName: ["പേര് എഴുതുക", "Please type your name"],
+  badPhone: ["ശരിയായ 10 അക്ക മൊബൈൽ നമ്പർ എഴുതുക", "Please type a valid 10-digit mobile number"],
   disclaimer: [
     "സ്ക്രീനിലെ നിറം യഥാർത്ഥ തുണിയിൽ നിന്ന് അല്പം വ്യത്യാസപ്പെടാം. ഓർഡർ ചെയ്യുന്നതിന് മുമ്പ് തുണി നേരിട്ട് കാണുക.",
     "Screen colours can differ slightly from the actual cloth. Please see the fabric before ordering.",
@@ -274,7 +281,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
             </div>
           )}
 
-          {step === "generating" && <Generating lang={lang} t={t} photo={photo?.url} />}
+          {step === "generating" && fabric && <Generating lang={lang} t={t} fabric={fabric} variant={variant} />}
 
           {step === "result" && result && fabric && (
             <div className="grid gap-3">
@@ -286,12 +293,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 <span className={cn("block text-xs text-muted-foreground", lang === "en" && "font-ml")}>{t(W.disclaimer)[1]}</span>
               </p>
               {want ? (
-                <div className="rounded-2xl border-2 border-gold bg-gold/15 p-4 text-center" data-testid="want-panel">
-                  <p className="font-display text-3xl font-semibold">{fabric.code}</p>
-                  <p className="text-sm">{fabric.name}</p>
-                  <p className={cn("mt-2 text-lg font-semibold", lang === "ml" && "font-ml")}>{t(W.wantNote)[0]}</p>
-                  <p className="text-xs text-muted-foreground">{t(W.wantNote)[1]}</p>
-                </div>
+                <WantForm lang={lang} t={t} fabric={fabric} image={result.url} />
               ) : (
                 <Big variant="gold" onClick={() => setWant(true)} testid="want">
                   <Check className="size-5" /> <Label w={t(W.want)} lang={lang} />
@@ -627,27 +629,98 @@ function GalleryButton({ lang, t, onPhoto, onBad }: { lang: "ml" | "en"; t: (w: 
   );
 }
 
-function Generating({ lang, t, photo }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; photo?: string }) {
+/**
+ * The ~15 s wait: the chosen fabric fills the screen with its name and code, and a calm line with a moving bar.
+ * No percentage — the model gives no progress, so none is invented.
+ */
+function Generating({ lang, t, fabric, variant }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; fabric: Fabric; variant: string | null }) {
   const [s, setS] = React.useState(0);
   React.useEffect(() => {
     const i = setInterval(() => setS((x) => x + 1), 1000);
     return () => clearInterval(i);
   }, []);
+  const v = variant ? (lang === "ml" ? (VARIANT_ML[variant.toLowerCase()] ?? variant) : variant) : null;
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-5 text-center" data-testid="generating">
-      {photo && (
-        <div className="relative w-2/3 overflow-hidden rounded-2xl">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={photo} alt="" className="aspect-[3/4] w-full object-cover opacity-60 blur-[2px]" />
-          <div className="absolute inset-0 grid place-items-center">
-            <Loader2 className="size-12 animate-spin text-primary" />
+    <div className="fixed inset-0 z-50 flex flex-col bg-black text-white" data-testid="generating" role="status" aria-live="polite">
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={fabric.photo} alt="" className="absolute inset-0 size-full object-cover" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/20 to-black/40" />
+      <div className="relative mx-auto flex w-full max-w-md flex-1 flex-col justify-between px-5 pt-[max(1.25rem,env(safe-area-inset-top))] pb-[max(1.5rem,env(safe-area-inset-bottom))]">
+        <p className="font-display text-sm font-semibold tracking-[0.16em] opacity-90">SUXUS HERITAGE TAILOR</p>
+        <div className="grid gap-3">
+          <div>
+            <p className="font-display text-4xl font-semibold tracking-wide" data-testid="generating-code">
+              {fabric.code}
+            </p>
+            <p className="text-lg">{fabric.name}</p>
+            <p className="text-sm opacity-80">
+              {[v, fabric.colour, fabric.pattern, fabric.rate > 0 ? `₹${fabric.rate}/m` : null].filter(Boolean).join(" · ")}
+            </p>
+          </div>
+          <div className="h-1 overflow-hidden rounded-full bg-white/25">
+            <div className="h-1 w-1/3 rounded-full bg-gold" style={{ animation: "tryon-slide 1.6s ease-in-out infinite" }} />
+          </div>
+          <div>
+            <p className={cn("text-lg font-medium", lang === "ml" && "font-ml")}>{t(W.generating)[0]}</p>
+            <p className={cn("text-sm opacity-80", lang === "en" && "font-ml")}>
+              {t(W.generatingNote)[0]} <span className="tabular-nums opacity-70">· {s} s</span>
+            </p>
           </div>
         </div>
+      </div>
+      <style>{`@keyframes tryon-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }`}</style>
+    </div>
+  );
+}
+
+/** "I want this": name + phone → an enquiry the shop sees in Try-on enquiries (with this fabric, variant and image). */
+function WantForm({ lang, t, fabric, image }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; fabric: Fabric; image: string }) {
+  const [name, setName] = React.useState("");
+  const [phone, setPhone] = React.useState("");
+  const [state, setState] = React.useState<"form" | "sending" | "done">("form");
+  const [err, setErr] = React.useState<readonly [string, string] | null>(null);
+  const send = async () => {
+    setErr(null);
+    if (name.trim().length < 2) return setErr(W.badName);
+    const digits = phone.replace(/\D/g, "");
+    if (!(digits.length === 10 || (digits.length === 12 && digits.startsWith("91")) || phone.trim().startsWith("+"))) return setErr(W.badPhone);
+    setState("sending");
+    try {
+      const r = await fetch("/api/tryon/enquiry", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name, phone, image }), signal: AbortSignal.timeout(20_000) });
+      const j = await r.json().catch(() => ({ ok: false, error: "generic" }));
+      if (j.ok) return setState("done");
+      setState("form");
+      setErr(j.error === "phone" ? W.badPhone : j.error === "name" ? W.badName : (ERR[j.error] ?? ERR.generic));
+    } catch {
+      setState("form");
+      setErr(ERR.network);
+    }
+  };
+  if (state === "done")
+    return (
+      <div className="rounded-2xl border-2 border-gold bg-gold/15 p-4 text-center" data-testid="want-done">
+        <p className={cn("text-lg font-semibold", lang === "ml" && "font-ml")}>{t(W.thanks)[0]}</p>
+        <p className="text-xs text-muted-foreground">{t(W.thanks)[1]}</p>
+        <p className="mt-3 font-display text-3xl font-semibold">{fabric.code}</p>
+        <p className="text-sm">{fabric.name}</p>
+        <p className={cn("mt-2 font-semibold", lang === "ml" && "font-ml")}>{t(W.wantNote)[0]}</p>
+        <p className="text-xs text-muted-foreground">{t(W.wantNote)[1]}</p>
+      </div>
+    );
+  return (
+    <div className="grid gap-2 rounded-2xl border-2 border-gold bg-gold/10 p-4" data-testid="want-form">
+      <p className={cn("font-semibold", lang === "ml" && "font-ml")}>{t(W.wantAsk)[0]}</p>
+      <p className="-mt-1 text-xs text-muted-foreground">{t(W.wantAsk)[1]}</p>
+      <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t(W.name).join(" · ")} autoComplete="name" aria-label="Name" className="h-12 rounded-xl border bg-card px-3 text-base" />
+      <input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder={t(W.phone).join(" · ")} inputMode="tel" autoComplete="tel" aria-label="Phone" className="h-12 rounded-xl border bg-card px-3 text-base tabular-nums" />
+      {err && (
+        <p className="text-sm text-destructive" data-testid="want-error">
+          <span className={cn(lang === "ml" && "font-ml")}>{t(err)[0]}</span> · <span className="text-xs">{t(err)[1]}</span>
+        </p>
       )}
-      <Title w={t(W.generating)} lang={lang} />
-      <p className={cn("text-base", lang === "ml" && "font-ml")}>{t(W.generatingNote)[0]}</p>
-      <p className="text-sm text-muted-foreground">{t(W.generatingNote)[1]}</p>
-      <p className="text-2xl font-semibold tabular-nums text-muted-foreground">{s} s</p>
+      <Big variant="gold" onClick={() => void send()} disabled={state === "sending"} testid="want-send">
+        {state === "sending" ? <Loader2 className="size-5 animate-spin" /> : <Check className="size-5" />} <Label w={t(W.send)} lang={lang} />
+      </Big>
     </div>
   );
 }

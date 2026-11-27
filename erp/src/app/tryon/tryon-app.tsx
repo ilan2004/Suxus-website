@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Camera, Check, Download, Image as ImageIcon, Loader2, RefreshCw, Search, Shirt, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, Download, Image as ImageIcon, Loader2, RefreshCw, Search, Shirt, Sparkles, SwitchCamera, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ───────────────────────── Words (Malayalam first, English second) ───────────────────────── */
@@ -23,6 +23,8 @@ const W = {
   agree: ["ശരി, ക്യാമറ തുറക്കുക", "OK, open the camera"],
   gallery: ["ഗാലറിയിൽ നിന്ന്", "Choose from gallery"],
   standHint: ["മുഖവും തോളും വരയ്ക്കുള്ളിൽ വരട്ടെ", "Keep your face and shoulders inside the outline"],
+  toBack: ["പിൻ ക്യാമറ", "Back camera"],
+  toFront: ["മുൻ ക്യാമറ", "Front camera"],
   capture: ["ഫോട്ടോ എടുക്കുക", "Take photo"],
   retake: ["വീണ്ടും എടുക്കുക", "Retake"],
   usePhoto: ["ഈ ഫോട്ടോ മതി — ഉണ്ടാക്കുക", "Use this photo — create"],
@@ -260,7 +262,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
           {step === "preview" && photo && fabric && (
             <div className="grid gap-4">
               {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img src={photo.url} alt="" className="aspect-[3/4] w-full rounded-2xl object-cover" />
+              <img src={photo.url} alt="" className="aspect-[3/4] w-full rounded-2xl bg-muted object-contain" data-testid="preview-image" />
               <FabricChip f={fabric} variant={variant} lang={lang} />
               {counter}
               <Big onClick={() => void generate(photo.blob, fabric)} testid="use-photo">
@@ -444,6 +446,16 @@ function FabricStep({
   );
 }
 
+const CAM_KEY = "suxus_tryon_camera";
+type Facing = "user" | "environment";
+const savedFacing = (): Facing => {
+  try {
+    return localStorage.getItem(CAM_KEY) === "environment" ? "environment" : "user";
+  } catch {
+    return "user";
+  }
+};
+
 function CameraStep({
   lang,
   t,
@@ -461,13 +473,48 @@ function CameraStep({
 }) {
   const video = React.useRef<HTMLVideoElement>(null);
   const [ready, setReady] = React.useState(false);
+  // Front (selfie) by default; the last choice on this phone is remembered
+  const [facing, setFacing] = React.useState<Facing>("user");
+  React.useEffect(() => setFacing(savedFacing()), []);
+  /** bumped when the phone is turned: the stream is opened again so its frames follow the new orientation */
+  const [turns, setTurns] = React.useState(0);
+  const denied = React.useRef(onDenied);
+  denied.current = onDenied;
+
+  React.useEffect(() => {
+    let t: ReturnType<typeof setTimeout> | null = null;
+    const turned = () => {
+      if (t) clearTimeout(t);
+      t = setTimeout(() => setTurns((n) => n + 1), 350);
+    };
+    const so = typeof screen !== "undefined" ? screen.orientation : undefined;
+    so?.addEventListener?.("change", turned);
+    window.addEventListener("orientationchange", turned);
+    return () => {
+      if (t) clearTimeout(t);
+      so?.removeEventListener?.("change", turned);
+      window.removeEventListener("orientationchange", turned);
+    };
+  }, []);
+
   React.useEffect(() => {
     let stream: MediaStream | null = null;
     let live = true;
+    setReady(false);
     (async () => {
       try {
         if (!navigator.mediaDevices?.getUserMedia) throw new Error("no camera");
-        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user", width: { ideal: 1280 }, height: { ideal: 1706 } }, audio: false });
+        const portrait = typeof window !== "undefined" && window.innerHeight >= window.innerWidth;
+        const want = (f: Facing): MediaStreamConstraints => ({
+          // ask for a frame shaped like the screen; the browser hands back frames upright for the current orientation
+          video: { facingMode: { ideal: f }, width: { ideal: portrait ? 1440 : 1920 }, height: { ideal: portrait ? 1920 : 1440 } },
+          audio: false,
+        });
+        stream = await navigator.mediaDevices.getUserMedia(want(facing)).catch(async (e) => {
+          // a phone without a back camera (or a laptop): any camera rather than none
+          if ((e as Error).name === "OverconstrainedError" || (e as Error).name === "NotFoundError") return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+          throw e;
+        });
         if (!live) return stream.getTracks().forEach((tr) => tr.stop());
         if (video.current) {
           video.current.srcObject = stream;
@@ -475,19 +522,30 @@ function CameraStep({
           setReady(true);
         }
       } catch {
-        if (live) onDenied();
+        if (live) denied.current();
       }
     })();
     return () => {
       live = false;
       stream?.getTracks().forEach((tr) => tr.stop());
     };
-  }, [onDenied]);
+  }, [facing, turns]);
+
+  const flip = () => {
+    const next: Facing = facing === "user" ? "environment" : "user";
+    try {
+      localStorage.setItem(CAM_KEY, next);
+    } catch {
+      /* not remembered — still switches */
+    }
+    setFacing(next);
+  };
 
   const capture = () => {
     const v = video.current;
     if (!v || !v.videoWidth) return;
-    // centre 3:4 crop of the frame, at most 1280 px tall
+    // Exactly what the preview box shows: the centre 3:4 portrait crop of the (upright) frame, at most 1280 px tall.
+    // Drawn as the camera sees it — never mirrored, even though the selfie preview is shown like a mirror.
     const vw = v.videoWidth;
     const vh = v.videoHeight;
     const cw = Math.min(vw, (vh * 3) / 4);
@@ -500,10 +558,12 @@ function CameraStep({
     c.toBlob((b) => b && onPhoto(b), "image/jpeg", 0.9);
   };
 
+  const front = facing === "user";
   return (
-    <div className="grid gap-3">
-      <div className="relative aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black">
-        <video ref={video} playsInline muted className="absolute inset-0 size-full -scale-x-100 object-cover" />
+    <div className="grid gap-3 landscape:grid-cols-[auto_1fr] landscape:items-center">
+      {/* portrait: full width · landscape: as tall as the screen allows, buttons beside it */}
+      <div className="relative mx-auto aspect-[3/4] w-full overflow-hidden rounded-2xl bg-black landscape:h-[calc(100dvh-7rem)] landscape:w-auto">
+        <video ref={video} playsInline muted autoPlay className={cn("absolute inset-0 size-full object-cover", front && "-scale-x-100")} data-testid="camera-video" data-facing={facing} />
         {/* where to stand: head and shoulders */}
         <svg viewBox="0 0 300 400" className="pointer-events-none absolute inset-0 size-full" aria-hidden>
           <ellipse cx="150" cy="140" rx="62" ry="80" fill="none" stroke="rgba(255,255,255,.75)" strokeWidth="3" strokeDasharray="10 8" />
@@ -514,13 +574,29 @@ function CameraStep({
             <Loader2 className="size-8 animate-spin text-white/70" />
           </div>
         )}
-        <p className={cn("absolute inset-x-0 bottom-2 px-3 text-center text-sm text-white drop-shadow", lang === "ml" && "font-ml")}>{t(W.standHint)[0]}</p>
+        {/* Front / back camera: large, top corner — well away from the capture button */}
+        <button
+          type="button"
+          onClick={flip}
+          aria-label={front ? "Use the back camera" : "Use the front camera"}
+          data-testid="camera-switch"
+          className="absolute top-3 right-3 flex min-h-14 min-w-14 items-center justify-center gap-2 rounded-full bg-black/55 py-2 pr-4 pl-3 text-white shadow-lg backdrop-blur active:scale-95 landscape:top-2 landscape:right-2 landscape:px-3"
+        >
+          <SwitchCamera className="size-7" />
+          <span className="flex flex-col text-left leading-tight landscape:hidden">
+            <span className={cn("text-sm font-semibold", lang === "ml" && "font-ml")}>{t(front ? W.toBack : W.toFront)[0]}</span>
+            <span className={cn("text-[10px] opacity-80", lang === "en" && "font-ml")}>{t(front ? W.toBack : W.toFront)[1]}</span>
+          </span>
+        </button>
+        <p className={cn("absolute inset-x-0 bottom-2 px-3 text-center text-sm text-white drop-shadow landscape:text-[11px]", lang === "ml" && "font-ml")}>{t(W.standHint)[0]}</p>
       </div>
-      <Big onClick={capture} disabled={!ready} testid="capture">
-        <Camera className="size-5" /> <Label w={t(W.capture)} lang={lang} />
-      </Big>
-      <GalleryButton lang={lang} t={t} onPhoto={onPhoto} onBad={onBadFile} />
-      <BackLink onClick={onBack} w={t(W.back)} />
+      <div className="grid gap-3">
+        <Big onClick={capture} disabled={!ready} testid="capture">
+          <Camera className="size-5" /> <Label w={t(W.capture)} lang={lang} />
+        </Big>
+        <GalleryButton lang={lang} t={t} onPhoto={onPhoto} onBad={onBadFile} />
+        <BackLink onClick={onBack} w={t(W.back)} />
+      </div>
     </div>
   );
 }
@@ -668,15 +744,34 @@ function WhatsAppIcon() {
 
 /* ───────────────────────── Image helpers ───────────────────────── */
 
-/** A gallery photo: upright, at most 1280 px, JPEG (keeps uploads small on a slow network). */
+/**
+ * A gallery photo: upright, at most 1280 px, JPEG (keeps uploads small on a slow network). Decoded through an <img>,
+ * which every current browser (iPhone Safari included) draws with the photo's rotation flag applied — createImageBitmap
+ * on Safari can ignore it and give a sideways picture. The JPEG written out has no rotation flag left to misread.
+ */
 async function shrink(file: File): Promise<Blob> {
-  const bmp = await createImageBitmap(file, { imageOrientation: "from-image" } as ImageBitmapOptions);
-  const scale = Math.min(1, 1280 / Math.max(bmp.width, bmp.height));
-  const c = document.createElement("canvas");
-  c.width = Math.round(bmp.width * scale);
-  c.height = Math.round(bmp.height * scale);
-  c.getContext("2d")!.drawImage(bmp, 0, 0, c.width, c.height);
-  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/jpeg", 0.9));
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise<HTMLImageElement>((res, rej) => {
+      const i = new Image();
+      i.decoding = "async";
+      i.style.imageOrientation = "from-image";
+      i.onload = () => res(i);
+      i.onerror = () => rej(new Error("decode"));
+      i.src = url;
+    });
+    const w = img.naturalWidth;
+    const h = img.naturalHeight;
+    if (!w || !h) throw new Error("decode");
+    const scale = Math.min(1, 1280 / Math.max(w, h));
+    const c = document.createElement("canvas");
+    c.width = Math.round(w * scale);
+    c.height = Math.round(h * scale);
+    c.getContext("2d")!.drawImage(img, 0, 0, c.width, c.height);
+    return await new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error("encode"))), "image/jpeg", 0.9));
+  } finally {
+    URL.revokeObjectURL(url);
+  }
 }
 
 async function imageFile(url: string, code: string) {

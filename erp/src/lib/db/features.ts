@@ -17,8 +17,9 @@ import { getDb } from "./index";
  *   tryonLeads 0028 Try-on enquiries ("I want this")  tryon_enquiries
  *   tryonTv  0029  Shop TV (customer's choice)        tryon_generations.on_display
  *   tryonStyle 0030 Styling choices (sleeve/tuck/pocket) tryon_generations.sleeve
+ *   combo    0031  Shirt + trouser combinations       fabrics.suitable_for, fabrics.colour_bucket
  */
-export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean; prices: boolean; pocket: boolean; tryon: boolean; tryonLeads: boolean; tryonTv: boolean; tryonStyle: boolean };
+export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean; prices: boolean; pocket: boolean; tryon: boolean; tryonLeads: boolean; tryonTv: boolean; tryonStyle: boolean; combo: boolean };
 
 const NEEDS: Record<keyof Features, string[]> = {
   stock: ["fabrics.opening_mtr", "fabrics.opening_cost_per_mtr", "fabric_stock_moves.id"],
@@ -33,6 +34,7 @@ const NEEDS: Record<keyof Features, string[]> = {
   tryonLeads: ["tryon_enquiries.contacted"],
   tryonTv: ["tryon_generations.on_display", "tryon_generations.display_at"],
   tryonStyle: ["tryon_generations.sleeve", "tryon_generations.tuck", "tryon_generations.pocket"],
+  combo: ["fabrics.suitable_for", "fabrics.colour_bucket"],
 };
 
 const g = globalThis as unknown as { __suxusFeatures?: { at: number; f: Features } };
@@ -41,7 +43,7 @@ export async function features(): Promise<Features> {
   const c = g.__suxusFeatures;
   const all = c && Object.values(c.f).every(Boolean);
   if (c && (all || Date.now() - c.at < 60_000)) return c.f;
-  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false, prices: false, pocket: false, tryon: false, tryonLeads: false, tryonTv: false, tryonStyle: false };
+  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false, prices: false, pocket: false, tryon: false, tryonLeads: false, tryonTv: false, tryonStyle: false, combo: false };
   try {
     const db = await getDb();
     const res = await db.execute(sql`select table_name || '.' || column_name as k from information_schema.columns where table_schema = current_schema()

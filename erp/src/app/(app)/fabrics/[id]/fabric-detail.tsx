@@ -16,6 +16,8 @@ import type { FabricRow } from "@/lib/queries";
 import { cn, fmtDate, num, round2, rupees } from "@/lib/utils";
 import { StockDialog, mtr } from "@/components/forms/stock-dialogs";
 import { undoStockMove } from "@/lib/actions/fabric-stock";
+import { ComboRow } from "@/components/combo-row";
+import type { ComboCard } from "@/lib/combo-server";
 
 export type StockMove = {
   id: number;
@@ -50,9 +52,12 @@ export function FabricDetail({
   showCost,
   photosEnabled,
   shopName,
+  combos = null,
 }: {
   photosEnabled: boolean;
   shopName: string;
+  /** trousers from our stock that go with this fabric (null = off / before the database update) */
+  combos?: { items: ComboCard[]; short: boolean } | null;
   fabric: FabricRow;
   lines: Line[];
   moves: StockMove[];
@@ -154,6 +159,12 @@ export function FabricDetail({
         <Info label="Remarks" value={f.remarks} />
       </div>
       </div>
+
+      {combos && (
+        <div className="rounded-xl border bg-card p-4">
+          <ComboRow items={combos.items} short={combos.short} lang="ml" hrefOf={(c) => `/fabrics/${c.id}`} />
+        </div>
+      )}
 
       {stockEnabled && <StockHistory f={f} moves={moves} showCost={showCost} canAdjust={canAdjust} onAdjust={() => setStock("adjust")} onChanged={() => router.refresh()} />}
 

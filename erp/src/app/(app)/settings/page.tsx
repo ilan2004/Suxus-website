@@ -39,6 +39,9 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
             <Link href="/settings/tryon" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
               Try-on <span className="ml ml-1">ട്രൈ-ഓൺ</span> →
             </Link>
+            <Link href="/settings/combos" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
+              Combinations <span className="ml ml-1">കോംബോ</span> →
+            </Link>
             <Link href="/settings/stitching-prices" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
               Stitching Prices <span className="ml ml-1">തുന്നൽക്കൂലി നിരക്ക്</span> →
             </Link>

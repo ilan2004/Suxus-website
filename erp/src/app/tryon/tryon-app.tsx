@@ -3,6 +3,8 @@
 import * as React from "react";
 import { ArrowLeft, Camera, Check, Download, Image as ImageIcon, Loader2, RefreshCw, Search, Shirt, Sparkles, SwitchCamera, Tv, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ComboDetail, ComboRow } from "@/components/combo-row";
+import type { ComboCard } from "@/lib/combo-server";
 import { DEFAULT_STYLE, POCKETS, SLEEVES, TUCKS, sleeveOfVariantName, styleSummary, variantOfSleeve, type TryonStyle } from "@/lib/tryon-style";
 
 /* ───────────────────────── Words (Malayalam first, English second) ───────────────────────── */
@@ -322,6 +324,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <Big variant="outline" onClick={() => setStep("camera")}>
                 <RefreshCw className="size-5" /> <Label w={t(W.retake)} lang={lang} />
               </Big>
+              <Combos fabricId={fabric.id} sleeve={variant} lang={lang} closeWord={t(W.close)[0]} />
             </div>
           )}
 
@@ -350,6 +353,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <Big onClick={() => void generate(photo.blob, fabric)} testid="use-photo">
                 <Sparkles className="size-5" /> <Label w={t(W.usePhoto)} lang={lang} />
               </Big>
+              <Combos fabricId={fabric.id} sleeve={style.sleeve} lang={lang} closeWord={t(W.close)[0]} />
             </div>
           )}
 
@@ -370,6 +374,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                   {t(W.tuckNote)[0]} <span className={cn(lang === "ml" ? "font-sans" : "font-ml")}>· {t(W.tuckNote)[1]}</span>
                 </p>
               )}
+              <Combos fabricId={fabric.id} sleeve={resultStyle?.sleeve ?? variant} lang={lang} closeWord={t(W.close)[0]} />
               <p className="rounded-xl bg-muted px-3 py-2 text-sm" data-testid="disclaimer">
                 <span className={cn("block", lang === "ml" && "font-ml")}>{t(W.disclaimer)[0]}</span>
                 <span className={cn("block text-xs text-muted-foreground", lang === "en" && "font-ml")}>{t(W.disclaimer)[1]}</span>
@@ -874,6 +879,35 @@ function WantForm({ lang, t, fabric, image }: { lang: "ml" | "en"; t: (w: readon
 /* ───────────────────────── Pieces ───────────────────────── */
 
 /** One single-select row of chips (Malayalam first). */
+/**
+ * "ഇതിന് ചേരുന്ന പാൻറ്റ്": trouser fabrics from our stock for this shirt fabric. Colour rules on the server — no AI
+ * call, no cost, never a try-on image of the trouser. Hidden when switched off in Settings or when it fails.
+ */
+function Combos({ fabricId, sleeve, lang, closeWord }: { fabricId: number; sleeve: string | null; lang: "ml" | "en"; closeWord: string }) {
+  const half = /half/i.test(sleeve ?? "");
+  const [data, setData] = React.useState<{ key: string; items: ComboCard[]; short: boolean } | null>(null);
+  const [picked, setPicked] = React.useState<number | null>(null);
+  const [open, setOpen] = React.useState<ComboCard | null>(null);
+  const key = `${fabricId}:${half ? "half" : "full"}`;
+  React.useEffect(() => {
+    let live = true;
+    fetch(`/api/tryon/combos?fabricId=${fabricId}&sleeve=${half ? "half" : "full"}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((j) => live && setData(j.ok && j.on ? { key, items: j.items, short: j.short } : null))
+      .catch(() => live && setData(null));
+    return () => {
+      live = false;
+    };
+  }, [fabricId, half, key]);
+  if (!data || data.key !== key) return null;
+  return (
+    <>
+      <ComboRow items={data.items} short={data.short} lang={lang} selected={picked} onPick={(c) => (setPicked(c.id), setOpen(c))} />
+      {open && <ComboDetail c={open} lang={lang} onClose={() => setOpen(null)} closeWord={closeWord} />}
+    </>
+  );
+}
+
 function ChipRow<T extends string>({ title, lang, items, value, onChange, testid }: { title: [string, string]; lang: "ml" | "en"; items: { v: T; ml: string; en: string }[]; value: T; onChange: (v: T) => void; testid: string }) {
   return (
     <div className="grid gap-1" data-testid={testid}>

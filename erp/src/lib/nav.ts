@@ -1,4 +1,5 @@
 import {
+  Palette,
   KanbanSquare,
   LayoutDashboard,
   ShoppingBag,
@@ -68,6 +69,7 @@ export const NAV: NavGroup[] = [
       { href: "/capital", en: "Capital Account", ml: "മുതൽമുടക്ക്", icon: Landmark, perm: "money" },
       { href: "/reports", en: "Summary", ml: "ചുരുക്കം", icon: BarChart3, perm: "money" },
       { href: "/settings/tryon", en: "Try-on QR & enquiries", ml: "ട്രൈ-ഓൺ", icon: QrCode, perm: "prices" },
+      { href: "/settings/combos", en: "Shirt + trouser combinations", ml: "കോംബോ", icon: Palette, perm: "prices" },
       { href: "/settings/stitching-prices", en: "Stitching Prices", ml: "തുന്നൽക്കൂലി നിരക്ക്", icon: Tags, perm: "prices" },
       { href: "/settings", en: "Settings", ml: "സെറ്റിംഗ്സ്", icon: Settings, perm: "settings" },
     ],

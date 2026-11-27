@@ -48,6 +48,8 @@ const REQUIRED: [string, string][] = [
   ["tryon_enquiries", "contacted"],
   ["tryon_generations", "on_display"],
   ["tryon_generations", "sleeve"],
+  ["fabrics", "suitable_for"],
+  ["fabrics", "colour_bucket"],
 ];
 
 async function main() {

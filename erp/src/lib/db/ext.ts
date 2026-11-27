@@ -29,6 +29,9 @@ export const bulkItemsPrice = pgTable("bulk_order_items", { id: integer("id").pr
 export const measurementsPocket = pgTable("measurements", { id: integer("id").primaryKey(), pocket: jsonb("pocket").$type<Pocket | null>() });
 export const draftsPocket = pgTable("measurement_drafts", { id: integer("id").primaryKey(), pocket: jsonb("pocket").$type<Pocket | null>() });
 
+/** fabrics.suitable_for / colour_bucket — Shirt + trouser combinations (owner's corrections in Settings) */
+export const fabricsCombo = pgTable("fabrics", { id: integer("id").primaryKey(), suitableFor: text("suitable_for").notNull(), colourBucket: text("colour_bucket") });
+
 /** For a select list on the un-aliased table: e.g. { wearerId: col.measurementWearer } */
 export const col = {
   measurementWearer: sql<number | null>`"measurements"."wearer_id"`.mapWith((v) => (v == null ? null : Number(v))),
@@ -42,6 +45,8 @@ export const col = {
   measurementPocket: sql<Pocket | null>`"measurements"."pocket"`.mapWith((v) => (v == null ? null : typeof v === "string" ? (JSON.parse(v) as Pocket) : (v as Pocket))),
   draftPocket: sql<Pocket | null>`"measurement_drafts"."pocket"`.mapWith((v) => (v == null ? null : typeof v === "string" ? (JSON.parse(v) as Pocket) : (v as Pocket))),
   fabricOpeningMtr: sql<number | null>`"fabrics"."opening_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
+  fabricSuitableFor: sql<string | null>`"fabrics"."suitable_for"`,
+  fabricColourBucket: sql<string | null>`"fabrics"."colour_bucket"`,
   fabricOpeningCost: sql<number | null>`"fabrics"."opening_cost_per_mtr"`.mapWith((v) => (v == null ? null : Number(v))),
 };
 

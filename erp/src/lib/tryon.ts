@@ -392,7 +392,7 @@ export async function generateTryon(o: {
     await db.insert(schema.tryonImages).values({ id: resultId, device: o.device, kind: "result", mime: "image/jpeg", data: result });
     await log({ ok: true, cost, resultId });
     // One line per success for the Vercel logs (cost and time per generation)
-    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
+    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} promptChars=${prompt.length} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
     return { resultId, cost, ms: Date.now() - started, prompt };
   } catch (e) {
     const err = e instanceof TryonError ? e : new TryonError("api", (e as Error).message);

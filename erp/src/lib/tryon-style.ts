@@ -19,7 +19,10 @@ export const TUCKS: { v: Tuck; ml: string; en: string }[] = [
   { v: "tucked", ml: "ഇൻസൈഡ്", en: "Tucked in" },
   { v: "untucked", ml: "ഔട്ട്സൈഡ്", en: "Untucked" },
 ];
-/** Same names and order as the measurement record's pocket choice (None / One (left) / Two). */
+/**
+ * Same names and order as the measurement record's pocket choice (None / One (left) / Two). Two pockets always means the
+ * two-pocket work-shirt style with a buttoned flap on each — there is no plain double pocket.
+ */
 const POCKET_CODE: Record<string, PocketStyle> = { none: "none", one: "single", two: "double" };
 export const POCKETS: { v: PocketStyle; ml: string; en: string }[] = POCKET_COUNTS.map((c) => ({ v: POCKET_CODE[c.v], ml: c.ml, en: c.en }));
 
@@ -61,13 +64,15 @@ export function styleSentences(s: TryonStyle, pattern: string | null | undefined
   );
   out.push(
     {
-      none: "The shirt front has no pocket at all. The chest is plain on both sides.",
-      single: "The shirt has one patch pocket on the wearer's left chest, in the same fabric as the shirt, with the pattern aligned to the body of the shirt.",
+      // trimmed: same meaning, fewer words
+      none: "The shirt front has no pocket; the chest is plain.",
+      single: "One plain patch pocket, no flap, on the wearer's left chest, same fabric, pattern aligned with the shirt body.",
+      // the owner's wording, as given: two pockets always have a buttoned flap (= the measurement record's two-pocket work-shirt style)
       double:
-        "The shirt has two patch pockets, one on each side of the chest, symmetrical in size and position, both in the same fabric as the shirt with the pattern aligned to the body of the shirt. This is the two-pocket work-shirt style.",
+        "The shirt has two patch pockets, one on each side of the chest, symmetrical in size and position. Each pocket has a buttoned flap: a rectangular flap of the same fabric covering the top of the pocket, fastened with a single visible button at the centre of the flap. Both flaps are the same size and sit at the same height. The pockets and flaps are in the same fabric as the shirt with the pattern aligned to the body of the shirt. This is the two-pocket work-shirt style.",
     }[s.pocket],
   );
   const patterned = !!pattern && !/^plain/i.test(pattern);
-  if (patterned && s.pocket !== "none") out.push("On the pocket or pockets, keep the pattern running in the same direction as the shirt body so the pockets do not look like a different cloth.");
+  if (patterned && s.pocket !== "none") out.push("Pocket pattern runs the same direction as the shirt body.");
   return out.join("\n");
 }

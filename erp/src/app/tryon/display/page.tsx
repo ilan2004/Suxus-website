@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { getSetting } from "@/lib/settings";
-import { tvAllowed } from "@/lib/tryon-tv";
+import { startPairing, tvAllowed } from "@/lib/tryon-tv";
 import { TRYON_URL, tryonQrSvg } from "@/lib/tryon-qr";
 
 export const metadata: Metadata = { title: { absolute: "SUXUS · Try-on" }, robots: { index: false, follow: false } };
@@ -32,6 +32,29 @@ html,body{margin:0;height:100%;overflow:hidden;background:#0f2b24;color:#f7f3e8;
 .mini .qr{height:22vh;width:22vh;padding:.8vh;border-radius:1vh}
 .bar{height:.9vh;background:rgba(255,255,255,.18);border-radius:1vh;overflow:hidden;width:100%}
 .bar i{display:block;height:100%;width:100%;background:#c8a96a;transform-origin:left}
+`;
+
+const PAIR_CSS = `
+.pair{flex-direction:column;text-align:center;gap:3.2vh}
+.pcode{font-size:24vh;font-weight:700;letter-spacing:.08em;line-height:1;color:#fff;background:rgba(255,255,255,.08);border-radius:3vh;padding:3vh 6vh}
+`;
+
+/** ES5: ask every 3 s whether the code was entered; reload when paired (or for a fresh code when it expired). */
+const PAIR_SCRIPT = (nonce: string) => `
+(function(){
+  function ask(){
+    var x=new XMLHttpRequest();
+    x.open('GET','/api/tryon/tv-pair?n=${nonce}&t='+Date.now(),true);
+    x.timeout=15000;
+    x.onload=function(){
+      if(x.status===410){ location.reload(); return; }
+      try{ var d=JSON.parse(x.responseText); if(d&&d.paired){ location.reload(); } }catch(e){}
+    };
+    x.send();
+  }
+  setInterval(ask,3000);
+  setTimeout(function(){ location.reload(); }, 15*60*1000);
+})();
 `;
 
 /** ES5 only (old TV browsers): poll every 4 s; a newly shown result stays 45 s; a removed one leaves at once. */
@@ -82,16 +105,30 @@ const SCRIPT = (key: string) => `
 
 export default async function TryonDisplay({ searchParams }: { searchParams: Promise<{ key?: string }> }) {
   const { key } = await searchParams;
-  if (!(await tvAllowed(key)))
+  // Not paired yet: a 6-digit code to type in Settings > Try-on > Pair a TV; the TV then switches by itself
+  if (!(await tvAllowed(key))) {
+    const p = await startPairing();
     return (
-      <div style={{ minHeight: "100dvh", display: "grid", placeItems: "center", background: "#0f2b24", color: "#f7f3e8", fontFamily: "sans-serif", textAlign: "center", padding: 24 }}>
-        <p>
-          This screen is for the shop TV.
-          <br />
-          Open it from Settings &gt; Try-on (signed in), or with the TV link shown there.
-        </p>
-      </div>
+      <>
+        <style>{CSS + PAIR_CSS}</style>
+        <div className="tv pair" data-testid="tv-pair">
+          <div className="brand">SUXUS HERITAGE TAILOR</div>
+          <div className="tvml" style={{ fontSize: "5vh" }}>
+            ഈ ടി.വി. ജോടിയാക്കാൻ ഫോണിൽ ഈ കോഡ് അടിക്കുക
+          </div>
+          <div className="en">To connect this TV, type this code on your phone</div>
+          <div className="pcode" data-testid="tv-pair-code">
+            {p.code.slice(0, 3)} {p.code.slice(3)}
+          </div>
+          <div className="en" style={{ fontSize: "3.6vh" }}>
+            ERP → Settings → Try-on → <b>Pair a TV</b>
+          </div>
+          <div className="small">The code changes every 15 minutes · കോഡ് 15 മിനിറ്റ് കഴിഞ്ഞാൽ മാറും</div>
+        </div>
+        <script dangerouslySetInnerHTML={{ __html: PAIR_SCRIPT(p.nonce) }} />
+      </>
     );
+  }
   const [shop, qr] = await Promise.all([getSetting("shop"), tryonQrSvg()]);
   return (
     <>

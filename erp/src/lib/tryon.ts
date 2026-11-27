@@ -21,8 +21,6 @@ const PRICE = { outputImage1k: 0.0336, inputPerMTok: 1.5, inputTokensPerImageEst
 export const USD_TO_INR = 88;
 
 export const LIMITS = {
-  /** successful try-ons per device per day (shown to the customer) */
-  perDevice: 2,
   /** attempts (incl. failures) per device per day — stops a broken phone looping on the API */
   attemptsPerDevice: 6,
   /** successful try-ons per network address per day (a shared wifi, or someone clearing cookies) */
@@ -56,22 +54,53 @@ export function todayStartIST() {
   return new Date(ist.getTime() - 5.5 * 3600 * 1000);
 }
 
-export async function usage(device: string, ip: string | null) {
+/** Why no try-on can be made right now (null = it can). */
+export type Blocked = "limit" | "shop_limit" | "budget" | "off" | null;
+
+/** Cost of this month's try-ons in rupees (from the logged costUsd). */
+export async function monthSpendInr() {
+  const db = await getDb();
+  const d = todayStartIST();
+  const ist = new Date(d.getTime() + 5.5 * 3600 * 1000);
+  ist.setUTCDate(1);
+  const month = new Date(ist.getTime() - 5.5 * 3600 * 1000);
+  const [m] = await db
+    .select({ usd: sql<number>`coalesce(sum(${schema.tryonGenerations.costUsd}), 0)`.mapWith(Number) })
+    .from(schema.tryonGenerations)
+    .where(gte(schema.tryonGenerations.createdAt, month));
+  return Math.round(m.usd * USD_TO_INR * 100) / 100;
+}
+
+/**
+ * What this phone may do now. The controls (Settings > Try-on) are read on every call, so a change applies at once:
+ * master switch, per person per day (1 or 2), whole shop per day, monthly spend cap — plus the per-network cap.
+ * `tester` (signed-in Owner / Partner) skips the per-person, per-network and whole-shop limits, not the switch or the cap.
+ */
+export async function usage(device: string, ip: string | null, tester = false): Promise<{ left: number; limit: number; blocked: Blocked }> {
+  const { getSetting } = await import("./settings");
+  const c = await getSetting("tryon");
+  const limit = c.perDevice;
+  if (!c.enabled) return { left: 0, limit, blocked: "off" };
+  if ((await monthSpendInr()) >= c.monthlyCapInr) return { left: 0, limit, blocked: "budget" };
+  if (tester) return { left: limit, limit, blocked: null };
   const db = await getDb();
   const since = todayStartIST();
+  const okCount = sql<number>`count(*) filter (where ${schema.tryonGenerations.ok})`.mapWith(Number);
+  const [shop] = await db.select({ ok: okCount }).from(schema.tryonGenerations).where(gte(schema.tryonGenerations.createdAt, since));
+  if (shop.ok >= c.shopPerDay) return { left: 0, limit, blocked: "shop_limit" };
   const [d] = await db
-    .select({ ok: sql<number>`count(*) filter (where ${schema.tryonGenerations.ok})`.mapWith(Number), all: sql<number>`count(*)`.mapWith(Number) })
+    .select({ ok: okCount, all: sql<number>`count(*)`.mapWith(Number) })
     .from(schema.tryonGenerations)
     .where(and(eq(schema.tryonGenerations.device, device), gte(schema.tryonGenerations.createdAt, since)));
   const [i] = ip
     ? await db
-        .select({ ok: sql<number>`count(*) filter (where ${schema.tryonGenerations.ok})`.mapWith(Number) })
+        .select({ ok: okCount })
         .from(schema.tryonGenerations)
         .where(and(eq(schema.tryonGenerations.ip, ip), gte(schema.tryonGenerations.createdAt, since)))
     : [{ ok: 0 }];
-  const left = Math.max(0, LIMITS.perDevice - d.ok);
+  const left = Math.max(0, limit - d.ok);
   const blocked = left === 0 || d.all >= LIMITS.attemptsPerDevice || i.ok >= LIMITS.perIp;
-  return { left: blocked ? 0 : left, limit: LIMITS.perDevice };
+  return { left: blocked ? 0 : left, limit, blocked: blocked ? "limit" : null };
 }
 
 /** Customer photos and generated images older than 7 days are deleted (the log keeps no image). */

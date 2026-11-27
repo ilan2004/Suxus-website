@@ -49,6 +49,13 @@ const schemas = {
     pant: z.array(z.object({ width: z.coerce.number<number>().positive(), model: z.enum(["Regular", "Loose"]), metres: z.coerce.number<number>().positive().max(20) })),
   }),
   variants: z.record(z.string(), z.array(z.string().trim().min(1)).max(20)),
+  tryon: z.object({
+    enabled: z.boolean(),
+    perDevice: z.union([z.literal(1), z.literal(2)]),
+    shopPerDay: z.coerce.number<number>().int().min(0).max(10000),
+    monthlyCapInr: z.coerce.number<number>().min(0).max(10_000_000),
+    displayToken: z.string(),
+  }),
 } satisfies Record<keyof AppSettings, z.ZodType>;
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<Result<null>> {

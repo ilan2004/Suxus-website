@@ -827,6 +827,9 @@ export const tryonGenerations = pgTable(
     ms: integer("ms"),
     photoId: text("photo_id"),
     resultId: text("result_id"),
+    /** the customer pressed "Show on the shop TV" (default off — never shown otherwise); cleared by "remove from TV" */
+    onDisplay: boolean("on_display").notNull().default(false),
+    displayAt: timestamp("display_at", { withTimezone: true }),
   },
   (t) => [index("tryon_generations_device_idx").on(t.device, t.createdAt), index("tryon_generations_created_idx").on(t.createdAt)],
 );

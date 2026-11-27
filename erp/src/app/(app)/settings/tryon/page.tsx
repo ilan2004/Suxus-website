@@ -4,6 +4,8 @@ import { requireUser } from "@/lib/auth";
 import { getSetting } from "@/lib/settings";
 import { features } from "@/lib/db/features";
 import { tryonStats } from "@/lib/tryon-admin";
+import { monthSpendInr } from "@/lib/tryon";
+import { TryonControls } from "./controls";
 import { TRYON_HEAD, TRYON_URL, tryonQrSvg } from "@/lib/tryon-qr";
 import { PageHeader } from "@/components/app/page-header";
 import { rupees } from "@/lib/utils";
@@ -14,7 +16,14 @@ export const metadata = { title: "Try-on" };
 export default async function TryonSettingsPage() {
   await requireUser({ can: "prices" });
   const feat = await features();
-  const [shop, qr, stats] = await Promise.all([getSetting("shop"), tryonQrSvg(), feat.tryon ? tryonStats() : Promise.resolve(null)]);
+  const [shop, qr, stats, controls, spent] = await Promise.all([
+    getSetting("shop"),
+    tryonQrSvg(),
+    feat.tryon ? tryonStats() : Promise.resolve(null),
+    getSetting("tryon"),
+    feat.tryon ? monthSpendInr() : Promise.resolve(0),
+  ]);
+  const tvLink = controls.displayToken ? `${TRYON_URL}/display?key=${controls.displayToken}` : null;
   return (
     <>
       <PageHeader
@@ -49,6 +58,12 @@ export default async function TryonSettingsPage() {
         </section>
 
         <section className="grid content-start gap-4">
+          <TryonControls
+            value={{ enabled: controls.enabled, perDevice: controls.perDevice, shopPerDay: controls.shopPerDay, monthlyCapInr: controls.monthlyCapInr }}
+            spentInr={spent}
+            todayOk={stats?.today.ok ?? 0}
+            tvLink={tvLink}
+          />
           {!stats ? (
             <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">Usage appears here after the next database update.</p>
           ) : (
@@ -79,7 +94,7 @@ export default async function TryonSettingsPage() {
                   </ol>
                 )}
               </div>
-              {stats.model && <p className="text-xs text-muted-foreground">Model: {stats.model}. Each customer phone gets 2 try-ons a day; failed attempts are not counted. Photos are deleted after 7 days.</p>}
+              {stats.model && <p className="text-xs text-muted-foreground">Model: {stats.model}. Failed attempts are not counted against the limits. Photos are deleted after 7 days.</p>}
             </>
           )}
         </section>

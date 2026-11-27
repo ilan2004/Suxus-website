@@ -29,7 +29,11 @@ export type AppSettings = {
   fabricRequirement: FabricRequirementTables;
   /** Settings → Variants: the variants (തരം) each garment can have on an order item */
   variants: VariantLists;
+  /** Settings → Try-on: master switch, limits (read on every request — no deploy needed) and the TV link token */
+  tryon: TryonControls;
 };
+export type TryonControls = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number; displayToken: string };
+export const DEFAULT_TRYON: TryonControls = { enabled: true, perDevice: 2, shopPerDay: 40, monthlyCapInr: 2000, displayToken: "" };
 
 const DEFAULTS: AppSettings = {
   lists: DEFAULT_LISTS,
@@ -42,6 +46,7 @@ const DEFAULTS: AppSettings = {
   measureOptions: { autoAdvance: false },
   fabricRequirement: DEFAULT_FABRIC_REQUIREMENT,
   variants: DEFAULT_VARIANTS,
+  tryon: DEFAULT_TRYON,
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -53,7 +58,7 @@ export async function getSettings(): Promise<AppSettings> {
   const out = structuredClone(DEFAULTS) as AppSettings;
   for (const r of rows) {
     const k = r.key as keyof AppSettings;
-    if (k === "lists" || k === "shop") {
+    if (k === "lists" || k === "shop" || k === "tryon") {
       // merge so that newly added default keys appear for old databases
       (out[k] as object) = { ...DEFAULTS[k], ...(r.value as object) };
     } else {
@@ -75,6 +80,7 @@ export async function getSetting<K extends keyof AppSettings>(key: K): Promise<A
   const db = await getDb();
   const [row] = await db.select().from(schema.settings).where(eq(schema.settings.key, key));
   if (!row) return DEFAULTS[key];
+  if (key === "tryon") return { ...DEFAULT_TRYON, ...(row.value as object) } as AppSettings[K];
   if (key === "lists" || key === "shop") return { ...DEFAULTS[key], ...(row.value as object) } as AppSettings[K];
   return row.value as AppSettings[K];
 }

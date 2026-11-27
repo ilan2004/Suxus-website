@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ArrowLeft, Camera, Check, Download, Image as ImageIcon, Loader2, RefreshCw, Search, Shirt, Sparkles, SwitchCamera, X } from "lucide-react";
+import { ArrowLeft, Camera, Check, Download, Image as ImageIcon, Loader2, RefreshCw, Search, Shirt, Sparkles, SwitchCamera, Tv, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /* ───────────────────────── Words (Malayalam first, English second) ───────────────────────── */
@@ -17,8 +17,8 @@ const W = {
   noMatch: ["ഈ തിരച്ചിലിൽ തുണി ഇല്ല", "No fabric matches"],
   consentTitle: ["ഫോട്ടോയെക്കുറിച്ച്", "About your photo"],
   consent: [
-    "ഈ പ്രിവ്യൂ ഉണ്ടാക്കാൻ മാത്രമാണ് ഫോട്ടോ ഉപയോഗിക്കുന്നത്. ആരുമായും പങ്കുവെക്കില്ല. 7 ദിവസത്തിനുള്ളിൽ ഡിലീറ്റ് ചെയ്യും.",
-    "Your photo is used only to create this preview. It is not shared with anyone and is deleted after 7 days.",
+    "ഈ പ്രിവ്യൂ ഉണ്ടാക്കാൻ മാത്രമാണ് ഫോട്ടോ ഉപയോഗിക്കുന്നത്. നിങ്ങൾ സ്വയം കടയിലെ ടി.വി.യിൽ കാണിക്കാൻ തിരഞ്ഞെടുത്താലല്ലാതെ ഇത് സ്വകാര്യമാണ് — ആരുമായും പങ്കുവെക്കില്ല. 7 ദിവസത്തിനുള്ളിൽ ഡിലീറ്റ് ചെയ്യും.",
+    "Your photo is used only to create this preview. It stays private — shared with no one — unless you choose to show it on the shop screen. It is deleted after 7 days.",
   ],
   agree: ["ശരി, ക്യാമറ തുറക്കുക", "OK, open the camera"],
   gallery: ["ഗാലറിയിൽ നിന്ന്", "Choose from gallery"],
@@ -35,6 +35,10 @@ const W = {
   another: ["മറ്റൊരു തുണി നോക്കാം", "Try another fabric"],
   want: ["എനിക്ക് ഇത് വേണം", "I want this"],
   wantNote: ["ഈ സ്ക്രീൻ കൗണ്ടറിൽ കാണിക്കുക", "Show this screen at the counter"],
+  tvShow: ["കടയിലെ ടി.വി.യിൽ കാണിക്കട്ടെ?", "Show on the shop TV?"],
+  tvShowNote: ["നിങ്ങൾ അമർത്തിയാൽ മാത്രം — 45 സെക്കൻഡ് കാണിക്കും", "Only if you press it — shown for 45 seconds"],
+  tvOn: ["കടയിലെ ടി.വി.യിൽ കാണിക്കുന്നു", "Showing on the shop TV"],
+  tvRemove: ["ടി.വി.യിൽ നിന്ന് മാറ്റുക", "Remove from TV"],
   wantAsk: ["പേരും ഫോൺ നമ്പറും തരൂ — ഞങ്ങൾ ബന്ധപ്പെടാം", "Your name and phone — we will contact you"],
   name: ["പേര്", "Name"],
   phone: ["ഫോൺ നമ്പർ", "Phone number"],
@@ -63,6 +67,9 @@ const ERR: Record<string, readonly [string, string]> = {
   no_fabrics: ["ഇപ്പോൾ ട്രൈ ചെയ്യാൻ തുണി ലഭ്യമല്ല. കൗണ്ടറിൽ ചോദിക്കുക.", "No fabrics are available to try right now. Please ask at the counter."],
   fabrics: ["തുണികൾ ലോഡ് ചെയ്യാൻ കഴിഞ്ഞില്ല. ഒന്നുകൂടി ശ്രമിക്കുക.", "Could not load the fabrics. Please try again."],
   unavailable: ["ട്രൈ-ഓൺ ഇപ്പോൾ ലഭ്യമല്ല. കൗണ്ടറിൽ ചോദിക്കുക.", "Try-on is not available right now. Please ask at the counter."],
+  off: ["ട്രൈ-ഓൺ ഇപ്പോൾ ലഭ്യമല്ല. കൗണ്ടറിൽ ചോദിക്കുക.", "Try-on is not available right now. Please ask at the counter."],
+  shop_limit: ["ക്ഷമിക്കണം, ഇന്നത്തെ ട്രൈ-ഓൺ എല്ലാം കഴിഞ്ഞു. ദയവായി കൗണ്ടറിൽ ചോദിക്കുക — തുണി നേരിട്ട് കാണിച്ചുതരാം.", "Sorry, today's try-ons are all finished. Please ask at the counter — we will show you the fabric in person."],
+  budget: ["ക്ഷമിക്കണം, ഇന്നത്തെ ട്രൈ-ഓൺ എല്ലാം കഴിഞ്ഞു. ദയവായി കൗണ്ടറിൽ ചോദിക്കുക — തുണി നേരിട്ട് കാണിച്ചുതരാം.", "Sorry, today's try-ons are all finished. Please ask at the counter — we will show you the fabric in person."],
   generic: ["ഇപ്പോൾ ഉണ്ടാക്കാൻ കഴിഞ്ഞില്ല. ഒന്നുകൂടി ശ്രമിക്കുക.", "We could not create it right now. Please try again."],
 };
 const errOf = (code: string) => ERR[code] ?? ERR.generic;
@@ -90,12 +97,17 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
   const [result, setResult] = React.useState<{ url: string } | null>(null);
   const [error, setError] = React.useState<{ code: string; back: Step } | null>(null);
   const [want, setWant] = React.useState(false);
+  /** why no try-on can be made now (Settings > Try-on: off / monthly cap / whole shop per day / this phone's limit) */
+  const [blocked, setBlocked] = React.useState<string | null>(null);
 
   const loadStatus = React.useCallback(async () => {
     try {
       const r = await fetch("/api/tryon/status", { cache: "no-store" });
       const j = await r.json();
-      if (j.ok) setLeft({ left: j.left, limit: j.limit });
+      if (j.ok) {
+        setLeft({ left: j.left, limit: j.limit });
+        setBlocked(j.blocked ?? null);
+      }
       else if (j.error === "unavailable") setError({ code: "unavailable", back: "welcome" });
     } catch {
       /* the counter just stays hidden */
@@ -125,6 +137,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
 
   const generate = async (blob: Blob, f: Fabric) => {
     if (!variant) return setStep("garment");
+    if (blocked && blocked !== "limit") return fail(blocked, "result");
     if (left && left.left <= 0) return fail("limit", "result");
     setStep("generating");
     const fd = new FormData();
@@ -135,6 +148,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
       const r = await fetch("/api/tryon/generate", { method: "POST", body: fd, signal: AbortSignal.timeout(130_000) });
       const j = await r.json().catch(() => ({ ok: false, error: "generic" }));
       if (typeof j.left === "number") setLeft({ left: j.left, limit: j.limit });
+      if ("blocked" in j) setBlocked(j.blocked ?? null);
       if (!j.ok) return fail(j.error ?? "generic", j.error === "blocked" || j.error === "bad_photo" ? "camera" : "preview");
       setResult({ url: j.image });
       setWant(false);
@@ -187,10 +201,20 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 <Shirt className="size-10" />
               </div>
               <Title w={t(W.welcome)} lang={lang} big />
-              {counter}
-              <Big onClick={() => setStep("garment")} testid="start">
-                <Label w={t(W.start)} lang={lang} />
-              </Big>
+              {blocked && blocked !== "limit" ? (
+                // finished for today / switched off: a polite note instead of Start
+                <div className="rounded-2xl border bg-card p-4" data-testid="tryon-closed">
+                  <p className={cn("text-lg leading-relaxed", lang === "ml" && "font-ml")}>{t(errOf(blocked))[0]}</p>
+                  <p className={cn("mt-1 text-sm text-muted-foreground", lang === "en" && "font-ml")}>{t(errOf(blocked))[1]}</p>
+                </div>
+              ) : (
+                <>
+                  {counter}
+                  <Big onClick={() => setStep("garment")} testid="start">
+                    <Label w={t(W.start)} lang={lang} />
+                  </Big>
+                </>
+              )}
             </div>
           )}
 
@@ -292,6 +316,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 <span className={cn("block", lang === "ml" && "font-ml")}>{t(W.disclaimer)[0]}</span>
                 <span className={cn("block text-xs text-muted-foreground", lang === "en" && "font-ml")}>{t(W.disclaimer)[1]}</span>
               </p>
+              <TvChoice key={result.url} lang={lang} t={t} image={result.url} />
               {want ? (
                 <WantForm lang={lang} t={t} fabric={fabric} image={result.url} />
               ) : (
@@ -325,7 +350,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <p className={cn("text-sm text-muted-foreground", lang === "en" && "font-ml")}>{t(errOf(error.code))[1]}</p>
               {NOT_COUNTED.has(error.code) && <p className="text-xs text-muted-foreground">{t(W.notCounted).join(" · ")}</p>}
               {counter}
-              {error.code !== "limit" && error.code !== "unavailable" && (
+              {!["limit", "unavailable", "off", "shop_limit", "budget"].includes(error.code) && (
                 <Big
                   onClick={() => {
                     if (error.back === "preview" && photo && fabric) void generate(photo.blob, fabric);
@@ -337,7 +362,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 </Big>
               )}
               {error.code === "camera" && <GalleryButton lang={lang} t={t} onPhoto={(b) => (setPhoto({ blob: b, url: URL.createObjectURL(b) }), setStep("preview"))} onBad={() => fail("bad_photo", "camera")} />}
-              {result && error.code === "limit" && <BackLink onClick={() => setStep("result")} w={t(W.back)} />}
+              {result && ["limit", "shop_limit", "budget"].includes(error.code) && <BackLink onClick={() => setStep("result")} w={t(W.back)} />}
             </div>
           )}
         </main>
@@ -669,6 +694,61 @@ function Generating({ lang, t, fabric, variant }: { lang: "ml" | "en"; t: (w: re
         </div>
       </div>
       <style>{`@keyframes tryon-slide { 0% { transform: translateX(-100%) } 100% { transform: translateX(300%) } }`}</style>
+    </div>
+  );
+}
+
+/**
+ * "Show on the shop TV?" — OFF until the customer presses it. Only then may their image reach /tryon/display; "Remove
+ * from TV" takes it off again at once.
+ */
+function TvChoice({ lang, t, image }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; image: string }) {
+  const [on, setOn] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [failed, setFailed] = React.useState(false);
+  const set = async (show: boolean) => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      const r = await fetch("/api/tryon/display", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image, show }), signal: AbortSignal.timeout(15_000) });
+      const j = await r.json().catch(() => ({ ok: false }));
+      if (j.ok) setOn(show);
+      else setFailed(true);
+    } catch {
+      setFailed(true);
+    }
+    setBusy(false);
+  };
+  return (
+    <div className={cn("rounded-2xl border p-3", on ? "border-primary bg-primary/5" : "bg-card")} data-testid="tv-choice" data-on={on}>
+      {on ? (
+        <div className="flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2">
+            <Tv className="size-5 shrink-0 text-primary" />
+            <span>
+              <span className={cn("block font-semibold", lang === "ml" && "font-ml")}>{t(W.tvOn)[0]}</span>
+              <span className="block text-xs text-muted-foreground">{t(W.tvOn)[1]}</span>
+            </span>
+          </p>
+          <button type="button" onClick={() => void set(false)} disabled={busy} className="min-h-11 shrink-0 rounded-xl border bg-card px-3 text-sm font-medium" data-testid="tv-remove">
+            {busy ? <Loader2 className="size-4 animate-spin" /> : <span className={cn(lang === "ml" && "font-ml")}>{t(W.tvRemove)[0]}</span>}
+          </button>
+        </div>
+      ) : (
+        <button type="button" onClick={() => void set(true)} disabled={busy} className="flex w-full items-center gap-3 text-left" data-testid="tv-show">
+          <span className="grid size-11 shrink-0 place-items-center rounded-xl border bg-muted">{busy ? <Loader2 className="size-5 animate-spin" /> : <Tv className="size-5" />}</span>
+          <span className="min-w-0 flex-1">
+            <span className={cn("block font-semibold", lang === "ml" && "font-ml")}>{t(W.tvShow)[0]}</span>
+            <span className="block text-xs text-muted-foreground">
+              {t(W.tvShow)[1]} · {t(W.tvShowNote)[0]}
+            </span>
+          </span>
+          <span className="h-7 w-12 shrink-0 rounded-full bg-muted p-0.5" aria-hidden>
+            <span className="block size-6 rounded-full bg-card shadow" />
+          </span>
+        </button>
+      )}
+      {failed && <p className="mt-1 text-xs text-destructive">{t(ERR.generic).join(" · ")}</p>}
     </div>
   );
 }

@@ -6,7 +6,8 @@ const nextConfig: NextConfig = {
   turbopack: { root: __dirname },
   serverExternalPackages: ["@electric-sql/pglite", "exceljs", "pdfkit"],
   // Job slip PDF: the Malayalam font it embeds is read from disk at runtime
-  outputFileTracingIncludes: { "/**": ["./drizzle/**/*"], "/j/**": ["./assets/fonts/**/*"] },
+  // Try-on: the watermark is read from disk at runtime
+  outputFileTracingIncludes: { "/**": ["./drizzle/**/*"], "/j/**": ["./assets/fonts/**/*"], "/api/tryon/**": ["./assets/tryon-watermark.png"] },
 };
 
 export default nextConfig;

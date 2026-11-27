@@ -43,6 +43,8 @@ const REQUIRED: [string, string][] = [
   ["bulk_order_items", "list_rate"],
   ["measurements", "pocket"],
   ["measurement_drafts", "pocket"],
+  ["tryon_images", "data"],
+  ["tryon_generations", "cost_usd"],
 ];
 
 async function main() {

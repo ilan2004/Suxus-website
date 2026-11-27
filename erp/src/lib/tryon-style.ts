@@ -59,13 +59,13 @@ export function styleSentences(s: TryonStyle, pattern: string | null | undefined
     {
       untucked: "The shirt is worn untucked, hanging loose over the trousers, hem ending around hip level.",
       tucked:
-        "The shirt is tucked into the trousers: a clean tuck with no bunching, the trouser waistband and the vertical line of the shirt placket visible, the shirt following the body at the waist. Keep the person's own trousers exactly as they are in the photo — same colour, same fit, do not replace or recolour them. If the person's waist and waistband are not visible in the photograph, render the shirt untucked instead; do not extend the photograph, do not invent a waist, trousers or belt that are not in the original frame.",
+        "The shirt is tucked into the trousers: a neat, tight tuck with the shirt pulled smooth and flat at the waist and stomach — no puffing, ballooning or loose fabric hanging over the waistband, only a very slight, even blouse. The shirt hem is completely hidden inside the trousers all the way round. The full trouser waistband, its button and the belt loops are clearly visible as a crisp straight line across the waist; a belt, if the person wears one, stays visible. The button placket runs straight down into the waistband, centred. Keep the person's own trousers exactly as they are in the photo — same colour, same fit, do not replace or recolour them. If the person's waist and waistband are not visible in the photograph, render the shirt untucked instead; do not extend the photograph, do not invent a waist, trousers or belt that are not in the original frame.",
     }[s.tuck],
   );
   out.push(
     {
-      // trimmed: same meaning, fewer words
-      none: "The shirt front has no pocket; the chest is plain.",
+      // the image model copies the pocket from the customer's own shirt unless told plainly to remove it
+      none: "IMPORTANT: the new shirt has NO pocket at all — no chest pocket on either side, no patch pocket, no flap, no pocket outline or stitching. The chest is completely plain, smooth fabric from the placket to the side seams. If the person's current shirt in the photo has a pocket, remove it; do not copy it.",
       single: "One plain patch pocket, no flap, on the wearer's left chest, same fabric, pattern aligned with the shirt body.",
       // the owner's wording, as given: two pockets always have a buttoned flap (= the measurement record's two-pocket work-shirt style)
       double:

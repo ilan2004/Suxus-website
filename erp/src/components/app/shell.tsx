@@ -32,7 +32,7 @@ function isActive(pathname: string, href: string) {
   if (href === "/") return pathname === "/";
   // A more specific menu item (e.g. /orders/board) wins over its parent (/orders)
   if (href === "/orders" && pathname.startsWith("/orders/board")) return false;
-  if (href === "/settings" && pathname.startsWith("/settings/stitching-prices")) return false;
+  if (href === "/settings" && (pathname.startsWith("/settings/stitching-prices") || pathname.startsWith("/settings/tryon"))) return false;
   return pathname === href || pathname.startsWith(href + "/");
 }
 
@@ -91,9 +91,15 @@ function NavLink({ item, active, onNavigate, big }: { item: NavItem; active: boo
       {item.soon ? (
         <span className={cls}>{inner}</span>
       ) : (
-        <Link href={item.href} className={cls} onClick={onNavigate}>
-          {inner}
-        </Link>
+        item.newTab ? (
+          <a href={item.href} target="_blank" rel="noopener" className={cls} onClick={onNavigate}>
+            {inner}
+          </a>
+        ) : (
+          <Link href={item.href} className={cls} onClick={onNavigate}>
+            {inner}
+          </Link>
+        )
       )}
     </li>
   );

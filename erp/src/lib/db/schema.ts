@@ -830,3 +830,24 @@ export const tryonGenerations = pgTable(
   },
   (t) => [index("tryon_generations_device_idx").on(t.device, t.createdAt), index("tryon_generations_created_idx").on(t.createdAt)],
 );
+
+/** "I want this" on a try-on result: the customer's name and phone, the fabric, variant and the generated image. */
+export const tryonEnquiries = pgTable(
+  "tryon_enquiries",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: created(),
+    name: text("name").notNull(),
+    phone: text("phone").notNull(),
+    fabricId: integer("fabric_id").references(() => fabrics.id, { onDelete: "set null" }),
+    variant: text("variant"),
+    /** the generated image (tryon_images.id) — the image itself is deleted after 7 days like every try-on photo */
+    resultId: text("result_id"),
+    generationId: integer("generation_id"),
+    device: text("device").notNull(),
+    contacted: boolean("contacted").notNull().default(false),
+    contactedBy: text("contacted_by"),
+    contactedAt: timestamp("contacted_at", { withTimezone: true }),
+  },
+  (t) => [index("tryon_enquiries_created_idx").on(t.createdAt)],
+);

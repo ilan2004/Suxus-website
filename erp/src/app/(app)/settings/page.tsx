@@ -35,9 +35,14 @@ export default async function SettingsPage({ searchParams }: { searchParams: Pro
         ml="സെറ്റിംഗ്സ്"
         description="Shop details on bills, dropdown lists, piece rates and fabric codes. Changes apply everywhere."
         actions={
-          <Link href="/settings/stitching-prices" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
-            Stitching Prices <span className="ml ml-1">തുന്നൽക്കൂലി നിരക്ക്</span> →
-          </Link>
+          <>
+            <Link href="/settings/tryon" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
+              Try-on <span className="ml ml-1">ട്രൈ-ഓൺ</span> →
+            </Link>
+            <Link href="/settings/stitching-prices" className="inline-flex h-9 items-center rounded-md border bg-card px-3 text-sm font-medium hover:bg-accent">
+              Stitching Prices <span className="ml ml-1">തുന്നൽക്കൂലി നിരക്ക്</span> →
+            </Link>
+          </>
         }
       />
       <SettingsView

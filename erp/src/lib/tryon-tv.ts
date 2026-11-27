@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { and, desc, eq, gte, sql } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { getSetting, saveSetting } from "./settings";
+import { isStyle, styleSummary } from "./tryon-style";
 
 /*
  * The shop TV (/tryon/display). A customer's image reaches it ONLY when that customer pressed "Show on the shop TV"
@@ -104,7 +105,7 @@ export async function tvFeed() {
   const db = await getDb();
   const g = schema.tryonGenerations;
   const rows = await db
-    .select({ id: g.id, at: g.displayAt, variant: g.variant, code: schema.fabrics.code, brand: schema.fabrics.brand, shade: schema.fabrics.shade, rate: schema.fabrics.saleRate })
+    .select({ id: g.id, at: g.displayAt, variant: g.variant, sleeve: g.sleeve, tuck: g.tuck, pocket: g.pocket, code: schema.fabrics.code, brand: schema.fabrics.brand, shade: schema.fabrics.shade, rate: schema.fabrics.saleRate })
     .from(g)
     .leftJoin(schema.fabrics, eq(schema.fabrics.id, g.fabricId))
     .where(
@@ -116,7 +117,10 @@ export async function tvFeed() {
     )
     .orderBy(desc(g.displayAt))
     .limit(5);
-  return rows.map((r) => ({ id: r.id, at: r.at ? new Date(r.at).getTime() : 0, code: r.code ?? "", name: [r.brand, r.shade].filter(Boolean).join(" · "), variant: r.variant, rate: r.rate ?? 0 }));
+  return rows.map((r) => {
+    const st = { sleeve: r.sleeve, tuck: r.tuck, pocket: r.pocket };
+    return { id: r.id, at: r.at ? new Date(r.at).getTime() : 0, code: r.code ?? "", name: [r.brand, r.shade].filter(Boolean).join(" · "), variant: r.variant, rate: r.rate ?? 0, style: isStyle(st) ? styleSummary(st, "ml") : null };
+  });
 }
 
 /** The image of a shown result — refused when the customer has not chosen (or has removed) it. */

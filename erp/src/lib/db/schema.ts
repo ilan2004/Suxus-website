@@ -830,6 +830,10 @@ export const tryonGenerations = pgTable(
     /** the customer pressed "Show on the shop TV" (default off — never shown otherwise); cleared by "remove from TV" */
     onDisplay: boolean("on_display").notNull().default(false),
     displayAt: timestamp("display_at", { withTimezone: true }),
+    /** styling choices (null = chosen before styles existed): half | full | full_rolled · tucked | untucked · none | single | double */
+    sleeve: text("sleeve"),
+    tuck: text("tuck"),
+    pocket: text("pocket"),
   },
   (t) => [index("tryon_generations_device_idx").on(t.device, t.createdAt), index("tryon_generations_created_idx").on(t.createdAt)],
 );

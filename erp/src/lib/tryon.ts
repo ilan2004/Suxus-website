@@ -6,6 +6,7 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { fabricsWithStock } from "./queries";
 import { LOCAL_DIR } from "./storage";
+import { styleSentences, type TryonStyle } from "./tryon-style";
 
 /*
  * AI fabric try-on (public page /tryon). Everything that touches the Gemini key, the customer's photo or the limits
@@ -343,7 +344,17 @@ const newId = () => crypto.randomBytes(24).toString("base64url");
  * One try-on: store the photo, build the instruction from the fabric's data, call the model, watermark, store the
  * result, log it (success or failure, model, cost, time).
  */
-export async function generateTryon(o: { device: string; ip: string | null; fabricId: number; sleeve: "full" | "half"; variant: string; photo: Buffer; origin: string }) {
+export async function generateTryon(o: {
+  device: string;
+  ip: string | null;
+  fabricId: number;
+  sleeve: "full" | "half";
+  variant: string;
+  photo: Buffer;
+  origin: string;
+  /** styling choices; null = the instruction exactly as before (customers until styles are switched on) */
+  style?: TryonStyle | null;
+}) {
   const db = await getDb();
   const fabric = (await tryonFabrics()).find((f) => f.id === o.fabricId);
   const started = Date.now();
@@ -363,6 +374,7 @@ export async function generateTryon(o: { device: string; ip: string | null; fabr
       ms: Date.now() - started,
       photoId,
       resultId: v.resultId ?? null,
+      ...(o.style ? { sleeve: o.style.sleeve, tuck: o.style.tuck, pocket: o.style.pocket } : {}),
     });
   try {
     if (!fabric) throw new TryonError("fabric_photo", "fabric not available");
@@ -372,14 +384,15 @@ export async function generateTryon(o: { device: string; ip: string | null; fabr
       .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
       .jpeg({ quality: 90 })
       .toBuffer();
-    const prompt = tryonPrompt(fabric, o.sleeve);
+    // the existing instruction unchanged; the style sentences only AFTER it (the colour block stays first)
+    const prompt = tryonPrompt(fabric, o.sleeve) + (o.style ? `\n${styleSentences(o.style, fabric.pattern)}` : "");
     const { image, cost, usageText } = await callGemini(prompt, o.photo, fabricJpeg);
     const result = await watermark(image);
     const resultId = newId();
     await db.insert(schema.tryonImages).values({ id: resultId, device: o.device, kind: "result", mime: "image/jpeg", data: result });
     await log({ ok: true, cost, resultId });
     // One line per success for the Vercel logs (cost and time per generation)
-    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code} variant=${o.variant} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
+    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
     return { resultId, cost, ms: Date.now() - started, prompt };
   } catch (e) {
     const err = e instanceof TryonError ? e : new TryonError("api", (e as Error).message);

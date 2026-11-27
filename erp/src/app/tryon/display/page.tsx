@@ -90,7 +90,7 @@ const SCRIPT = (key: string) => `
     var code=el('code'), name=el('name'), meta=el('meta'), bar=el('bar');
     if(code&&code.textContent!==current.code) code.textContent=current.code;
     if(name&&name.textContent!==current.name) name.textContent=current.name;
-    var m=variantText(current.variant)+(current.rate>0?(' · ₹'+current.rate+' / m'):'');
+    var m=(current.style||variantText(current.variant))+(current.rate>0?(' · ₹'+current.rate+' / m'):'');
     if(meta&&meta.textContent!==m) meta.textContent=m;
     if(bar) bar.style.transform='scaleX('+(Math.max(0,until-Date.now())/SHOW_MS)+')';
     if(loaded===src){ idle.style.display='none'; show.style.display='flex'; }

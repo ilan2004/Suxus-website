@@ -32,8 +32,16 @@ export type AppSettings = {
   /** Settings → Try-on: master switch, limits (read on every request — no deploy needed) and the TV link token */
   tryon: TryonControls;
 };
-export type TryonControls = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number; displayToken: string };
-export const DEFAULT_TRYON: TryonControls = { enabled: true, perDevice: 2, shopPerDay: 40, monthlyCapInr: 2000, displayToken: "" };
+export type TryonControls = {
+  enabled: boolean;
+  perDevice: 1 | 2;
+  shopPerDay: number;
+  monthlyCapInr: number;
+  displayToken: string;
+  /** styling choices (sleeve / tuck / pocket) for customers — off until tested; owner / partner always see them */
+  styles: boolean;
+};
+export const DEFAULT_TRYON: TryonControls = { enabled: true, perDevice: 2, shopPerDay: 40, monthlyCapInr: 2000, displayToken: "", styles: false };
 
 const DEFAULTS: AppSettings = {
   lists: DEFAULT_LISTS,

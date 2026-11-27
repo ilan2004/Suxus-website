@@ -47,6 +47,7 @@ const REQUIRED: [string, string][] = [
   ["tryon_generations", "cost_usd"],
   ["tryon_enquiries", "contacted"],
   ["tryon_generations", "on_display"],
+  ["tryon_generations", "sleeve"],
 ];
 
 async function main() {

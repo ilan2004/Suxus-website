@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
-import { newTvLink, saveTryonControls } from "@/lib/actions/tryon";
+import { newTvLink, pairTv, saveTryonControls } from "@/lib/actions/tryon";
 import { cn, rupees } from "@/lib/utils";
 
 type C = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number };
@@ -101,9 +101,10 @@ export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; 
         <p className="flex items-center gap-2 font-medium">
           <Monitor className="size-4" /> Shop TV <span className="ml">കടയിലെ ടി.വി.</span>
         </p>
+        <PairTv />
         <p className="text-xs text-muted-foreground">
-          Open this link once on the TV browser or Android TV stick and leave it. It shows the QR, and a customer&apos;s result only when that customer presses &quot;Show on the shop TV&quot;.
-          Signed-in staff can also open /tryon/display directly.
+          The TV shows the QR, and a customer&apos;s result only when that customer presses &quot;Show on the shop TV&quot;. Another way (a computer, or a phone browser): open this link
+          once and leave it.
         </p>
         {tvLink ? (
           <div className="flex flex-wrap items-center gap-2">
@@ -128,7 +129,7 @@ export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; 
             disabled={pending}
             onClick={() =>
               start(async () => {
-                if (tvLink && !window.confirm("Make a new TV link? The old one stops working — the TV must be opened with the new link.")) return;
+                if (tvLink && !window.confirm("Make a new TV link? The old link stops working and every paired TV is disconnected — pair the TV again afterwards.")) return;
                 const r = await newTvLink();
                 if (!r.ok) return void toast.error(r.error);
                 toast.success("New TV link made");
@@ -140,6 +141,50 @@ export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; 
           </Button>
         </div>
       </section>
+    </div>
+  );
+}
+
+/** Pair a TV: open suxus-erp.vercel.app/tryon/display on the TV, type the 6 numbers it shows. */
+function PairTv() {
+  const router = useRouter();
+  const [code, setCode] = React.useState("");
+  const [pending, start] = React.useTransition();
+  const go = () =>
+    start(async () => {
+      const r = await pairTv(code);
+      if (!r.ok) return void toast.error(r.error);
+      setCode("");
+      toast.success("TV paired — it switches to the QR in a few seconds");
+      router.refresh();
+    });
+  return (
+    <div className="grid gap-2 rounded-lg border-2 border-primary/30 bg-primary/5 p-3" data-testid="pair-tv">
+      <p className="text-sm font-medium">
+        Pair a TV <span className="ml">ടി.വി. ജോടിയാക്കുക</span>
+      </p>
+      <ol className="list-decimal pl-5 text-xs text-muted-foreground">
+        <li>
+          On the TV browser open <b>suxus-erp.vercel.app/tryon/display</b>
+        </li>
+        <li>Type the 6 numbers the TV shows here</li>
+      </ol>
+      <div className="flex gap-2">
+        <Input
+          aria-label="TV code"
+          inputMode="numeric"
+          autoComplete="off"
+          maxLength={7}
+          placeholder="123 456"
+          value={code}
+          onChange={(e) => setCode(e.target.value.replace(/[^\d ]/g, ""))}
+          onKeyDown={(e) => e.key === "Enter" && go()}
+          className="h-11 max-w-40 text-center text-xl tracking-widest tabular-nums"
+        />
+        <Button type="button" className="h-11" onClick={go} disabled={pending || code.replace(/\D/g, "").length !== 6}>
+          {pending && <Loader2 className="animate-spin" />} Pair
+        </Button>
+      </div>
     </div>
   );
 }

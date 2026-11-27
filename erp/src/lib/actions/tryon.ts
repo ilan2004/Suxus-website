@@ -7,7 +7,7 @@ import { getDb, schema } from "@/lib/db";
 import { audit } from "@/lib/audit";
 import { z } from "zod";
 import { getSetting, saveSetting } from "@/lib/settings";
-import { newDisplayToken } from "@/lib/tryon-tv";
+import { approvePairing, newDisplayToken } from "@/lib/tryon-tv";
 import { fail, ok, zodError, type Result } from "./util";
 
 /** Try-on enquiries: tick / untick "contacted" (who and when are kept). Partners only. */
@@ -51,4 +51,14 @@ export async function newTvLink(): Promise<Result<{ token: string }>> {
   await audit(await getDb(), user, "update", "settings", "tryon", "new shop TV link");
   revalidatePath("/settings/tryon");
   return ok({ token });
+}
+
+/** Settings > Try-on > Pair a TV: the 6-digit code shown on the TV. Partners only. */
+export async function pairTv(code: string): Promise<Result<null>> {
+  const user = await requireUser({ can: "prices" });
+  if (!/^\d{6}$/.test(code.replace(/\s/g, ""))) return fail("Type the 6 numbers shown on the TV");
+  if (!(await approvePairing(code.replace(/\s/g, "")))) return fail("That code is not on any TV right now (codes last 15 minutes) — check the number on the TV");
+  await audit(await getDb(), user, "update", "settings", "tryon", "shop TV paired");
+  revalidatePath("/settings/tryon");
+  return ok(null);
 }

@@ -8,6 +8,7 @@ import { sql } from "drizzle-orm";
  * the migration tool (drizzle-kit) compares against, are in ./schema-kit.ts.
  */
 import {
+  customType,
   type AnyPgColumn,
   boolean,
   date,
@@ -781,4 +782,51 @@ export const fabricPhotoLog = pgTable(
     createdAt: created(),
   },
   (t) => [index("fabric_photo_log_fabric_idx").on(t.fabricId)],
+);
+
+/* ───────────────────────── AI fabric try-on (public /tryon) ───────────────────────── */
+
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
+/**
+ * A customer's photo or a generated try-on image. Private: served only to the device that made it (its id is a long
+ * random token AND the device cookie must match). Deleted after 7 days.
+ */
+export const tryonImages = pgTable(
+  "tryon_images",
+  {
+    id: text("id").primaryKey(),
+    /** HMAC of the device cookie — never the cookie itself */
+    device: text("device").notNull(),
+    /** photo | result */
+    kind: text("kind").notNull(),
+    mime: text("mime").notNull(),
+    data: bytea("data").notNull(),
+    createdAt: created(),
+  },
+  (t) => [index("tryon_images_created_idx").on(t.createdAt)],
+);
+
+/** Every try-on generation (success or failure) — for the daily limit and the cost. */
+export const tryonGenerations = pgTable(
+  "tryon_generations",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: created(),
+    device: text("device").notNull(),
+    /** HMAC of the IP address (a shared limit, so clearing cookies does not reset it) */
+    ip: text("ip"),
+    fabricId: integer("fabric_id").references(() => fabrics.id, { onDelete: "set null" }),
+    garment: text("garment").notNull(),
+    variant: text("variant"),
+    ok: boolean("ok").notNull(),
+    /** short reason code on failure (never shown raw to the customer) */
+    error: text("error"),
+    model: text("model").notNull(),
+    costUsd: numeric("cost_usd", { precision: 10, scale: 4, mode: "number" }).notNull().default(0),
+    ms: integer("ms"),
+    photoId: text("photo_id"),
+    resultId: text("result_id"),
+  },
+  (t) => [index("tryon_generations_device_idx").on(t.device, t.createdAt), index("tryon_generations_created_idx").on(t.createdAt)],
 );

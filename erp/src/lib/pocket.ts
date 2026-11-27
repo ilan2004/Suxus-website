@@ -17,6 +17,8 @@ export type Pocket = {
   depth: number | null;
   shape: PocketShape | null;
   flap: boolean;
+  /** a button on the flap (only with a flap) */
+  button?: boolean;
 };
 
 /** A new shirt record starts with: one pocket (left), no flap. */
@@ -55,6 +57,19 @@ export const POCKET_PATHS: Record<PocketShape, string> = {
 };
 export const POCKET_HEM = "M18 22 L82 22";
 
+/** The flap over the pocket top: a little wider than the pocket, its lower edge cut like the pocket bottom. */
+export const FLAP_PATHS: Record<PocketShape, string> = {
+  flat: "M13 9 L87 9 L87 36 L13 36 Z",
+  pointed: "M13 9 L87 9 L87 30 L50 41 L13 30 Z",
+  cut: "M13 9 L87 9 L87 29 L80 36 L20 36 L13 29 Z",
+  rounded: "M13 9 L87 9 L87 27 Q87 36 78 36 L22 36 Q13 36 13 27 Z",
+};
+/** Button on the flap: centre and radius in the same 100 × 100 box. */
+export const FLAP_BUTTON = { cx: 50, cy: 26, r: 4.5 };
+
+/** The common work-shirt style: two pockets, cut corners, flap with a button. */
+export const DOUBLE_FLAP_PRESET: Pocket = { count: "two", size: null, width: null, depth: null, shape: "cut", flap: true, button: true };
+
 /** Is this a shirt record (the pocket section applies)? */
 export const hasPocket = (garmentType: string) => garmentType === "Shirt";
 
@@ -74,7 +89,13 @@ export function pocketWords(p: Pocket | null | undefined): { ml: string; en: str
   }
   const shape = labelOf(POCKET_SHAPES, p.shape);
   if (shape) lines.push({ ml: `അടിഭാഗം: ${shape.ml}`, en: `Bottom: ${shape.en}` });
-  lines.push({ ml: p.flap ? "ഫ്ലാപ്പ്: ഉണ്ട്" : "ഫ്ലാപ്പ്: ഇല്ല", en: p.flap ? "With flap" : "Without flap" });
+  lines.push(
+    !p.flap
+      ? { ml: "ഫ്ലാപ്പ്: ഇല്ല", en: "Without flap" }
+      : p.button
+        ? { ml: "ഫ്ലാപ്പ്: ബട്ടൺ ഉള്ളത്", en: "Flap with button" }
+        : { ml: "ഫ്ലാപ്പ്: ഉണ്ട്", en: "With flap" },
+  );
   return lines;
 }
 const num = (n: number | null) => (n == null ? "?" : String(Math.round(n * 100) / 100));
@@ -85,6 +106,6 @@ export function cleanPocket(p: Pocket | null | undefined): Pocket | null {
   const pos = (n: number | null) => (n != null && Number.isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : null);
   const width = pos(p.width);
   const depth = pos(p.depth);
-  if (p.count === "none") return { count: "none", size: null, width: null, depth: null, shape: null, flap: false };
-  return { count: p.count, size: width != null || depth != null ? null : p.size, width, depth, shape: p.shape, flap: !!p.flap };
+  if (p.count === "none") return { count: "none", size: null, width: null, depth: null, shape: null, flap: false, button: false };
+  return { count: p.count, size: width != null || depth != null ? null : p.size, width, depth, shape: p.shape, flap: !!p.flap, button: !!p.flap && !!p.button };
 }

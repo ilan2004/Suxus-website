@@ -33,6 +33,7 @@ const MeasurementInput = z.object({
       depth: z.number().nullable(),
       shape: z.enum(["flat", "pointed", "cut", "rounded"]).nullable(),
       flap: z.boolean(),
+      button: z.boolean().optional(),
     })
     .nullable()
     .optional(),

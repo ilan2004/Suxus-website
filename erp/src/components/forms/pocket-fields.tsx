@@ -3,14 +3,52 @@
 import * as React from "react";
 import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { DEFAULT_POCKET, POCKET_COUNTS, POCKET_HEM, POCKET_PATHS, POCKET_SHAPES, POCKET_SIZES, type Pocket, type PocketShape } from "@/lib/pocket";
+import {
+  DEFAULT_POCKET,
+  DOUBLE_FLAP_PRESET,
+  FLAP_BUTTON,
+  FLAP_PATHS,
+  POCKET_COUNTS,
+  POCKET_HEM,
+  POCKET_PATHS,
+  POCKET_SHAPES,
+  POCKET_SIZES,
+  type Pocket,
+  type PocketCount,
+  type PocketShape,
+} from "@/lib/pocket";
 
-/** A pocket bottom shape: black lines on white, sharp at any size (the same paths print on the job slip). */
-export function PocketDrawing({ shape, className, title }: { shape: PocketShape; className?: string; title?: string }) {
+/** One pocket's lines: the body, then the flap (and its button) or the hem line. */
+function PocketLines({ shape, flap, button }: { shape: PocketShape; flap?: boolean; button?: boolean }) {
+  return (
+    <>
+      <path d={POCKET_PATHS[shape]} fill="#fff" stroke="#000" strokeWidth={4} strokeLinejoin="round" />
+      {flap ? (
+        <>
+          <path d={FLAP_PATHS[shape]} fill="#fff" stroke="#000" strokeWidth={4} strokeLinejoin="round" />
+          {button && <circle cx={FLAP_BUTTON.cx} cy={FLAP_BUTTON.cy} r={FLAP_BUTTON.r} fill="#fff" stroke="#000" strokeWidth={3} />}
+        </>
+      ) : (
+        <path d={POCKET_HEM} fill="none" stroke="#000" strokeWidth={2} strokeDasharray="5 4" />
+      )}
+    </>
+  );
+}
+
+/** A pocket: black lines on white, sharp at any size (the same paths print on the job slip). Two pockets side by side for "Two". */
+export function PocketDrawing({ shape, flap, button, count = "one", className, title }: { shape: PocketShape; flap?: boolean; button?: boolean; count?: PocketCount; className?: string; title?: string }) {
+  if (count === "two")
+    return (
+      <svg viewBox="0 0 210 100" className={cn("bg-white", className)} role="img" aria-label={title ?? `two ${shape} pockets`}>
+        <PocketLines shape={shape} flap={flap} button={button} />
+        <g transform="translate(110 0)">
+          <PocketLines shape={shape} flap={flap} button={button} />
+        </g>
+      </svg>
+    );
   return (
     <svg viewBox="0 0 100 100" className={cn("bg-white", className)} role="img" aria-label={title ?? shape}>
-      <path d={POCKET_PATHS[shape]} fill="none" stroke="#000" strokeWidth={4} strokeLinejoin="round" />
-      <path d={POCKET_HEM} fill="none" stroke="#000" strokeWidth={2} strokeDasharray="5 4" />
+      <PocketLines shape={shape} flap={flap} button={button} />
     </svg>
   );
 }
@@ -50,7 +88,7 @@ export function PocketShapePicker({ value, onChange, big = false }: { value: Poc
   );
 }
 
-function Choice<T extends string>({ items, value, onChange, big, label }: { items: { v: T; ml: string; en: string }[]; value: T | null; onChange: (v: T) => void; big?: boolean; label: string }) {
+function Choice<T extends string>({ items, value, onChange, big, label }: { items: { v: T; ml: string; en: string; pic?: React.ReactNode }[]; value: T | null; onChange: (v: T) => void; big?: boolean; label: string }) {
   return (
     <div className={cn("grid gap-1.5", `grid-cols-${items.length}`)} style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }} role="radiogroup" aria-label={label}>
       {items.map((x) => (
@@ -60,8 +98,9 @@ function Choice<T extends string>({ items, value, onChange, big, label }: { item
           role="radio"
           aria-checked={value === x.v}
           onClick={() => onChange(x.v)}
-          className={cn("rounded-xl border-2 px-2 leading-tight", big ? "min-h-16 py-2" : "min-h-11 py-1", value === x.v ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}
+          className={cn("flex flex-col items-center justify-center rounded-xl border-2 px-2 leading-tight", big ? "min-h-16 py-2" : "min-h-11 py-1", value === x.v ? "border-primary bg-primary text-primary-foreground" : "bg-card hover:bg-accent")}
         >
+          {x.pic && <span className={cn("mb-1 overflow-hidden rounded-md border border-black/20 bg-white", big ? "h-14" : "h-10")}>{x.pic}</span>}
           <span className={cn("block font-ml font-bold", big ? "text-lg" : "text-sm")}>{x.ml}</span>
           <span className={cn("block opacity-80", big ? "text-sm" : "text-[11px]")}>{x.en}</span>
         </button>
@@ -94,13 +133,32 @@ export function PocketFields({ value, onChange, big = false }: { value: Pocket |
     );
   const set = (patch: Partial<Pocket>) => onChange({ ...value, ...patch });
   const exact = value.width != null || value.depth != null;
+  const shape = value.shape ?? "flat";
+  const isPreset = value.count === "two" && value.shape === "cut" && value.flap && !!value.button;
+  const pic = (count: PocketCount, flap = value.flap, button = value.button) =>
+    count === "none" ? <span className={cn("grid h-full place-items-center px-3 text-black/40", big ? "text-2xl" : "text-lg")}>—</span> : <PocketDrawing shape={shape} flap={flap} button={button} count={count} className="h-full w-auto" />;
   return (
     <div className="grid gap-3" data-testid="pocket-fields">
+      {/* The common work-shirt style in one tap: two pockets, cut corners, flap with a button */}
+      <button
+        type="button"
+        onClick={() => onChange({ ...DOUBLE_FLAP_PRESET, size: value.size, width: value.width, depth: value.depth })}
+        aria-pressed={isPreset}
+        data-testid="pocket-preset-double"
+        className={cn("flex items-center gap-3 rounded-2xl bg-white p-2 text-left text-black", isPreset ? "border-[5px] border-primary shadow-lg" : "border-2 border-black/20 hover:border-black/50")}
+      >
+        <PocketDrawing shape="cut" flap button count="two" className={cn("w-auto shrink-0", big ? "h-20" : "h-14")} title="Double pocket with button flaps" />
+        <span className="leading-tight">
+          <span className={cn("block font-ml font-bold", big ? "text-xl" : "text-base")}>ഡബിൾ പോക്കറ്റ് · ഫ്ലാപ്പ് + ബട്ടൺ</span>
+          <span className={cn("block text-black/60", big ? "text-sm" : "text-xs")}>Two pockets, cut corners, flap with button — one tap</span>
+        </span>
+        {isPreset && <Check className="ml-auto size-6 shrink-0 text-primary" strokeWidth={3} />}
+      </button>
       <div className="grid gap-1">
         <p className="text-xs font-medium">
           <span className="font-ml">പോക്കറ്റ്</span> · Number of pockets
         </p>
-        <Choice items={POCKET_COUNTS} value={value.count} onChange={(count) => set({ count })} big={big} label="Number of pockets" />
+        <Choice items={POCKET_COUNTS.map((c) => ({ ...c, pic: pic(c.v) }))} value={value.count} onChange={(count) => set({ count })} big={big} label="Number of pockets" />
       </div>
       {value.count !== "none" && (
         <>
@@ -149,11 +207,12 @@ export function PocketFields({ value, onChange, big = false }: { value: Pocket |
             </p>
             <Choice
               items={[
-                { v: "without", ml: "ഫ്ലാപ്പ് ഇല്ല", en: "Without flap" },
-                { v: "with", ml: "ഫ്ലാപ്പ് ഉണ്ട്", en: "With flap" },
+                { v: "without", ml: "ഫ്ലാപ്പ് ഇല്ല", en: "Without flap", pic: pic("one", false, false) },
+                { v: "with", ml: "ഫ്ലാപ്പ് ഉണ്ട്", en: "With flap", pic: pic("one", true, false) },
+                { v: "button", ml: "ഫ്ലാപ്പ് + ബട്ടൺ", en: "Flap with button", pic: pic("one", true, true) },
               ]}
-              value={value.flap ? "with" : "without"}
-              onChange={(v) => set({ flap: v === "with" })}
+              value={!value.flap ? "without" : value.button ? "button" : "with"}
+              onChange={(v) => set({ flap: v !== "without", button: v === "button" })}
               big={big}
               label="Pocket flap"
             />

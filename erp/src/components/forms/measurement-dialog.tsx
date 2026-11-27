@@ -207,7 +207,7 @@ export function MeasurementCard({ m, onEdit }: { m: MeasurementRow; onEdit?: () 
       </dl>
       {m.pocket && pocketWords(m.pocket) && (
         <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground" data-testid="pocket-summary">
-          {m.pocket.count !== "none" && m.pocket.shape && <PocketDrawing shape={m.pocket.shape} className="size-8 rounded border" />}
+          {m.pocket.count !== "none" && m.pocket.shape && <PocketDrawing shape={m.pocket.shape} flap={m.pocket.flap} button={m.pocket.button} count={m.pocket.count} className="h-8 w-auto rounded border" />}
           <span>{pocketWords(m.pocket)!.map((l) => l.en).join(" · ")}</span>
         </div>
       )}

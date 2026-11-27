@@ -425,7 +425,7 @@ function Summary({
         </div>
         {pocket && (
           <button type="button" onClick={() => onPick(pocket.step)} className={cn("mt-2 flex min-h-20 w-full items-center gap-3 rounded-2xl border-2 bg-card px-3 py-2 text-left", !pocket.value && "border-dashed")} data-testid="pocket-summary">
-            {pocket.value && pocket.value.count !== "none" && pocket.value.shape && <PocketDrawing shape={pocket.value.shape} className="size-14 shrink-0 rounded-lg border" />}
+            {pocket.value && pocket.value.count !== "none" && pocket.value.shape && <PocketDrawing shape={pocket.value.shape} flap={pocket.value.flap} button={pocket.value.button} count={pocket.value.count} className="h-14 w-auto shrink-0 rounded-lg border" />}
             <span className="min-w-0">
               <span className="block font-ml text-lg leading-tight font-semibold">പോക്കറ്റ്</span>
               <span className="block text-sm text-muted-foreground">{pocket.value ? pocketWords(pocket.value)!.map((l) => l.ml).join(" · ") : "Not recorded · രേഖപ്പെടുത്തിയിട്ടില്ല"}</span>

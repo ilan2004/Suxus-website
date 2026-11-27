@@ -13,7 +13,7 @@ import { GARMENTS, WHOLE_ML, fieldsFor, mlOf, enOf, wholeOf, type GarmentField }
 import { formatPhone } from "./phone";
 import { fmtDate } from "./utils";
 import { variantMl, variantRequired } from "./variants";
-import { POCKET_HEM, POCKET_PATHS, pocketWords, type Pocket } from "./pocket";
+import { FLAP_BUTTON, FLAP_PATHS, POCKET_HEM, POCKET_PATHS, pocketWords, type Pocket } from "./pocket";
 
 /** Printed at the top of every job slip page. */
 export const JOB_SLIP_SHOP = { name: "SUXUS Heritage Tailor", line: "Pallikkal Bazar · Ph 95443 76072" };
@@ -264,7 +264,8 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
     if (pocketLines && p.pocket) {
       text("Pocket · പോക്കറ്റ്", 13, "M");
       const top = doc.y + 2;
-      const drawW = p.pocket.shape && p.pocket.count !== "none" ? 96 : 0;
+      const two = p.pocket.count === "two";
+      const drawW = p.pocket.shape && p.pocket.count !== "none" ? (two ? 180 : 96) : 0;
       let y = top;
       for (const l of pocketLines) {
         // Malayalam large, the English small on the same line
@@ -272,17 +273,27 @@ export async function renderJobSlipPdf(pages: JobSlipPage[]): Promise<Buffer> {
         y = doc.y + 7;
       }
       if (drawW && p.pocket.shape) {
+        // The pocket as the tailor should see it: bottom shape, flap and button; two side by side for two pockets
+        const shape = p.pocket.shape;
         const size = 88;
-        const x = L + W - size;
-        doc.save();
-        doc.rect(x - 2, top - 2, size + 4, size + 4).lineWidth(0.8).strokeColor(black).stroke();
-        doc.translate(x, top).scale(size / 100);
-        doc.path(POCKET_PATHS[p.pocket.shape]).lineWidth(4).lineJoin("round").strokeColor(black).stroke();
-        doc.path(POCKET_HEM).lineWidth(2).dash(5, { space: 4 }).strokeColor(black).stroke();
-        doc.undash();
-        doc.restore();
+        const boxW = two ? size * 2.1 : size;
+        const x0 = L + W - boxW;
+        doc.rect(x0 - 2, top - 2, boxW + 4, size + 4).lineWidth(0.8).strokeColor(black).stroke();
+        for (const dx of two ? [0, size * 1.1] : [0]) {
+          doc.save();
+          doc.translate(x0 + dx, top).scale(size / 100);
+          doc.path(POCKET_PATHS[shape]).lineWidth(4).lineJoin("round").fillAndStroke("#ffffff", black);
+          if (p.pocket.flap) {
+            doc.path(FLAP_PATHS[shape]).lineWidth(4).lineJoin("round").fillAndStroke("#ffffff", black);
+            if (p.pocket.button) doc.circle(FLAP_BUTTON.cx, FLAP_BUTTON.cy, FLAP_BUTTON.r).lineWidth(3).fillAndStroke("#ffffff", black);
+          } else {
+            doc.path(POCKET_HEM).lineWidth(2).dash(5, { space: 4 }).strokeColor(black).stroke();
+            doc.undash();
+          }
+          doc.restore();
+        }
       }
-      doc.y = Math.max(y, top + drawW) + 6;
+      doc.y = Math.max(y, top + (drawW ? 92 : 0)) + 6;
       rule(1.5);
     }
     // Required metres next to the fabric name (one fabric), or on its own line

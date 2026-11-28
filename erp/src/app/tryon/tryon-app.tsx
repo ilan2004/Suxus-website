@@ -29,6 +29,8 @@ const W = {
   toBack: ["പിൻ ക്യാമറ", "Back camera"],
   shirtOnly: ["ഷർട്ട് മാത്രം", "Shirt only"],
   shirtPant: ["ഷർട്ട് + പാന്റ്", "Shirt + pant"],
+  addPant: ["+ പാന്റ് കൂടി ഇട്ടുനോക്കാം (അതേ ഒരു ഫോട്ടോയിൽ)", "+ Add a pant too (same one picture)"],
+  tryThisPant: ["ഈ പാന്റ് ഇട്ടുനോക്കാം", "Try this pant on"],
   pantFabric: ["പാന്റിന്റെ തുണി തിരഞ്ഞെടുക്കുക", "Choose the pant fabric"],
   noPantFabric: ["ഇപ്പോൾ പാന്റ് തുണി (Suiting) ലഭ്യമല്ല", "No pant fabric (Suiting) in stock right now"],
   pantHint: ["പാന്റും കാണാൻ മുട്ടിന് താഴെ വരെ വരുന്ന ഫോട്ടോ എടുക്കൂ", "To see the pant too, take a photo down below the knees"],
@@ -329,7 +331,10 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               lang={lang}
               t={t}
               onRetry={loadFabrics}
-              onBack={() => setStep("fabric")}
+              onBack={() => {
+                if (!pantFabric) setOutfit("shirt");
+                setStep(photo ? "preview" : "fabric");
+              }}
               onPick={(f) => {
                 setPantFabric(f);
                 setStep(photo ? "preview" : "consent");
@@ -397,7 +402,20 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                     // shirt + pant: both cloths, compact, each tappable to change
                     <div className="grid gap-1">
                       <MiniFabric f={fabric} label={lang === "ml" ? "ഷർട്ട്" : "Shirt"} onClick={() => setStep("fabric")} />
-                      <MiniFabric f={pantFabric} label={lang === "ml" ? "പാന്റ്" : "Pant"} onClick={() => setStep("pantFabric")} />
+                      <div className="flex items-stretch gap-1">
+                        <div className="min-w-0 flex-1">
+                          <MiniFabric f={pantFabric} label={lang === "ml" ? "പാന്റ്" : "Pant"} onClick={() => setStep("pantFabric")} />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => (setOutfit("shirt"), setPantFabric(null))}
+                          className="w-11 shrink-0 rounded-xl border bg-card text-lg text-muted-foreground"
+                          aria-label="Remove the pant"
+                          data-testid="remove-pant"
+                        >
+                          ×
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <button type="button" onClick={() => setStep("fabric")} className="text-left" aria-label="Change fabric">
@@ -431,7 +449,32 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <Big onClick={() => void generate(photo.blob, fabric)} testid="use-photo">
                 <Sparkles className="size-5" /> <Label w={t(W.usePhoto)} lang={lang} />
               </Big>
-              {!withPant && <Combos fabricId={fabric.id} sleeve={style.sleeve} lang={lang} closeWord={t(W.close)[0]} />}
+              {!withPant && (
+                <button
+                  type="button"
+                  onClick={() => (setOutfit("shirt_pant"), setStep("pantFabric"))}
+                  className="flex min-h-12 items-center justify-center gap-2 rounded-xl border-2 border-dashed border-primary/60 bg-card px-3 font-medium"
+                  data-testid="add-pant"
+                >
+                  <Label w={t(W.addPant)} lang={lang} small />
+                </button>
+              )}
+              {!withPant && (
+                <Combos
+                  fabricId={fabric.id}
+                  sleeve={style.sleeve}
+                  lang={lang}
+                  closeWord={t(W.close)[0]}
+                  tryWord={t(W.tryThisPant)}
+                  onTry={(id) => {
+                    const f = fabrics?.find((x) => x.id === id && x.forPant);
+                    if (!f) return false;
+                    setOutfit("shirt_pant");
+                    setPantFabric(f);
+                    return true;
+                  }}
+                />
+              )}
             </div>
           )}
 
@@ -972,7 +1015,22 @@ function WantForm({ lang, t, fabric, image }: { lang: "ml" | "en"; t: (w: readon
  * "ഇതിന് ചേരുന്ന പാൻറ്റ്": trouser fabrics from our stock for this shirt fabric. Colour rules on the server — no AI
  * call, no cost, never a try-on image of the trouser. Hidden when switched off in Settings or when it fails.
  */
-function Combos({ fabricId, sleeve, lang, closeWord }: { fabricId: number; sleeve: string | null; lang: "ml" | "en"; closeWord: string }) {
+function Combos({
+  fabricId,
+  sleeve,
+  lang,
+  closeWord,
+  onTry,
+  tryWord,
+}: {
+  fabricId: number;
+  sleeve: string | null;
+  lang: "ml" | "en";
+  closeWord: string;
+  /** style screen: put this pant into the same one picture; false when that cloth can't be tried (no photo / stock) */
+  onTry?: (fabricId: number) => boolean;
+  tryWord?: [string, string];
+}) {
   const half = /half/i.test(sleeve ?? "");
   const [data, setData] = React.useState<{ key: string; items: ComboCard[]; short: boolean } | null>(null);
   const [picked, setPicked] = React.useState<number | null>(null);
@@ -992,7 +1050,24 @@ function Combos({ fabricId, sleeve, lang, closeWord }: { fabricId: number; sleev
   return (
     <>
       <ComboRow items={data.items} short={data.short} lang={lang} selected={picked} onPick={(c) => (setPicked(c.id), setOpen(c))} />
-      {open && <ComboDetail c={open} lang={lang} onClose={() => setOpen(null)} closeWord={closeWord} />}
+      {open && (
+        <ComboDetail
+          c={open}
+          lang={lang}
+          onClose={() => setOpen(null)}
+          closeWord={closeWord}
+          action={
+            onTry && tryWord
+              ? {
+                  label: lang === "ml" ? tryWord[0] : tryWord[1],
+                  run: () => {
+                    if (onTry(open.id)) setOpen(null);
+                  },
+                }
+              : undefined
+          }
+        />
+      )}
     </>
   );
 }

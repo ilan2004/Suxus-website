@@ -8,6 +8,7 @@ import { fabricsWithStock } from "./queries";
 import { LOCAL_DIR } from "./storage";
 import { col } from "./db/ext";
 import { features } from "./db/features";
+import { isPantCloth } from "./combo";
 import { styleSentences, type TryonStyle } from "./tryon-style";
 
 /*
@@ -142,10 +143,7 @@ export async function tryonFabrics(): Promise<TryonFabric[]> {
     for (const r of await db.select({ id: schema.fabrics.id, s: col.fabricSuitableFor }).from(schema.fabrics)) suitable.set(r.id, r.s ?? "both");
   }
   /** pant cloth: marked "suiting", or Type Suiting / Uniform Suiting unless marked "shirting" */
-  const isPant = (f: { id: number; type: string | null }) => {
-    const sf = suitable.get(f.id) ?? "both";
-    return sf === "suiting" || (sf !== "shirting" && /suiting/i.test(f.type ?? ""));
-  };
+  const isPant = (f: { id: number; type: string | null }) => isPantCloth({ suitableFor: suitable.get(f.id), type: f.type });
   return rows
     .filter((f) => f.active && (f.balanceMtr ?? 0) > 0 && f.photoUrls.length > 0)
     .map((f) => ({

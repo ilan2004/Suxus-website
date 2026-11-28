@@ -49,7 +49,7 @@ export const isSuitable = (v: unknown): v is Suitable => typeof v === "string" &
 export const SUITABLE_LABEL: Record<Suitable, { ml: string; en: string }> = {
   shirting: { ml: "ഷർട്ടിങ് മാത്രം", en: "Shirting only" },
   suiting: { ml: "സ്യൂട്ടിങ് / പാൻറ്റ്", en: "Suiting / trousering" },
-  both: { ml: "രണ്ടിനും", en: "Both" },
+  both: { ml: "Type അനുസരിച്ച്", en: "As per Type" },
 };
 
 /* ───────────────────────── Step 1: bucket from the hex ───────────────────────── */
@@ -198,6 +198,8 @@ export type ComboFabric = {
   active: boolean;
   /** the words that could say "voile" (brand, type, composition) — a thin shirting voile is never a trouser */
   words?: string;
+  /** the fabric's Type (Shirting / Suiting / ...) — pant cloth is Suiting */
+  type?: string | null;
   /** for "prefer slow-moving stock": the date it came into stock (older first) */
   since?: string | null;
 };
@@ -206,8 +208,15 @@ export const isPlain = (pattern: string | null | undefined) => /^plain|^solid/i.
 /** An empty pattern on the shirt counts as plain; on a trouser it is unknown, so a pattern shirt never gets it. */
 const shirtIsPatterned = (pattern: string | null | undefined) => !!(pattern ?? "").trim() && !isPlain(pattern);
 
-export const trouserSuitable = (f: Pick<ComboFabric, "suitableFor" | "words">) =>
-  (isSuitable(f.suitableFor) ? f.suitableFor : "both") !== "shirting" && !/voile/i.test(f.words ?? "");
+/**
+ * Pant cloth: marked "suiting" in Settings → Combinations, or left on "As per Type" with Type = Suiting. A fabric
+ * marked "shirting", or typed Shirting (or anything else), is never offered as a trouser. Same rule as the try-on.
+ */
+export const isPantCloth = (f: { suitableFor?: string | null; type?: string | null }) => {
+  const sf = isSuitable(f.suitableFor) ? f.suitableFor : "both";
+  return sf === "suiting" || (sf !== "shirting" && /suiting|trouser/i.test(f.type ?? ""));
+};
+export const trouserSuitable = (f: Pick<ComboFabric, "suitableFor" | "words" | "type">) => isPantCloth(f) && !/voile/i.test(f.words ?? "");
 
 export type Recommendation<T> = { fabric: T; bucket: Bucket; ml: string; en: string; occasion: Occasion };
 

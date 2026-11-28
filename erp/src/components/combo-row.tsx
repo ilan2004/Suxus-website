@@ -99,7 +99,7 @@ export function ComboRow({
 }
 
 /** Try-on: the trouser fabric's details, on the page (customers have no ERP fabric page). Never makes a try-on image. */
-export function ComboDetail({ c, lang, onClose, closeWord }: { c: ComboCard; lang: "ml" | "en"; onClose: () => void; closeWord: string }) {
+export function ComboDetail({ c, lang, onClose, closeWord, action }: { c: ComboCard; lang: "ml" | "en"; onClose: () => void; closeWord: string; action?: { label: string; run: () => void } }) {
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-3 sm:items-center" onClick={onClose} role="dialog" aria-modal="true" data-testid="combo-detail">
       <div className="grid w-full max-w-md gap-3 rounded-2xl bg-background p-4 shadow-xl" onClick={(e) => e.stopPropagation()}>
@@ -122,6 +122,11 @@ export function ComboDetail({ c, lang, onClose, closeWord }: { c: ComboCard; lan
         </div>
         <p className={cn("text-sm", lang === "ml" && "font-ml")}>{lang === "ml" ? c.reason.ml : c.reason.en}</p>
         {c.estimate && <p className={cn("rounded-lg bg-muted/60 px-3 py-2 text-xs", lang === "ml" && "font-ml")}>{estimateText(c.estimate, lang)}</p>}
+        {action && (
+          <button type="button" onClick={action.run} className={cn("h-12 rounded-xl bg-primary font-semibold text-primary-foreground", lang === "ml" && "font-ml")} data-testid="combo-try">
+            {action.label}
+          </button>
+        )}
         <button type="button" onClick={onClose} className="h-11 rounded-xl border bg-card font-medium">
           {closeWord}
         </button>

@@ -6,6 +6,8 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { fabricsWithStock } from "./queries";
 import { LOCAL_DIR } from "./storage";
+import { col } from "./db/ext";
+import { features } from "./db/features";
 import { styleSentences, type TryonStyle } from "./tryon-style";
 
 /*
@@ -126,11 +128,24 @@ export type TryonFabric = {
   rate: number;
   thumb: string;
   photo: string;
+  /** pant cloth (Type "Suiting" / "Uniform Suiting") — not offered for a shirt */
+  forPant: boolean;
 };
 
 /** Fabrics a customer can try: active, in stock (balance > 0) and with a photo. Public fields only — no cost, no supplier. */
 export async function tryonFabrics(): Promise<TryonFabric[]> {
   const rows = await fabricsWithStock();
+  // Settings > Combinations "suitable for" (shirting / suiting / both), when the database has it
+  const suitable = new Map<number, string>();
+  if ((await features()).combo) {
+    const db = await getDb();
+    for (const r of await db.select({ id: schema.fabrics.id, s: col.fabricSuitableFor }).from(schema.fabrics)) suitable.set(r.id, r.s ?? "both");
+  }
+  /** pant cloth: marked "suiting", or Type Suiting / Uniform Suiting unless marked "shirting" */
+  const isPant = (f: { id: number; type: string | null }) => {
+    const sf = suitable.get(f.id) ?? "both";
+    return sf === "suiting" || (sf !== "shirting" && /suiting/i.test(f.type ?? ""));
+  };
   return rows
     .filter((f) => f.active && (f.balanceMtr ?? 0) > 0 && f.photoUrls.length > 0)
     .map((f) => ({
@@ -145,6 +160,7 @@ export async function tryonFabrics(): Promise<TryonFabric[]> {
       rate: f.saleRate,
       thumb: f.thumbUrls[0] || f.photoUrls[0],
       photo: f.photoUrls[0],
+      forPant: isPant(f),
     }));
 }
 
@@ -198,11 +214,17 @@ export function colourName(hex: string) {
 const SHIRT_FRONT_MM = 500;
 
 /** The instruction, filled in from the fabric's own stored fields (pattern, repeat in mm, dominant colour). */
-export function tryonPrompt(f: { pattern: string | null; patternMm: number | null; hex: string | null; colour: string | null }, sleeve: "full" | "half") {
+type PromptFabric = { pattern: string | null; patternMm: number | null; hex: string | null; colour: string | null };
+/**
+ * `pant` (shirt + pant in ONE image): the trouser fabric is the third image. Without it the text is exactly as before.
+ */
+export function tryonPrompt(f: PromptFabric, sleeve: "full" | "half", pant?: { fabric: PromptFabric; model: "Regular" | "Loose" } | null) {
   const lines: string[] = [];
   lines.push(
-    `The first image is the customer. The second image is a close-up photo of the shirting fabric.`,
-    `Replace only the upper garment with a ${sleeve} sleeve formal shirt made from the fabric in the second image.`,
+    `The first image is the customer. The second image is a close-up photo of the shirting fabric.${pant ? " The third image is a close-up photo of the trouser fabric." : ""}`,
+    pant
+      ? `Replace the upper garment with a ${sleeve} sleeve formal shirt made from the fabric in the second image, and the trousers with ${pant.model === "Loose" ? "loose-fit" : "regular-fit"} formal trousers made from the fabric in the third image.`
+      : `Replace only the upper garment with a ${sleeve} sleeve formal shirt made from the fabric in the second image.`,
   );
   if (f.hex) {
     const named = colourName(f.hex);
@@ -224,8 +246,22 @@ export function tryonPrompt(f: { pattern: string | null; patternMm: number | nul
       }`,
     );
   } else if (f.pattern) lines.push(`The pattern is ${f.pattern.toLowerCase()}. Keep it exactly the scale it is in the reference - small and true to size, not enlarged.`);
+  if (pant) {
+    // the trousers' own colour and pattern, after the shirt's (the shirt blocks above are unchanged)
+    const t = pant.fabric;
+    if (t.hex) {
+      const named = colourName(t.hex);
+      const shopName = t.colour && t.colour.toLowerCase() !== named ? ` (the shop calls it "${t.colour}")` : "";
+      lines.push(`The trouser fabric's dominant colour is ${t.hex.toUpperCase()} - a ${named}${shopName}. That colour must cover the trousers and be as deep and saturated as the reference. Do NOT produce a pale or washed-out version.`);
+    } else lines.push(`Match the trouser fabric's colour exactly - as deep and saturated as the reference.`);
+    const tp = (t.pattern ?? "").toLowerCase();
+    if (tp.startsWith("plain")) lines.push(`The trouser fabric is plain (solid).`);
+    else if ((tp === "check" || tp === "stripe") && t.patternMm && t.patternMm > 0) lines.push(`The trouser fabric has a ${tp} with a repeat of about ${Math.round(t.patternMm * 10) / 10} mm; keep it small and true to size.`);
+    else if (t.pattern) lines.push(`The trouser fabric is ${t.pattern.toLowerCase()}; keep its scale true to the reference.`);
+  }
   lines.push(
     `Keep the person's face, hair, skin tone, body shape, pose, expression and the background completely unchanged. Do not alter their face shape, weight or age.`,
+    ...(pant ? [`If the person's legs are not visible in the photograph, change only the shirt; do not extend the photograph or invent legs or trousers.`] : []),
     `Keep the exact same camera framing and crop. Do not zoom out, do not extend the image, do not show more of the body.`,
     `Natural drape, realistic folds, lighting matching the original photo.`,
   );
@@ -264,11 +300,11 @@ function costOf(res: unknown) {
   const u = (res as { usage?: Record<string, unknown> })?.usage;
   const num = (k: string) => (u && typeof u[k] === "number" ? (u[k] as number) : null);
   const inTok = num("total_input_tokens") ?? num("input_tokens") ?? num("prompt_token_count");
-  const input = ((inTok ?? PRICE.inputTokensPerImageEstimate * 2 + 400) / 1e6) * PRICE.inputPerMTok;
+  const input = ((inTok ?? PRICE.inputTokensPerImageEstimate * 3 + 400) / 1e6) * PRICE.inputPerMTok;
   return Math.round((PRICE.outputImage1k + input) * 10000) / 10000;
 }
 
-async function callGemini(prompt: string, person: Buffer, fabric: Buffer) {
+async function callGemini(prompt: string, person: Buffer, fabric: Buffer, pantFabric?: Buffer | null) {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new TryonError("config", "GEMINI_API_KEY is not set");
   let r: Response;
@@ -282,6 +318,7 @@ async function callGemini(prompt: string, person: Buffer, fabric: Buffer) {
           { type: "text", text: prompt },
           { type: "image", mime_type: "image/jpeg", data: person.toString("base64") },
           { type: "image", mime_type: "image/jpeg", data: fabric.toString("base64") },
+          ...(pantFabric ? [{ type: "image", mime_type: "image/jpeg", data: pantFabric.toString("base64") }] : []),
         ],
         // portrait output
         response_format: { type: "image", mime_type: "image/jpeg", aspect_ratio: "3:4", image_size: "1K" },
@@ -354,9 +391,13 @@ export async function generateTryon(o: {
   origin: string;
   /** styling choices; null = the instruction exactly as before (customers until styles are switched on) */
   style?: TryonStyle | null;
+  /** shirt + pant in the same ONE image: the pant cloth (a Suiting) and Regular / Loose model */
+  pant?: { fabricId: number; model: "Regular" | "Loose"; variant: string } | null;
 }) {
   const db = await getDb();
-  const fabric = (await tryonFabrics()).find((f) => f.id === o.fabricId);
+  const all = await tryonFabrics();
+  const fabric = all.find((f) => f.id === o.fabricId);
+  const pantFabric = o.pant ? (all.find((f) => f.id === o.pant!.fabricId && f.forPant) ?? null) : null;
   const started = Date.now();
   const photoId = newId();
   await db.insert(schema.tryonImages).values({ id: photoId, device: o.device, kind: "photo", mime: "image/jpeg", data: o.photo });
@@ -375,9 +416,11 @@ export async function generateTryon(o: {
       photoId,
       resultId: v.resultId ?? null,
       ...(o.style ? { sleeve: o.style.sleeve, tuck: o.style.tuck, pocket: o.style.pocket } : {}),
+      ...(o.pant ? { pantFabricId: pantFabric?.id ?? null, pantVariant: o.pant.variant } : {}),
     });
   try {
     if (!fabric) throw new TryonError("fabric_photo", "fabric not available");
+    if (o.pant && !pantFabric) throw new TryonError("fabric_photo", "pant fabric not available");
     const { default: sharp } = await import("sharp");
     const fabricJpeg = await sharp(await fabricPhotoBytes(fabric.photo, o.origin))
       .rotate()
@@ -385,14 +428,20 @@ export async function generateTryon(o: {
       .jpeg({ quality: 90 })
       .toBuffer();
     // the existing instruction unchanged; the style sentences only AFTER it (the colour block stays first)
-    const prompt = tryonPrompt(fabric, o.sleeve) + (o.style ? `\n${styleSentences(o.style, fabric.pattern)}` : "");
-    const { image, cost, usageText } = await callGemini(prompt, o.photo, fabricJpeg);
+    const pantJpeg = pantFabric
+      ? await sharp(await fabricPhotoBytes(pantFabric.photo, o.origin)).rotate().resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 90 }).toBuffer()
+      : null;
+    const prompt =
+      tryonPrompt(fabric, o.sleeve, pantFabric && o.pant ? { fabric: pantFabric, model: o.pant.model } : null) +
+      (o.style ? `\n${styleSentences(o.style, fabric.pattern, !!pantFabric)}` : "");
+    // still ONE call: the pant cloth is a third image in the same request
+    const { image, cost, usageText } = await callGemini(prompt, o.photo, fabricJpeg, pantJpeg);
     const result = await watermark(image);
     const resultId = newId();
     await db.insert(schema.tryonImages).values({ id: resultId, device: o.device, kind: "result", mime: "image/jpeg", data: result });
     await log({ ok: true, cost, resultId });
     // One line per success for the Vercel logs (cost and time per generation)
-    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} promptChars=${prompt.length} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
+    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code}${pantFabric ? ` pant=${pantFabric.code}/${o.pant?.model}` : ""} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} promptChars=${prompt.length} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
     return { resultId, cost, ms: Date.now() - started, prompt };
   } catch (e) {
     const err = e instanceof TryonError ? e : new TryonError("api", (e as Error).message);

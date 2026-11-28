@@ -834,6 +834,9 @@ export const tryonGenerations = pgTable(
     sleeve: text("sleeve"),
     tuck: text("tuck"),
     pocket: text("pocket"),
+    /** shirt + pant in one image: the pant cloth and Regular / Loose model (null = shirt only) */
+    pantFabricId: integer("pant_fabric_id").references(() => fabrics.id, { onDelete: "set null" }),
+    pantVariant: text("pant_variant"),
   },
   (t) => [index("tryon_generations_device_idx").on(t.device, t.createdAt), index("tryon_generations_created_idx").on(t.createdAt)],
 );

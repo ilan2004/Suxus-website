@@ -67,13 +67,15 @@ export async function tryonEnquiries() {
       brand: schema.fabrics.brand,
       shade: schema.fabrics.shade,
       // the image is kept 7 days like every try-on photo; after that the enquiry stays without it
+      // shirt + pant try-on: the pant cloth, from the generation
+      pantCode: sql<string | null>`(select f."code" from "tryon_generations" g join "fabrics" f on f."id" = g."pant_fabric_id" where g."id" = ${e.generationId})`,
       hasImage: sql<boolean>`exists (select 1 from ${schema.tryonImages} where ${schema.tryonImages.id} = ${e.resultId})`,
     })
     .from(e)
     .leftJoin(schema.fabrics, eq(schema.fabrics.id, e.fabricId))
     .orderBy(desc(e.id))
     .limit(500);
-  return rows.map((r) => ({ ...r, createdAt: new Date(r.createdAt).toISOString(), contactedAt: r.contactedAt ? new Date(r.contactedAt).toISOString() : null, fabric: r.code ? `${r.code} · ${[r.brand, r.shade].filter(Boolean).join(" · ")}` : "—" }));
+  return rows.map((r) => ({ ...r, createdAt: new Date(r.createdAt).toISOString(), contactedAt: r.contactedAt ? new Date(r.contactedAt).toISOString() : null, fabric: (r.code ? `${r.code} · ${[r.brand, r.shade].filter(Boolean).join(" · ")}` : "—") + (r.pantCode ? ` + pant ${r.pantCode}` : "") }));
 }
 export type TryonEnquiry = Awaited<ReturnType<typeof tryonEnquiries>>[number];
 

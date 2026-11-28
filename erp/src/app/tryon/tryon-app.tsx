@@ -27,6 +27,11 @@ const W = {
   gallery: ["ഗാലറിയിൽ നിന്ന്", "Choose from gallery"],
   standHint: ["മുഖവും തോളും വരയ്ക്കുള്ളിൽ വരട്ടെ", "Keep your face and shoulders inside the outline"],
   toBack: ["പിൻ ക്യാമറ", "Back camera"],
+  shirtOnly: ["ഷർട്ട് മാത്രം", "Shirt only"],
+  shirtPant: ["ഷർട്ട് + പാന്റ്", "Shirt + pant"],
+  pantFabric: ["പാന്റിന്റെ തുണി തിരഞ്ഞെടുക്കുക", "Choose the pant fabric"],
+  noPantFabric: ["ഇപ്പോൾ പാന്റ് തുണി (Suiting) ലഭ്യമല്ല", "No pant fabric (Suiting) in stock right now"],
+  pantHint: ["പാന്റും കാണാൻ മുട്ടിന് താഴെ വരെ വരുന്ന ഫോട്ടോ എടുക്കൂ", "To see the pant too, take a photo down below the knees"],
   waistHint: ["ഇൻസൈഡ് സ്റ്റൈൽ വേണമെങ്കിൽ അരക്കെട്ട് വരുന്ന ഫോട്ടോ എടുക്കൂ (മുട്ടുവരെ)", "For the tucked-in style, take a photo down to the knees"],
   tuckNote: ["മുഴുവൻ ശരീരം വരുന്ന ഫോട്ടോ എടുത്താൽ ഇൻസൈഡ് സ്റ്റൈൽ കാണിക്കാം.", "If the shirt came out untucked, a photo showing your waist lets us show the tucked-in style."],
   toFront: ["മുൻ ക്യാമറ", "Front camera"],
@@ -81,10 +86,11 @@ const errOf = (code: string) => ERR[code] ?? ERR.generic;
 /** The attempt did not use up one of the day's try-ons (only successes count). */
 const NOT_COUNTED = new Set(["network", "timeout", "busy", "blocked", "bad_photo", "generic", "api", "config", "fabric_photo"]);
 
-const VARIANT_ML: Record<string, string> = { "full sleeve": "ഫുൾ കൈ", "half sleeve": "ഹാഫ് കൈ" };
+const VARIANT_ML: Record<string, string> = { "full sleeve": "ഫുൾ കൈ", "half sleeve": "ഹാഫ് കൈ", regular: "സാധാരണ", "loose model": "ലൂസ് മോഡൽ" };
+const PANT_VARIANTS = ["Regular", "Loose model"];
 
-type Fabric = { id: number; code: string; name: string; colour: string | null; colourFamily: string | null; pattern: string | null; hex: string | null; rate: number; thumb: string; photo: string };
-type Step = "welcome" | "garment" | "fabric" | "consent" | "camera" | "preview" | "generating" | "result" | "error";
+type Fabric = { id: number; code: string; name: string; colour: string | null; colourFamily: string | null; pattern: string | null; hex: string | null; rate: number; thumb: string; photo: string; /** pant cloth (Suiting) */ forPant?: boolean };
+type Step = "welcome" | "garment" | "fabric" | "pantFabric" | "consent" | "camera" | "preview" | "generating" | "result" | "error";
 
 /* ───────────────────────── App ───────────────────────── */
 
@@ -95,6 +101,11 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
   const [step, setStep] = React.useState<Step>("welcome");
   const [variant, setVariant] = React.useState<string | null>(null);
   const [fabric, setFabric] = React.useState<Fabric | null>(null);
+  /** shirt only, or shirt + pant in the same ONE image (with the styling choices) */
+  const [outfit, setOutfit] = React.useState<"shirt" | "shirt_pant">("shirt");
+  const [pantFabric, setPantFabric] = React.useState<Fabric | null>(null);
+  const [pantVariant, setPantVariant] = React.useState("Regular");
+  const [resultPant, setResultPant] = React.useState<{ f: Fabric; variant: string } | null>(null);
   const [fabrics, setFabrics] = React.useState<Fabric[] | null>(null);
   const [fabricErr, setFabricErr] = React.useState<string | null>(null);
   const [photo, setPhoto] = React.useState<{ blob: Blob; url: string } | null>(null);
@@ -109,6 +120,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
   const [style, setStyle] = React.useState<TryonStyle>(DEFAULT_STYLE);
   /** the style the shown result was made with (for the result screen and the share caption) */
   const [resultStyle, setResultStyle] = React.useState<TryonStyle | null>(null);
+  const withPant = stylesOn && outfit === "shirt_pant";
 
   const loadStatus = React.useCallback(async () => {
     try {
@@ -160,6 +172,10 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
       fd.append("sleeve", style.sleeve);
       fd.append("tuck", style.tuck);
       fd.append("pocket", style.pocket);
+      if (withPant && pantFabric) {
+        fd.append("pantFabricId", String(pantFabric.id));
+        fd.append("pantVariant", pantVariant);
+      }
     }
     try {
       const r = await fetch("/api/tryon/generate", { method: "POST", body: fd, signal: AbortSignal.timeout(130_000) });
@@ -169,6 +185,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
       if (!j.ok) return fail(j.error ?? "generic", j.error === "blocked" || j.error === "bad_photo" ? "camera" : "preview");
       setResult({ url: j.image });
       setResultStyle(stylesOn ? style : null);
+      setResultPant(withPant && pantFabric ? { f: pantFabric, variant: pantVariant } : null);
       setWant(false);
       setStep("result");
     } catch (e) {
@@ -239,6 +256,28 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
           {step === "garment" && (
             <div className="grid gap-4">
               <Title w={t(W.garment)} lang={lang} />
+              {stylesOn && (
+                <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="What to try" data-testid="outfit">
+                  {(
+                    [
+                      ["shirt", W.shirtOnly],
+                      ["shirt_pant", W.shirtPant],
+                    ] as const
+                  ).map(([v, w]) => (
+                    <button
+                      key={v}
+                      type="button"
+                      role="radio"
+                      aria-checked={outfit === v}
+                      data-value={v}
+                      onClick={() => setOutfit(v)}
+                      className={cn("min-h-12 rounded-xl border-2 px-2 leading-tight", outfit === v ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
+                    >
+                      <Label w={t(w)} lang={lang} small />
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-3">
                 {variants.map((v) => (
                   <button
@@ -263,7 +302,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
 
           {step === "fabric" && (
             <FabricStep
-              fabrics={fabrics}
+              fabrics={fabrics && fabrics.filter((f) => !f.forPant)}
               err={fabricErr}
               lang={lang}
               t={t}
@@ -271,11 +310,29 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               onBack={() => setStep("garment")}
               onPick={(f) => {
                 setFabric(f);
+                if (withPant) return setStep("pantFabric");
                 // "Try another fabric": the same photo, straight to the new shirt
                 if (photo) {
                   if (stylesOn) setStep("preview");
                   else void generate(photo.blob, f);
                 } else setStep("consent");
+              }}
+            />
+          )}
+
+          {step === "pantFabric" && (
+            <FabricStep
+              title={W.pantFabric}
+              fabrics={fabrics && fabrics.filter((f) => f.forPant)}
+              err={fabricErr}
+              emptyNote={W.noPantFabric}
+              lang={lang}
+              t={t}
+              onRetry={loadFabrics}
+              onBack={() => setStep("fabric")}
+              onPick={(f) => {
+                setPantFabric(f);
+                setStep(photo ? "preview" : "consent");
               }}
             />
           )}
@@ -299,6 +356,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               lang={lang}
               t={t}
               waistHint={stylesOn}
+              pantHint={withPant}
               onPhoto={(blob) => {
                 setPhoto((p) => {
                   if (p) URL.revokeObjectURL(p.url);
@@ -330,22 +388,42 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
 
           {step === "preview" && photo && fabric && stylesOn && (
             // Style screen: fabric above, the three choices, the summary, then Create — on one phone screen
-            <div className="grid gap-3" data-testid="style-screen">
+            <div className={cn("grid", withPant ? "gap-2" : "gap-3")} data-testid="style-screen">
               <div className="flex items-stretch gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={photo.url} alt="" className="aspect-[3/4] w-20 shrink-0 rounded-xl bg-muted object-cover" data-testid="preview-image" />
+                <img src={photo.url} alt="" className={cn("aspect-[3/4] shrink-0 rounded-xl bg-muted object-cover", withPant ? "w-16" : "w-20")} data-testid="preview-image" />
                 <div className="grid min-w-0 flex-1 content-between gap-1">
-                  <button type="button" onClick={() => setStep("fabric")} className="text-left" aria-label="Change fabric">
-                    <FabricChip f={fabric} variant={null} lang={lang} />
-                  </button>
+                  {withPant && pantFabric ? (
+                    // shirt + pant: both cloths, compact, each tappable to change
+                    <div className="grid gap-1">
+                      <MiniFabric f={fabric} label={lang === "ml" ? "ഷർട്ട്" : "Shirt"} onClick={() => setStep("fabric")} />
+                      <MiniFabric f={pantFabric} label={lang === "ml" ? "പാന്റ്" : "Pant"} onClick={() => setStep("pantFabric")} />
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setStep("fabric")} className="text-left" aria-label="Change fabric">
+                      <FabricChip f={fabric} variant={null} lang={lang} />
+                    </button>
+                  )}
                   <button type="button" onClick={() => setStep("camera")} className="inline-flex w-fit items-center gap-1 text-xs text-muted-foreground underline">
                     <RefreshCw className="size-3" /> {t(W.retake).join(" · ")}
                   </button>
                 </div>
               </div>
-              <ChipRow title={["കൈ", "Sleeve"]} lang={lang} items={SLEEVES} value={style.sleeve} onChange={(sleeve) => (setStyle((x) => ({ ...x, sleeve })), setVariant(variantOfSleeve(sleeve)))} testid="chips-sleeve" />
-              <ChipRow title={["ഇടൽ", "Tuck"]} lang={lang} items={TUCKS} value={style.tuck} onChange={(tuck) => setStyle((x) => ({ ...x, tuck }))} testid="chips-tuck" />
-              <ChipRow title={["പോക്കറ്റ്", "Pocket"]} lang={lang} items={POCKETS} value={style.pocket} onChange={(pocket) => setStyle((x) => ({ ...x, pocket }))} testid="chips-pocket" />
+              {withPant && pantFabric && (
+                <div className="grid gap-1" data-testid="pant-choice">
+                  <ChipRow
+                    title={["പാന്റ്", "Pant"]}
+                    lang={lang}
+                    items={PANT_VARIANTS.map((v) => ({ v, ml: VARIANT_ML[v.toLowerCase()] ?? v, en: v }))}
+                    value={pantVariant}
+                    onChange={setPantVariant}
+                    testid="chips-pant" compact={withPant}
+                  />
+                </div>
+              )}
+              <ChipRow title={["കൈ", "Sleeve"]} lang={lang} items={SLEEVES} value={style.sleeve} onChange={(sleeve) => (setStyle((x) => ({ ...x, sleeve })), setVariant(variantOfSleeve(sleeve)))} testid="chips-sleeve" compact={withPant} />
+              <ChipRow title={["ഇടൽ", "Tuck"]} lang={lang} items={TUCKS} value={style.tuck} onChange={(tuck) => setStyle((x) => ({ ...x, tuck }))} testid="chips-tuck" compact={withPant} />
+              <ChipRow title={["പോക്കറ്റ്", "Pocket"]} lang={lang} items={POCKETS} value={style.pocket} onChange={(pocket) => setStyle((x) => ({ ...x, pocket }))} testid="chips-pocket" compact={withPant} />
               <p className={cn("rounded-xl bg-muted px-3 py-2 text-center text-sm font-medium", lang === "ml" && "font-ml")} data-testid="style-summary">
                 {styleSummary(style, lang)}
               </p>
@@ -353,17 +431,20 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <Big onClick={() => void generate(photo.blob, fabric)} testid="use-photo">
                 <Sparkles className="size-5" /> <Label w={t(W.usePhoto)} lang={lang} />
               </Big>
-              <Combos fabricId={fabric.id} sleeve={style.sleeve} lang={lang} closeWord={t(W.close)[0]} />
+              {!withPant && <Combos fabricId={fabric.id} sleeve={style.sleeve} lang={lang} closeWord={t(W.close)[0]} />}
             </div>
           )}
 
-          {step === "generating" && fabric && <Generating lang={lang} t={t} fabric={fabric} variant={variant} styleText={stylesOn ? styleSummary(style, lang) : null} />}
+          {step === "generating" && fabric && (
+            <Generating lang={lang} t={t} fabric={fabric} variant={variant} styleText={stylesOn ? styleSummary(style, lang) + (withPant && pantFabric ? ` · ${lang === "ml" ? "പാന്റ്" : "Pant"} ${pantFabric.code}` : "") : null} />
+          )}
 
           {step === "result" && result && fabric && (
             <div className="grid gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src={result.url} alt="" className="w-full rounded-2xl border shadow-sm" data-testid="result-image" />
               <FabricChip f={fabric} variant={resultStyle ? null : variant} lang={lang} />
+              {resultPant && <FabricChip f={resultPant.f} variant={resultPant.variant} lang={lang} />}
               {resultStyle && (
                 <p className={cn("text-center text-sm font-medium", lang === "ml" && "font-ml")} data-testid="result-style">
                   {styleSummary(resultStyle, lang)}
@@ -374,7 +455,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                   {t(W.tuckNote)[0]} <span className={cn(lang === "ml" ? "font-sans" : "font-ml")}>· {t(W.tuckNote)[1]}</span>
                 </p>
               )}
-              <Combos fabricId={fabric.id} sleeve={resultStyle?.sleeve ?? variant} lang={lang} closeWord={t(W.close)[0]} />
+              {!resultPant && <Combos fabricId={fabric.id} sleeve={resultStyle?.sleeve ?? variant} lang={lang} closeWord={t(W.close)[0]} />}
               <p className="rounded-xl bg-muted px-3 py-2 text-sm" data-testid="disclaimer">
                 <span className={cn("block", lang === "ml" && "font-ml")}>{t(W.disclaimer)[0]}</span>
                 <span className={cn("block text-xs text-muted-foreground", lang === "en" && "font-ml")}>{t(W.disclaimer)[1]}</span>
@@ -391,7 +472,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 <Big variant="outline" onClick={() => void saveImage(result.url, fabric.code)}>
                   <Download className="size-5" /> <Label w={t(W.save)} lang={lang} small />
                 </Big>
-                <Big variant="outline" onClick={() => void shareImage(result.url, fabric, phone, resultStyle)}>
+                <Big variant="outline" onClick={() => void shareImage(result.url, fabric, phone, resultStyle, resultPant?.f ?? null)}>
                   <WhatsAppIcon /> <Label w={t(W.share)} lang={lang} small />
                 </Big>
               </div>
@@ -437,6 +518,8 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
 /* ───────────────────────── Steps ───────────────────────── */
 
 function FabricStep({
+  title = W.fabric,
+  emptyNote,
   fabrics,
   err,
   lang,
@@ -445,6 +528,9 @@ function FabricStep({
   onBack,
   onPick,
 }: {
+  title?: readonly [string, string];
+  /** shown when this list has no fabric at all */
+  emptyNote?: readonly [string, string];
   fabrics: Fabric[] | null;
   err: string | null;
   lang: "ml" | "en";
@@ -467,7 +553,8 @@ function FabricStep({
   });
   return (
     <div className="grid gap-3">
-      <Title w={t(W.fabric)} lang={lang} />
+      <Title w={t(title)} lang={lang} />
+      {!err && fabrics && fabrics.length === 0 && emptyNote && <p className={cn("py-6 text-center", lang === "ml" && "font-ml")}>{t(emptyNote).join(" · ")}</p>}
       {err ? (
         <div className="grid gap-3 py-6 text-center" data-testid="tryon-error">
           <p className={cn("text-lg font-medium", lang === "ml" && "font-ml")}>{t(errOf(err))[0]}</p>
@@ -550,6 +637,7 @@ function CameraStep({
   lang,
   t,
   waistHint = false,
+  pantHint = false,
   onPhoto,
   onDenied,
   onBadFile,
@@ -559,6 +647,8 @@ function CameraStep({
   t: (w: readonly [string, string]) => [string, string];
   /** styling chips are on: say how to get the tucked-in look */
   waistHint?: boolean;
+  /** shirt + pant: the photo must show the legs */
+  pantHint?: boolean;
   onPhoto: (b: Blob) => void;
   onDenied: () => void;
   onBadFile: () => void;
@@ -690,7 +780,7 @@ function CameraStep({
         <GalleryButton lang={lang} t={t} onPhoto={onPhoto} onBad={onBadFile} />
         {waistHint && (
           <p className={cn("text-center text-xs text-muted-foreground", lang === "ml" && "font-ml")} data-testid="waist-hint">
-            {t(W.waistHint)[0]}
+            {t(pantHint ? W.pantHint : W.waistHint)[0]}
           </p>
         )}
         <BackLink onClick={onBack} w={t(W.back)} />
@@ -878,7 +968,6 @@ function WantForm({ lang, t, fabric, image }: { lang: "ml" | "en"; t: (w: readon
 
 /* ───────────────────────── Pieces ───────────────────────── */
 
-/** One single-select row of chips (Malayalam first). */
 /**
  * "ഇതിന് ചേരുന്ന പാൻറ്റ്": trouser fabrics from our stock for this shirt fabric. Colour rules on the server — no AI
  * call, no cost, never a try-on image of the trouser. Hidden when switched off in Settings or when it fails.
@@ -908,9 +997,23 @@ function Combos({ fabricId, sleeve, lang, closeWord }: { fabricId: number; sleev
   );
 }
 
-function ChipRow<T extends string>({ title, lang, items, value, onChange, testid }: { title: [string, string]; lang: "ml" | "en"; items: { v: T; ml: string; en: string }[]; value: T; onChange: (v: T) => void; testid: string }) {
+/** A cloth in one line (shirt + pant screen): swatch, which garment, code — tap to change. */
+function MiniFabric({ f, label, onClick }: { f: Fabric; label: string; onClick: () => void }) {
   return (
-    <div className="grid gap-1" data-testid={testid}>
+    <button type="button" onClick={onClick} className="flex min-h-11 items-center gap-2 rounded-xl border bg-card px-2 text-left" aria-label={`Change ${label} fabric`}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={f.thumb} alt="" className="size-8 shrink-0 rounded-md object-cover" />
+      <span className="min-w-0 truncate text-sm">
+        <span className="font-ml text-xs text-muted-foreground">{label}</span> <b>{f.code}</b> <span className="text-muted-foreground">{f.name}</span>
+      </span>
+    </button>
+  );
+}
+
+/** One single-select row of chips (Malayalam first). */
+function ChipRow<T extends string>({ title, lang, items, value, onChange, testid, compact = false }: { title: [string, string]; lang: "ml" | "en"; items: { v: T; ml: string; en: string }[]; value: T; onChange: (v: T) => void; testid: string; compact?: boolean }) {
+  return (
+    <div className={cn("grid", compact ? "gap-0.5" : "gap-1")} data-testid={testid}>
       <p className="text-xs text-muted-foreground">
         <span className={cn(lang === "ml" && "font-ml font-medium text-foreground")}>{lang === "ml" ? title[0] : title[1]}</span> · <span className={cn(lang === "en" && "font-ml")}>{lang === "ml" ? title[1] : title[0]}</span>
       </p>
@@ -923,7 +1026,7 @@ function ChipRow<T extends string>({ title, lang, items, value, onChange, testid
             aria-checked={value === x.v}
             onClick={() => onChange(x.v)}
             data-value={x.v}
-            className={cn("min-h-10 rounded-full border-2 px-3.5 text-sm leading-tight", value === x.v ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
+            className={cn(compact ? "min-h-9" : "min-h-10", "rounded-full border-2 px-3.5 text-sm leading-tight", value === x.v ? "border-primary bg-primary text-primary-foreground" : "bg-card")}
           >
             <span className={cn(lang === "ml" && "font-ml font-medium")}>{lang === "ml" ? x.ml : x.en}</span>
           </button>
@@ -1067,8 +1170,8 @@ async function saveImage(url: string, code: string) {
   setTimeout(() => URL.revokeObjectURL(a.href), 5000);
 }
 /** The image itself goes with the share (no link to it exists — nobody else can open it). */
-async function shareImage(url: string, fabric: Fabric, phone: string, style: TryonStyle | null) {
-  const text = `SUXUS Heritage Tailor — ${fabric.name} (${fabric.code})${style ? ` · ${styleSummary(style, "ml")}` : ""}. ${phone.split("|")[0].replace(/\s/g, "")}`;
+async function shareImage(url: string, fabric: Fabric, phone: string, style: TryonStyle | null, pant: Fabric | null = null) {
+  const text = `SUXUS Heritage Tailor — ${fabric.name} (${fabric.code})${pant ? ` + പാന്റ് ${pant.name} (${pant.code})` : ""}${style ? ` · ${styleSummary(style, "ml")}` : ""}. ${phone.split("|")[0].replace(/\s/g, "")}`;
   const f = await imageFile(url, fabric.code).catch(() => null);
   if (f && navigator.canShare?.({ files: [f] })) {
     try {

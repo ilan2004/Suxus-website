@@ -19,6 +19,15 @@ const W = {
   perMetre: ["/ മീറ്റർ", "/ metre"],
   noMatch: ["ഈ തിരച്ചിലിൽ തുണി ഇല്ല", "No fabric matches"],
   consentTitle: ["ഫോട്ടോയെക്കുറിച്ച്", "About your photo"],
+  contactTitle: ["നിങ്ങളുടെ പേരും ഫോൺ നമ്പറും", "Your name and phone"],
+  contactWhy: [
+    "ഫോട്ടോ ഉണ്ടാക്കുന്നതിന് മുമ്പ് പേരും ഫോൺ നമ്പറും നൽകുക. ഈ തുണിയെക്കുറിച്ച് ഞങ്ങൾ WhatsApp-ൽ ബന്ധപ്പെട്ടേക്കാം. നമ്പർ മറ്റാർക്കും നൽകില്ല.",
+    "Please give your name and phone before we make the picture. We may contact you on WhatsApp about this fabric. We never share your number.",
+  ],
+  contactName: ["പേര്", "Name"],
+  contactPhone: ["ഫോൺ നമ്പർ", "Phone number"],
+  contactGo: ["തുടരുക — ഉണ്ടാക്കുക", "Continue — create"],
+  contactBad: ["പേരും ശരിയായ 10 അക്ക ഫോൺ നമ്പറും നൽകുക.", "Please enter your name and a valid 10-digit phone number."],
   consent: [
     "ഈ പ്രിവ്യൂ ഉണ്ടാക്കാൻ മാത്രമാണ് ഫോട്ടോ ഉപയോഗിക്കുന്നത്. നിങ്ങൾ സ്വയം കടയിലെ ടി.വി.യിൽ കാണിക്കാൻ തിരഞ്ഞെടുത്താലല്ലാതെ ഇത് സ്വകാര്യമാണ് — ആരുമായും പങ്കുവെക്കില്ല. 7 ദിവസത്തിനുള്ളിൽ ഡിലീറ്റ് ചെയ്യും.",
     "Your photo is used only to create this preview. It stays private — shared with no one — unless you choose to show it on the shop screen. It is deleted after 7 days.",
@@ -117,7 +126,7 @@ const VARIANT_ML: Record<string, string> = { "full sleeve": "ഫുൾ കൈ", 
 const PANT_VARIANTS = ["Regular", "Loose model"];
 
 type Fabric = { id: number; code: string; name: string; colour: string | null; colourFamily: string | null; pattern: string | null; hex: string | null; rate: number; thumb: string; photo: string; /** pant cloth (Suiting) */ forPant?: boolean };
-type Step = "welcome" | "garment" | "fabric" | "pantFabric" | "consent" | "camera" | "preview" | "generating" | "result" | "error";
+type Step = "welcome" | "garment" | "fabric" | "pantFabric" | "consent" | "camera" | "preview" | "contact" | "generating" | "result" | "error";
 
 /* ───────────────────────── App ───────────────────────── */
 
@@ -152,6 +161,9 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
   /** website lock: a WhatsApp code (kept on this phone) and the shop's WhatsApp number */
   const [code, setCode] = React.useState("");
   const [whatsapp, setWhatsapp] = React.useState<string | null>(null);
+  /** website visitor (not the shop QR, no code): name + phone asked once before the free try-on */
+  const [via, setVia] = React.useState<string>("shop");
+  const [contact, setContact] = React.useState<{ name: string; phone: string } | null>(null);
   const loadStatus = React.useCallback(async (tryCode?: string) => {
     try {
       const q = new URLSearchParams();
@@ -168,6 +180,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
         setBlocked(j.blocked ?? null);
         setStylesOn(!!j.styles);
         setWhatsapp(j.whatsapp ?? null);
+        setVia(j.via ?? "shop");
         const good = j.via === "code" ? c : "";
         setCode(good);
         keepCode(good);
@@ -200,8 +213,9 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
     setStep("error");
   };
 
-  const generate = async (blob: Blob, f: Fabric) => {
+  const generate = async (blob: Blob, f: Fabric, who = contact) => {
     if (!variant) return setStep("garment");
+    if (via === "web" && !who) return setStep("contact");
     if (blocked && blocked !== "limit") return fail(blocked, "result");
     if (left && left.left <= 0) return fail("limit", "result");
     setStep("generating");
@@ -210,6 +224,10 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
     fd.append("fabricId", String(f.id));
     fd.append("variant", stylesOn ? variantOfSleeve(style.sleeve) : variant);
     if (code) fd.append("code", code);
+    if (via === "web" && who) {
+      fd.append("leadName", who.name);
+      fd.append("leadPhone", who.phone);
+    }
     // one press = one image: the chosen style only changes the words of that one request
     if (stylesOn) {
       fd.append("sleeve", style.sleeve);
@@ -225,6 +243,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
       const j = await r.json().catch(() => ({ ok: false, error: "generic" }));
       if (typeof j.left === "number") setLeft({ left: j.left, limit: j.limit });
       if ("blocked" in j) setBlocked(j.blocked ?? null);
+      if (j.error === "contact") return (setContact(null), setStep("contact"));
       if (!j.ok) return fail(j.error ?? "generic", j.error === "blocked" || j.error === "bad_photo" ? "camera" : "preview");
       setResult({ url: j.image });
       setResultStyle(stylesOn ? style : null);
@@ -520,6 +539,18 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                 />
               )}
             </div>
+          )}
+
+          {step === "contact" && photo && fabric && (
+            <ContactStep
+              lang={lang}
+              t={t}
+              onBack={() => setStep("preview")}
+              onDone={(who) => {
+                setContact(who);
+                void generate(photo.blob, fabric, who);
+              }}
+            />
           )}
 
           {step === "generating" && fabric && (
@@ -1124,6 +1155,68 @@ function Combos({
         />
       )}
     </>
+  );
+}
+
+/** Website visitor: name + phone once before the free try-on (kept on this phone for next time). */
+function ContactStep({ lang, t, onBack, onDone }: { lang: "ml" | "en"; t: (w: readonly [string, string]) => [string, string]; onBack: () => void; onDone: (c: { name: string; phone: string }) => void }) {
+  const saved = (() => {
+    try {
+      return JSON.parse(localStorage.getItem("suxus_tryon_contact") ?? "null") as { name: string; phone: string } | null;
+    } catch {
+      return null;
+    }
+  })();
+  const [name, setName] = React.useState(saved?.name ?? "");
+  const [phone, setPhone] = React.useState(saved?.phone ?? "");
+  const [bad, setBad] = React.useState(false);
+  const ml = lang === "ml";
+  return (
+    <form
+      className="flex flex-1 flex-col justify-center gap-4"
+      data-testid="contact-step"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const digits = phone.replace(/\D/g, "").replace(/^(91|0)(?=\d{10}$)/, "");
+        if (name.trim().length < 2 || !/^[6-9]\d{9}$/.test(digits)) return setBad(true);
+        const c = { name: name.trim(), phone: digits };
+        try {
+          localStorage.setItem("suxus_tryon_contact", JSON.stringify(c));
+        } catch {
+          /* private window */
+        }
+        onDone(c);
+      }}
+    >
+      <Title w={t(W.contactTitle)} lang={lang} />
+      <p className={cn("text-sm leading-relaxed text-muted-foreground", ml && "font-ml")}>{t(W.contactWhy)[0]}</p>
+      <label className="grid gap-1">
+        <span className={cn("text-sm font-medium", ml && "font-ml")}>{t(W.contactName).join(" · ")}</span>
+        <input value={name} onChange={(e) => (setName(e.target.value), setBad(false))} autoComplete="name" maxLength={80} className="h-12 rounded-xl border bg-card px-3 text-lg" data-testid="contact-name" />
+      </label>
+      <label className="grid gap-1">
+        <span className={cn("text-sm font-medium", ml && "font-ml")}>{t(W.contactPhone).join(" · ")}</span>
+        <input
+          value={phone}
+          onChange={(e) => (setPhone(e.target.value), setBad(false))}
+          inputMode="tel"
+          autoComplete="tel"
+          placeholder="98xxxxxxxx"
+          maxLength={16}
+          className="h-12 rounded-xl border bg-card px-3 text-lg tracking-wider"
+          data-testid="contact-phone"
+        />
+      </label>
+      {bad && (
+        <p className={cn("text-sm text-destructive", ml && "font-ml")} data-testid="contact-bad">
+          {t(W.contactBad)[0]}
+        </p>
+      )}
+      <button type="submit" className="flex min-h-14 items-center justify-center gap-2 rounded-2xl bg-primary px-4 text-primary-foreground" data-testid="contact-go">
+        <Sparkles className="size-5" /> <Label w={t(W.contactGo)} lang={lang} />
+      </button>
+      <BackLink onClick={onBack} w={t(W.back)} />
+    </form>
   );
 }
 

@@ -6,6 +6,8 @@ import { sleeveOfVariant } from "@/lib/variants";
 import { isStyle, variantOfSleeve } from "@/lib/tryon-style";
 import { TryonError, generateTryon, normalisePhoto, usage } from "@/lib/tryon";
 import { cleanCode, useCode } from "@/lib/tryon-web";
+import { saveWebLead } from "@/lib/tryon-lead";
+import { toIntlPhone } from "@/lib/phone";
 import { deviceOf, isShopTester, shopVisit } from "../_device";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +32,9 @@ export async function POST(req: NextRequest) {
   const before = await usage(device, ip, tester, ctx);
   // the controls in Settings > Try-on: off, monthly cap, whole shop per day, per person per day, website limits
   if (before.blocked || before.left <= 0) return NextResponse.json({ ok: false, error: before.blocked ?? "limit", ...before }, { status: before.blocked === "off" ? 503 : 429 });
+  // a website visitor gives a name and phone first (no OTP); it becomes a Try-on enquiry
+  const lead = before.via === "web" ? { name: String(form.get("leadName") ?? "").trim().slice(0, 80), phone: toIntlPhone(String(form.get("leadPhone") ?? "")) } : null;
+  if (lead && (lead.name.length < 2 || !lead.phone)) return NextResponse.json({ ok: false, error: "contact", ...before }, { status: 400 });
   const file = form.get("photo");
   const fabricId = Number(form.get("fabricId"));
   let variant = String(form.get("variant") ?? "");
@@ -56,10 +61,13 @@ export async function POST(req: NextRequest) {
     const feat = await features();
     const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin, style, pant, source: feat.tryonWeb ? { via: before.via, code: ctx.code } : null });
     if (before.via === "code") await useCode(ctx.code);
+    if (lead?.phone) await saveWebLead({ name: lead.name, phone: lead.phone, device, resultId: r.resultId }).catch((e) => console.error("[tryon] lead", e));
     const after = await usage(device, ip, tester, ctx);
     return NextResponse.json({ ok: true, image: `/api/tryon/image/${r.resultId}`, ms: r.ms, ...after, blocked: null }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     const code = e instanceof TryonError ? e.code : "api";
+    // keep the visitor's number even when the picture failed
+    if (lead?.phone) await saveWebLead({ name: lead.name, phone: lead.phone, device, resultId: null, fabricId, variant }).catch(() => {});
     const after = await usage(device, ip, tester, ctx).catch(() => before);
     return NextResponse.json({ ok: false, error: code, ...after }, { status: code === "bad_photo" ? 400 : 502 });
   }

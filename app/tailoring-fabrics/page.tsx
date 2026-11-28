@@ -3,6 +3,7 @@ import { Hanger, Scissors, Trousers } from "@/components/illustrations";
 import { LiveFabrics } from "@/components/LiveFabrics";
 import { Photo } from "@/components/Photo";
 import { PageHero, SectionHead, WhatsAppButton } from "@/components/Site";
+import { TryOnBand } from "@/components/TryOnBand";
 import { priceNote, waLink } from "@/lib/site";
 
 export const metadata: Metadata = {
@@ -49,9 +50,11 @@ export default function TailoringFabrics() {
         </div>
       </section>
 
+      <TryOnBand num="03" />
+
       <section className="section">
         <div className="wrap">
-          <SectionHead num="03" label="Tailoring" title="Stitched in our own unit." ml="ഞങ്ങളുടെ സ്വന്തം യൂണിറ്റിൽ തയ്ച്ചത്." />
+          <SectionHead num="04" label="Tailoring" title="Stitched in our own unit." ml="ഞങ്ങളുടെ സ്വന്തം യൂണിറ്റിൽ തയ്ച്ചത്." />
           <div className="cards">
             {tailoring.map((x, i) => (
               <article className="card" key={x.t}>
@@ -68,7 +71,7 @@ export default function TailoringFabrics() {
       <section className="section dark" id="festival">
         <div className="wrap grid">
           <div className="c-6">
-            <span className="label">04 / Festivals & events</span>
+            <span className="label">05 / Festivals & events</span>
             <h2>Dress codes for Onam, Eid and every group.</h2>
             <p className="ml-line" lang="ml">
               ഓണം, പെരുന്നാൾ, ഇവന്റുകൾ — ഗ്രൂപ്പ് ഡ്രസ്സ്.
@@ -99,7 +102,7 @@ export default function TailoringFabrics() {
 
       <section className="section paper">
         <div className="wrap">
-          <SectionHead num="05" label="Gallery" title="From the showroom and the unit." />
+          <SectionHead num="06" label="Gallery" title="From the showroom and the unit." />
           <div className="gallery">
             <Photo src="/images/showroom.jpg" alt="SUXUS showroom" caption="Showroom" />
             <Photo src="/images/tailors-at-work.jpg" alt="Tailors at work in the SUXUS stitching unit" caption="Stitching unit" />

@@ -28,8 +28,9 @@ export function TryOnBand({ num }: { num?: string }) {
             </a>
           </div>
           <p className="muted small mt-s">
-            A few tries per phone each day. Your photo is used only to make the picture and is deleted after 7 days. The
-            colour on screen can differ a little from the real cloth — see it in the shop before ordering.
+            One free try-on per phone — WhatsApp us for a code to try more, or scan the QR in our shop. Your photo is used
+            only to make the picture and is deleted after 7 days. The colour on screen can differ a little from the real
+            cloth — see it in the shop before ordering.
           </p>
         </div>
         <div className="c-5 s-8 tryon-visual" aria-hidden="true">

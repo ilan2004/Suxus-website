@@ -4,6 +4,7 @@ import { StitchingShirt } from "@/components/illustrations/StitchingShirt";
 import { LiveFabrics } from "@/components/LiveFabrics";
 import { Photo } from "@/components/Photo";
 import { MapEmbed, SchoolSteps, SectionHead, WhatsAppButton } from "@/components/Site";
+import { TryOnBand } from "@/components/TryOnBand";
 import { business, fullAddress } from "@/lib/site";
 
 const services = [
@@ -144,9 +145,11 @@ export default function Home() {
         </div>
       </section>
 
+      <TryOnBand num="05" />
+
       <section className="section paper">
         <div className="wrap">
-          <SectionHead num="05" label="Find us" title="Kadoor Complex, Pallikkal Bazar." />
+          <SectionHead num="06" label="Find us" title="Kadoor Complex, Pallikkal Bazar." />
           <MapEmbed />
           <div className="grid mt-s">
             <p className="c-6 muted small">{fullAddress}</p>

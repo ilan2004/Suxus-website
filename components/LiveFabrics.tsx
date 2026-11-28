@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { ERP_URL, TRYON_URL, waLink } from "@/lib/site";
+import { ERP_URL, TRYON_ON_SITE, TRYON_URL, waLink } from "@/lib/site";
 
 type Fabric = {
   code: string;
@@ -128,7 +128,7 @@ export function LiveFabrics({ limit, filters = true, moreHref }: { limit?: numbe
                 <a className="btn" href={waLink(`SUXUS | Heritage Tailor — I'm interested in fabric ${open.code} (${open.name}).`)} target="_blank" rel="noopener">
                   Ask on WhatsApp
                 </a>
-                {open.kind === "Shirting" && (
+                {TRYON_ON_SITE && open.kind === "Shirting" && (
                   <a className="btn ghost" href={TRYON_URL} target="_blank" rel="noopener">
                     Try it on your photo
                   </a>

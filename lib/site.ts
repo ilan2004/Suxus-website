@@ -32,6 +32,8 @@ export const business = {
 /** The shop's ERP: live fabric stock for the website and the AI try-on page. */
 export const ERP_URL = (process.env.NEXT_PUBLIC_ERP_URL || "https://suxus-erp.vercel.app").replace(/\/$/, "");
 export const TRYON_URL = `${ERP_URL}/tryon`;
+/** The try-on advert and buttons stay off until the website try-on limits are ready. */
+export const TRYON_ON_SITE = false;
 
 export const fullAddress = `${business.address.street}, ${business.address.locality}, ${business.address.region} ${business.address.postalCode}`;
 

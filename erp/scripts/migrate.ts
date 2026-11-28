@@ -51,6 +51,7 @@ const REQUIRED: [string, string][] = [
   ["fabrics", "suitable_for"],
   ["fabrics", "colour_bucket"],
   ["tryon_generations", "pant_fabric_id"],
+  ["tryon_generations", "source"],
 ];
 
 async function main() {

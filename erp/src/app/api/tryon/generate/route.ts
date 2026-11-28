@@ -5,7 +5,8 @@ import { variantsFor } from "@/lib/variants";
 import { sleeveOfVariant } from "@/lib/variants";
 import { isStyle, variantOfSleeve } from "@/lib/tryon-style";
 import { TryonError, generateTryon, normalisePhoto, usage } from "@/lib/tryon";
-import { deviceOf, isShopTester } from "../_device";
+import { cleanCode, useCode } from "@/lib/tryon-web";
+import { deviceOf, isShopTester, shopVisit } from "../_device";
 
 export const dynamic = "force-dynamic";
 /** The model usually answers in 10–40 s; allow for a slow one. */
@@ -18,15 +19,17 @@ export async function POST(req: NextRequest) {
   if (!(await features()).tryon) return NextResponse.json({ ok: false, error: "unavailable" }, { status: 503 });
   const { device, ip } = await deviceOf();
   const tester = await isShopTester();
-  const before = await usage(device, ip, tester);
-  // the controls in Settings > Try-on: off, monthly cap, whole shop per day, per person per day
-  if (before.blocked || before.left <= 0) return NextResponse.json({ ok: false, error: before.blocked ?? "limit", ...before }, { status: before.blocked === "off" ? 503 : 429 });
   let form: FormData;
   try {
     form = await req.formData();
   } catch {
     return NextResponse.json({ ok: false, error: "bad_photo" }, { status: 400 });
   }
+  // shop QR (12-hour cookie) or a website visitor; a WhatsApp code gives a website visitor more
+  const ctx = { shop: await shopVisit(), code: cleanCode(form.get("code")) };
+  const before = await usage(device, ip, tester, ctx);
+  // the controls in Settings > Try-on: off, monthly cap, whole shop per day, per person per day, website limits
+  if (before.blocked || before.left <= 0) return NextResponse.json({ ok: false, error: before.blocked ?? "limit", ...before }, { status: before.blocked === "off" ? 503 : 429 });
   const file = form.get("photo");
   const fabricId = Number(form.get("fabricId"));
   let variant = String(form.get("variant") ?? "");
@@ -50,12 +53,14 @@ export async function POST(req: NextRequest) {
   if (!Number.isInteger(fabricId) || !allowed.includes(variant) || !sleeve) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   try {
     const photo = await normalisePhoto(Buffer.from(await file.arrayBuffer()));
-    const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin, style, pant });
-    const after = await usage(device, ip, tester);
+    const feat = await features();
+    const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin, style, pant, source: feat.tryonWeb ? { via: before.via, code: ctx.code } : null });
+    if (before.via === "code") await useCode(ctx.code);
+    const after = await usage(device, ip, tester, ctx);
     return NextResponse.json({ ok: true, image: `/api/tryon/image/${r.resultId}`, ms: r.ms, ...after, blocked: null }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
     const code = e instanceof TryonError ? e.code : "api";
-    const after = await usage(device, ip, tester).catch(() => before);
+    const after = await usage(device, ip, tester, ctx).catch(() => before);
     return NextResponse.json({ ok: false, error: code, ...after }, { status: code === "bad_photo" ? 400 : 502 });
   }
 }

@@ -83,6 +83,31 @@ const ERR: Record<string, readonly [string, string]> = {
   shop_limit: ["ക്ഷമിക്കണം, ഇന്നത്തെ ട്രൈ-ഓൺ എല്ലാം കഴിഞ്ഞു. ദയവായി കൗണ്ടറിൽ ചോദിക്കുക — തുണി നേരിട്ട് കാണിച്ചുതരാം.", "Sorry, today's try-ons are all finished. Please ask at the counter — we will show you the fabric in person."],
   budget: ["ക്ഷമിക്കണം, ഇന്നത്തെ ട്രൈ-ഓൺ എല്ലാം കഴിഞ്ഞു. ദയവായി കൗണ്ടറിൽ ചോദിക്കുക — തുണി നേരിട്ട് കാണിച്ചുതരാം.", "Sorry, today's try-ons are all finished. Please ask at the counter — we will show you the fabric in person."],
   generic: ["ഇപ്പോൾ ഉണ്ടാക്കാൻ കഴിഞ്ഞില്ല. ഒന്നുകൂടി ശ്രമിക്കുക.", "We could not create it right now. Please try again."],
+  web_limit: [
+    "വെബ്സൈറ്റിൽ നിന്നുള്ള സൗജന്യ ട്രൈ-ഓൺ കഴിഞ്ഞു. കൂടുതൽ ട്രൈ ചെയ്യാൻ WhatsApp-ൽ ഒരു കോഡ് ചോദിക്കൂ — അല്ലെങ്കിൽ കടയിൽ വന്ന് QR സ്കാൻ ചെയ്യൂ.",
+    "Your free website try-on is used. WhatsApp us for a code to try more — or visit the shop and scan the QR there.",
+  ],
+  web_day: [
+    "ഇന്നത്തെ വെബ്സൈറ്റ് ട്രൈ-ഓൺ എല്ലാം കഴിഞ്ഞു. WhatsApp-ൽ ഒരു കോഡ് ചോദിക്കൂ, അല്ലെങ്കിൽ നാളെ ശ്രമിക്കൂ.",
+    "Today's website try-ons are all used. WhatsApp us for a code, or try again tomorrow.",
+  ],
+};
+const isWebBlock = (code: string | null | undefined) => code === "web_limit" || code === "web_day";
+const CODE_KEY = "suxus_tryon_code";
+const readCode = () => {
+  try {
+    return localStorage.getItem(CODE_KEY) ?? "";
+  } catch {
+    return "";
+  }
+};
+const keepCode = (c: string) => {
+  try {
+    if (c) localStorage.setItem(CODE_KEY, c);
+    else localStorage.removeItem(CODE_KEY);
+  } catch {
+    /* private window: the code works for this visit only */
+  }
 };
 const errOf = (code: string) => ERR[code] ?? ERR.generic;
 /** The attempt did not use up one of the day's try-ons (only successes count). */
@@ -124,19 +149,34 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
   const [resultStyle, setResultStyle] = React.useState<TryonStyle | null>(null);
   const withPant = stylesOn && outfit === "shirt_pant";
 
-  const loadStatus = React.useCallback(async () => {
+  /** website lock: a WhatsApp code (kept on this phone) and the shop's WhatsApp number */
+  const [code, setCode] = React.useState("");
+  const [whatsapp, setWhatsapp] = React.useState<string | null>(null);
+  const loadStatus = React.useCallback(async (tryCode?: string) => {
     try {
-      const r = await fetch("/api/tryon/status", { cache: "no-store" });
+      const q = new URLSearchParams();
+      // the shop QR's key (?s=): marks this phone as in the shop; then taken out of the address bar
+      const s = new URLSearchParams(window.location.search).get("s");
+      if (s) q.set("s", s);
+      const c = tryCode ?? readCode();
+      if (c) q.set("code", c);
+      const r = await fetch(`/api/tryon/status${q.size ? `?${q}` : ""}`, { cache: "no-store" });
       const j = await r.json();
+      if (s) window.history.replaceState(null, "", window.location.pathname);
       if (j.ok) {
         setLeft({ left: j.left, limit: j.limit });
         setBlocked(j.blocked ?? null);
         setStylesOn(!!j.styles);
-      }
-      else if (j.error === "unavailable") setError({ code: "unavailable", back: "welcome" });
+        setWhatsapp(j.whatsapp ?? null);
+        const good = j.via === "code" ? c : "";
+        setCode(good);
+        keepCode(good);
+        return { codeOk: !!c && j.via === "code" };
+      } else if (j.error === "unavailable") setError({ code: "unavailable", back: "welcome" });
     } catch {
       /* the counter just stays hidden */
     }
+    return { codeOk: false };
   }, []);
   const loadFabrics = React.useCallback(async () => {
     setFabricErr(null);
@@ -169,6 +209,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
     fd.append("photo", blob, "photo.jpg");
     fd.append("fabricId", String(f.id));
     fd.append("variant", stylesOn ? variantOfSleeve(style.sleeve) : variant);
+    if (code) fd.append("code", code);
     // one press = one image: the chosen style only changes the words of that one request
     if (stylesOn) {
       fd.append("sleeve", style.sleeve);
@@ -240,9 +281,12 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <Title w={t(W.welcome)} lang={lang} big />
               {blocked && blocked !== "limit" ? (
                 // finished for today / switched off: a polite note instead of Start
-                <div className="rounded-2xl border bg-card p-4" data-testid="tryon-closed">
-                  <p className={cn("text-lg leading-relaxed", lang === "ml" && "font-ml")}>{t(errOf(blocked))[0]}</p>
-                  <p className={cn("mt-1 text-sm text-muted-foreground", lang === "en" && "font-ml")}>{t(errOf(blocked))[1]}</p>
+                <div className="grid gap-3">
+                  <div className="rounded-2xl border bg-card p-4" data-testid="tryon-closed">
+                    <p className={cn("text-lg leading-relaxed", lang === "ml" && "font-ml")}>{t(errOf(blocked))[0]}</p>
+                    <p className={cn("mt-1 text-sm text-muted-foreground", lang === "en" && "font-ml")}>{t(errOf(blocked))[1]}</p>
+                  </div>
+                  {isWebBlock(blocked) && <WebCode lang={lang} whatsapp={whatsapp} onCode={loadStatus} />}
                 </div>
               ) : (
                 <>
@@ -537,7 +581,7 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
               <p className={cn("text-sm text-muted-foreground", lang === "en" && "font-ml")}>{t(errOf(error.code))[1]}</p>
               {NOT_COUNTED.has(error.code) && <p className="text-xs text-muted-foreground">{t(W.notCounted).join(" · ")}</p>}
               {counter}
-              {!["limit", "unavailable", "off", "shop_limit", "budget"].includes(error.code) && (
+              {!["limit", "unavailable", "off", "shop_limit", "budget", "web_limit", "web_day"].includes(error.code) && (
                 <Big
                   onClick={() => {
                     if (error.back === "preview" && photo && fabric) void generate(photo.blob, fabric);
@@ -548,8 +592,19 @@ export function TryOnApp({ phone, variants }: { phone: string; variants: string[
                   <RefreshCw className="size-5" /> <Label w={t(W.retry)} lang={lang} />
                 </Big>
               )}
+              {isWebBlock(error.code) && (
+                <WebCode
+                  lang={lang}
+                  whatsapp={whatsapp}
+                  onCode={async (c) => {
+                    const r = await loadStatus(c);
+                    if (r.codeOk) setStep(photo && fabric ? "preview" : "welcome");
+                    return r;
+                  }}
+                />
+              )}
               {error.code === "camera" && <GalleryButton lang={lang} t={t} onPhoto={(b) => (setPhoto({ blob: b, url: URL.createObjectURL(b) }), setStep("preview"))} onBad={() => fail("bad_photo", "camera")} />}
-              {result && ["limit", "shop_limit", "budget"].includes(error.code) && <BackLink onClick={() => setStep("result")} w={t(W.back)} />}
+              {result && ["limit", "shop_limit", "budget", "web_limit", "web_day"].includes(error.code) && <BackLink onClick={() => setStep("result")} w={t(W.back)} />}
             </div>
           )}
         </main>
@@ -1069,6 +1124,67 @@ function Combos({
         />
       )}
     </>
+  );
+}
+
+/** Website lock: WhatsApp the shop for a code, then type it here (6 digits). */
+function WebCode({ lang, whatsapp, onCode }: { lang: "ml" | "en"; whatsapp: string | null; onCode: (code: string) => Promise<{ codeOk: boolean }> }) {
+  const [v, setV] = React.useState("");
+  const [busy, setBusy] = React.useState(false);
+  const [bad, setBad] = React.useState(false);
+  const ml = lang === "ml";
+  const text = "SUXUS Heritage Tailor — ട്രൈ-ഓൺ കോഡ് വേണം / I would like a try-on code.";
+  return (
+    <div className="grid gap-3 rounded-2xl border bg-card p-4 text-left" data-testid="web-code">
+      {whatsapp && (
+        <a
+          href={`https://wa.me/${whatsapp}?text=${encodeURIComponent(text)}`}
+          target="_blank"
+          rel="noopener"
+          className="flex min-h-12 items-center justify-center gap-2 rounded-xl bg-[#1f8f4e] px-4 font-semibold text-white"
+          data-testid="wa-code"
+        >
+          <span className={cn(ml && "font-ml")}>{ml ? "WhatsApp-ൽ കോഡ് ചോദിക്കൂ" : "Ask for a code on WhatsApp"}</span>
+        </a>
+      )}
+      <form
+        className="grid gap-2"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          const c = v.replace(/\D/g, "");
+          if (c.length !== 6) return setBad(true);
+          setBusy(true);
+          const r = await onCode(c);
+          setBusy(false);
+          setBad(!r.codeOk);
+        }}
+      >
+        <label className={cn("text-sm font-medium", ml && "font-ml")} htmlFor="tryon-code">
+          {ml ? "കോഡ് ഉണ്ടോ? · Have a code?" : "Have a code? · കോഡ് ഉണ്ടോ?"}
+        </label>
+        <div className="flex gap-2">
+          <input
+            id="tryon-code"
+            inputMode="numeric"
+            autoComplete="one-time-code"
+            maxLength={7}
+            value={v}
+            onChange={(e) => (setV(e.target.value), setBad(false))}
+            placeholder="123456"
+            className="h-12 min-w-0 flex-1 rounded-xl border bg-background px-3 text-center font-mono text-xl tracking-[0.3em]"
+            data-testid="code-input"
+          />
+          <button type="submit" disabled={busy} className="h-12 shrink-0 rounded-xl bg-primary px-4 font-semibold text-primary-foreground" data-testid="code-use">
+            {busy ? "…" : ml ? "ശരി" : "Use"}
+          </button>
+        </div>
+        {bad && (
+          <p className={cn("text-sm text-destructive", ml && "font-ml")} data-testid="code-bad">
+            {ml ? "ഈ കോഡ് ശരിയല്ല, അല്ലെങ്കിൽ തീർന്നു. · This code is not valid or is used up." : "This code is not valid or is used up. · ഈ കോഡ് ശരിയല്ല, അല്ലെങ്കിൽ തീർന്നു."}
+          </p>
+        )}
+      </form>
+    </div>
   );
 }
 

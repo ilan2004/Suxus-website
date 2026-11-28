@@ -49,8 +49,16 @@ export type TryonControls = {
   displayToken: string;
   /** styling choices (sleeve / tuck / pocket) for customers — off until tested; owner / partner always see them */
   styles: boolean;
+  /** website lock: visitors without the shop QR get the web limits below (a WhatsApp code gives more) */
+  webLock: boolean;
+  /** try-ons per phone from the website, in total (not per day) */
+  webPerDevice: 1 | 2;
+  /** try-ons from the website per day, all visitors together (separate from shopPerDay) */
+  webPerDay: number;
+  /** secret in the shop QR (?s=…): scanning it marks the phone as in the shop for 12 hours */
+  shopKey: string;
 };
-export const DEFAULT_TRYON: TryonControls = { enabled: true, perDevice: 2, shopPerDay: 40, monthlyCapInr: 2000, displayToken: "", styles: false };
+export const DEFAULT_TRYON: TryonControls = { enabled: true, perDevice: 2, shopPerDay: 40, monthlyCapInr: 2000, displayToken: "", styles: false, webLock: false, webPerDevice: 1, webPerDay: 10, shopKey: "" };
 
 const DEFAULTS: AppSettings = {
   lists: DEFAULT_LISTS,

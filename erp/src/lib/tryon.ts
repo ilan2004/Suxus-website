@@ -58,8 +58,10 @@ export function todayStartIST() {
   return new Date(ist.getTime() - 5.5 * 3600 * 1000);
 }
 
-/** Why no try-on can be made right now (null = it can). */
-export type Blocked = "limit" | "shop_limit" | "budget" | "off" | null;
+/** Why no try-on can be made right now (null = it can). web_limit / web_day: the website lock (a WhatsApp code helps). */
+export type Blocked = "limit" | "shop_limit" | "budget" | "off" | "web_limit" | "web_day" | null;
+/** Which limits a try-on counts against: the shop's (QR), the website's, or a WhatsApp code. */
+export type Via = "shop" | "web" | "code";
 
 /** Cost of this month's try-ons in rupees (from the logged costUsd). */
 export async function monthSpendInr() {
@@ -80,31 +82,51 @@ export async function monthSpendInr() {
  * master switch, per person per day (1 or 2), whole shop per day, monthly spend cap — plus the per-network cap.
  * `tester` (signed-in Owner / Partner) skips the per-person, per-network and whole-shop limits, not the switch or the cap.
  */
-export async function usage(device: string, ip: string | null, tester = false): Promise<{ left: number; limit: number; blocked: Blocked }> {
+export async function usage(
+  device: string,
+  ip: string | null,
+  tester = false,
+  ctx: { shop?: boolean; code?: string } = {},
+): Promise<{ left: number; limit: number; blocked: Blocked; via: Via }> {
   const { getSetting } = await import("./settings");
   const c = await getSetting("tryon");
-  const limit = c.perDevice;
-  if (!c.enabled) return { left: 0, limit, blocked: "off" };
-  if ((await monthSpendInr()) >= c.monthlyCapInr) return { left: 0, limit, blocked: "budget" };
-  if (tester) return { left: limit, limit, blocked: null };
+  const feat = await features();
+  // website lock: on, with a shop QR made, and the database has the source column
+  const web = c.webLock && !!c.shopKey && feat.tryonWeb && !ctx.shop && !tester;
+  const limit = web ? c.webPerDevice : c.perDevice;
+  const via: Via = web ? "web" : "shop";
+  if (!c.enabled) return { left: 0, limit, blocked: "off", via };
+  if ((await monthSpendInr()) >= c.monthlyCapInr) return { left: 0, limit, blocked: "budget", via };
+  if (tester) return { left: limit, limit, blocked: null, via };
   const db = await getDb();
+  const g = schema.tryonGenerations;
   const since = todayStartIST();
-  const okCount = sql<number>`count(*) filter (where ${schema.tryonGenerations.ok})`.mapWith(Number);
-  const [shop] = await db.select({ ok: okCount }).from(schema.tryonGenerations).where(gte(schema.tryonGenerations.createdAt, since));
-  if (shop.ok >= c.shopPerDay) return { left: 0, limit, blocked: "shop_limit" };
-  const [d] = await db
-    .select({ ok: okCount, all: sql<number>`count(*)`.mapWith(Number) })
-    .from(schema.tryonGenerations)
-    .where(and(eq(schema.tryonGenerations.device, device), gte(schema.tryonGenerations.createdAt, since)));
-  const [i] = ip
-    ? await db
-        .select({ ok: okCount })
-        .from(schema.tryonGenerations)
-        .where(and(eq(schema.tryonGenerations.ip, ip), gte(schema.tryonGenerations.createdAt, since)))
-    : [{ ok: 0 }];
+  const okCount = sql<number>`count(*) filter (where ${g.ok})`.mapWith(Number);
+  const [i] = ip ? await db.select({ ok: okCount }).from(g).where(and(eq(g.ip, ip), gte(g.createdAt, since))) : [{ ok: 0 }];
+  const [att] = await db.select({ all: sql<number>`count(*)`.mapWith(Number) }).from(g).where(and(eq(g.device, device), gte(g.createdAt, since)));
+  const flooded = att.all >= LIMITS.attemptsPerDevice || i.ok >= LIMITS.perIp;
+
+  if (web) {
+    const { codeLeft } = await import("./tryon-web");
+    // a WhatsApp code: its own try-ons, outside the website and shop counts
+    const fromCode = ctx.code ? await codeLeft(ctx.code) : 0;
+    if (fromCode > 0) return { left: fromCode, limit: fromCode, blocked: null, via: "code" };
+    const [day] = await db.select({ ok: okCount }).from(g).where(and(eq(g.source, "web"), gte(g.createdAt, since)));
+    if (day.ok >= c.webPerDay) return { left: 0, limit, blocked: "web_day", via };
+    const [mine] = await db.select({ ok: okCount }).from(g).where(and(eq(g.device, device), eq(g.source, "web")));
+    const left = Math.max(0, limit - mine.ok);
+    if (left === 0) return { left: 0, limit, blocked: "web_limit", via };
+    return flooded ? { left: 0, limit, blocked: "limit", via } : { left, limit, blocked: null, via };
+  }
+
+  // the shop's own count leaves out website and code try-ons (rows before 0033 have no source: shop)
+  const shopRows = feat.tryonWeb ? sql`coalesce(${g.source}, 'shop') = 'shop'` : sql`true`;
+  const [shop] = await db.select({ ok: okCount }).from(g).where(and(gte(g.createdAt, since), shopRows));
+  if (shop.ok >= c.shopPerDay) return { left: 0, limit, blocked: "shop_limit", via };
+  const [d] = await db.select({ ok: okCount }).from(g).where(and(eq(g.device, device), gte(g.createdAt, since), shopRows));
   const left = Math.max(0, limit - d.ok);
-  const blocked = left === 0 || d.all >= LIMITS.attemptsPerDevice || i.ok >= LIMITS.perIp;
-  return { left: blocked ? 0 : left, limit, blocked: blocked ? "limit" : null };
+  const blocked = left === 0 || flooded;
+  return { left: blocked ? 0 : left, limit, blocked: blocked ? "limit" : null, via };
 }
 
 /** Customer photos and generated images older than 7 days are deleted (the log keeps no image). */
@@ -391,6 +413,8 @@ export async function generateTryon(o: {
   style?: TryonStyle | null;
   /** shirt + pant in the same ONE image: the pant cloth (a Suiting) and Regular / Loose model */
   pant?: { fabricId: number; model: "Regular" | "Loose"; variant: string } | null;
+  /** which limits it counts against (stored when the database has the column) and the WhatsApp code used */
+  source?: { via: Via; code?: string | null } | null;
 }) {
   const db = await getDb();
   const all = await tryonFabrics();
@@ -415,6 +439,7 @@ export async function generateTryon(o: {
       resultId: v.resultId ?? null,
       ...(o.style ? { sleeve: o.style.sleeve, tuck: o.style.tuck, pocket: o.style.pocket } : {}),
       ...(o.pant ? { pantFabricId: pantFabric?.id ?? null, pantVariant: o.pant.variant } : {}),
+      ...(o.source ? { source: o.source.via, code: o.source.via === "code" ? (o.source.code ?? null) : null } : {}),
     });
   try {
     if (!fabric) throw new TryonError("fabric_photo", "fabric not available");
@@ -439,7 +464,7 @@ export async function generateTryon(o: {
     await db.insert(schema.tryonImages).values({ id: resultId, device: o.device, kind: "result", mime: "image/jpeg", data: result });
     await log({ ok: true, cost, resultId });
     // One line per success for the Vercel logs (cost and time per generation)
-    console.log(`[tryon] ok model=${TRYON_MODEL} fabric=${fabric.code}${pantFabric ? ` pant=${pantFabric.code}/${o.pant?.model}` : ""} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} promptChars=${prompt.length} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
+    console.log(`[tryon] ok via=${o.source?.via ?? "shop"} model=${TRYON_MODEL} fabric=${fabric.code}${pantFabric ? ` pant=${pantFabric.code}/${o.pant?.model}` : ""} variant=${o.variant} sleeve=${o.style?.sleeve ?? "-"} tuck=${o.style?.tuck ?? "-"} pocket=${o.style?.pocket ?? "-"} promptChars=${prompt.length} ms=${Date.now() - started} costUsd=${cost} usage=${usageText}`);
     return { resultId, cost, ms: Date.now() - started, prompt };
   } catch (e) {
     const err = e instanceof TryonError ? e : new TryonError("api", (e as Error).message);

@@ -6,6 +6,8 @@ import { features } from "@/lib/db/features";
 import { tryonStats } from "@/lib/tryon-admin";
 import { monthSpendInr } from "@/lib/tryon";
 import { TryonControls } from "./controls";
+import { WebCodes } from "./web-codes";
+import { listCodes } from "@/lib/tryon-web";
 import { TRYON_HEAD, TRYON_URL, tryonQrSvg } from "@/lib/tryon-qr";
 import { PageHeader } from "@/components/app/page-header";
 import { rupees } from "@/lib/utils";
@@ -16,12 +18,13 @@ export const metadata = { title: "Try-on" };
 export default async function TryonSettingsPage() {
   await requireUser({ can: "prices" });
   const feat = await features();
-  const [shop, qr, stats, controls, spent] = await Promise.all([
+  const [shop, qr, stats, controls, spent, codes] = await Promise.all([
     getSetting("shop"),
     tryonQrSvg(),
     feat.tryon ? tryonStats() : Promise.resolve(null),
     getSetting("tryon"),
     feat.tryon ? monthSpendInr() : Promise.resolve(0),
+    feat.tryonWeb ? listCodes() : Promise.resolve({ active: [], done: [] }),
   ]);
   const tvLink = controls.displayToken ? `${TRYON_URL}/display?key=${controls.displayToken}` : null;
   return (
@@ -46,6 +49,11 @@ export default async function TryonSettingsPage() {
           <div className="mx-auto w-64 rounded-lg border bg-white p-2 [&_svg]:size-full" dangerouslySetInnerHTML={{ __html: qr }} data-testid="tryon-qr" />
           <p className="text-sm">{shop.phone}</p>
           <p className="text-xs break-all text-muted-foreground">{TRYON_URL}</p>
+          {controls.webLock && controls.shopKey && (
+            <p className="rounded-md bg-warning/10 px-2 py-1.5 text-xs text-foreground" data-testid="shop-qr-note">
+              Website lock is on: this is the shop QR (it carries the shop key). Reprint the poster and labels if the ones up now were printed before.
+            </p>
+          )}
           <div className="grid grid-cols-2 gap-2">
             <a href="/print/tryon-qr" target="_blank" className="inline-flex h-10 items-center justify-center gap-2 rounded-md border bg-card text-sm font-medium hover:bg-accent">
               <Printer className="size-4" /> A4 poster
@@ -59,11 +67,21 @@ export default async function TryonSettingsPage() {
 
         <section className="grid content-start gap-4">
           <TryonControls
-            value={{ enabled: controls.enabled, perDevice: controls.perDevice, shopPerDay: controls.shopPerDay, monthlyCapInr: controls.monthlyCapInr, styles: controls.styles }}
+            value={{
+              enabled: controls.enabled,
+              perDevice: controls.perDevice,
+              shopPerDay: controls.shopPerDay,
+              monthlyCapInr: controls.monthlyCapInr,
+              styles: controls.styles,
+              webLock: controls.webLock,
+              webPerDevice: controls.webPerDevice,
+              webPerDay: controls.webPerDay,
+            }}
             spentInr={spent}
             todayOk={stats?.today.ok ?? 0}
             tvLink={tvLink}
           />
+          {controls.webLock && feat.tryonWeb && <WebCodes active={codes.active} tryonUrl={TRYON_URL} />}
           {!stats ? (
             <p className="rounded-xl border bg-card p-5 text-sm text-muted-foreground">Usage appears here after the next database update.</p>
           ) : (

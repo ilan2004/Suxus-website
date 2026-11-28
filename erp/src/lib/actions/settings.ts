@@ -56,6 +56,10 @@ const schemas = {
     monthlyCapInr: z.coerce.number<number>().min(0).max(10_000_000),
     displayToken: z.string(),
     styles: z.boolean(),
+    webLock: z.boolean().default(false),
+    webPerDevice: z.union([z.literal(1), z.literal(2)]).default(1),
+    webPerDay: z.coerce.number<number>().int().min(0).max(10000).default(10),
+    shopKey: z.string().default(""),
   }),
   combo: z.object({ enabled: z.boolean(), preferSlow: z.boolean() }),
 } satisfies Record<keyof AppSettings, z.ZodType>;

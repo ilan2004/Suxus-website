@@ -10,17 +10,34 @@ import { Switch } from "@/components/ui/switch";
 import { newTvLink, pairTv, saveTryonControls } from "@/lib/actions/tryon";
 import { cn, rupees } from "@/lib/utils";
 
-type C = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number; styles: boolean };
+type C = { enabled: boolean; perDevice: 1 | 2; shopPerDay: number; monthlyCapInr: number; styles: boolean; webLock: boolean; webPerDevice: 1 | 2; webPerDay: number };
 
 /** Settings > Try-on: the four controls (apply at once — no deploy) and the shop TV link. */
 export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; spentInr: number; todayOk: number; tvLink: string | null }) {
   const router = useRouter();
-  const [v, setV] = React.useState({ ...value, shopPerDay: String(value.shopPerDay), monthlyCapInr: String(value.monthlyCapInr) });
+  const [v, setV] = React.useState({ ...value, shopPerDay: String(value.shopPerDay), monthlyCapInr: String(value.monthlyCapInr), webPerDay: String(value.webPerDay) });
   const [pending, start] = React.useTransition();
-  const dirty = v.styles !== value.styles || v.enabled !== value.enabled || v.perDevice !== value.perDevice || Number(v.shopPerDay) !== value.shopPerDay || Number(v.monthlyCapInr) !== value.monthlyCapInr;
+  const dirty =
+    v.styles !== value.styles ||
+    v.enabled !== value.enabled ||
+    v.perDevice !== value.perDevice ||
+    Number(v.shopPerDay) !== value.shopPerDay ||
+    Number(v.monthlyCapInr) !== value.monthlyCapInr ||
+    v.webLock !== value.webLock ||
+    v.webPerDevice !== value.webPerDevice ||
+    Number(v.webPerDay) !== value.webPerDay;
   const save = (next = v) =>
     start(async () => {
-      const r = await saveTryonControls({ enabled: next.enabled, perDevice: next.perDevice, shopPerDay: Number(next.shopPerDay), monthlyCapInr: Number(next.monthlyCapInr), styles: next.styles });
+      const r = await saveTryonControls({
+        enabled: next.enabled,
+        perDevice: next.perDevice,
+        shopPerDay: Number(next.shopPerDay),
+        monthlyCapInr: Number(next.monthlyCapInr),
+        styles: next.styles,
+        webLock: next.webLock,
+        webPerDevice: next.webPerDevice,
+        webPerDay: Number(next.webPerDay),
+      });
       if (!r.ok) return void toast.error(r.error);
       toast.success("Saved — applies now");
       router.refresh();
@@ -96,6 +113,51 @@ export function TryonControls({ value, spentInr, todayOk, tvLink }: { value: C; 
             </span>
             <Input aria-label="Monthly spend cap" type="number" inputMode="numeric" min={0} value={v.monthlyCapInr} onChange={(e) => setV((x) => ({ ...x, monthlyCapInr: e.target.value }))} />
           </label>
+        </div>
+        <div className="grid gap-3 rounded-lg bg-muted/50 p-3" data-testid="web-lock">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-sm font-medium">
+                Website lock <span className="ml">വെബ്സൈറ്റ് ലോക്ക്</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                On: only phones that scanned the shop QR use the shop limits above. Visitors from the website (or a shared link) get the website limits below,
+                kept apart from the shop&apos;s — for more they WhatsApp you for a code. Reprint the shop QR after switching on.
+              </p>
+            </div>
+            <Switch
+              aria-label="Website lock"
+              checked={v.webLock}
+              disabled={pending}
+              onCheckedChange={(webLock) => {
+                const next = { ...v, webLock };
+                setV(next);
+                save(next);
+              }}
+            />
+          </div>
+          {v.webLock && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">
+                  Per phone from the website (total) <span className="ml">ഒരു ഫോണിന് ആകെ</span>
+                </span>
+                <div className="grid grid-cols-2 gap-1 rounded-md border bg-muted p-0.5">
+                  {[1, 2].map((n) => (
+                    <button key={n} type="button" onClick={() => setV((x) => ({ ...x, webPerDevice: n as 1 | 2 }))} className={cn("h-8 rounded text-sm", v.webPerDevice === n ? "bg-card font-semibold shadow-sm" : "text-muted-foreground")} aria-pressed={v.webPerDevice === n}>
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              </label>
+              <label className="grid gap-1 text-sm">
+                <span className="font-medium">
+                  Whole website per day <span className="ml">വെബ്സൈറ്റിന് ആകെ</span>
+                </span>
+                <Input aria-label="Whole website per day" type="number" inputMode="numeric" min={0} value={v.webPerDay} onChange={(e) => setV((x) => ({ ...x, webPerDay: e.target.value }))} />
+              </label>
+            </div>
+          )}
         </div>
         <div className="grid gap-1" data-testid="tryon-spend">
           <div className="flex justify-between text-sm">

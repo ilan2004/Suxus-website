@@ -837,6 +837,10 @@ export const tryonGenerations = pgTable(
     /** shirt + pant in one image: the pant cloth and Regular / Loose model (null = shirt only) */
     pantFabricId: integer("pant_fabric_id").references(() => fabrics.id, { onDelete: "set null" }),
     pantVariant: text("pant_variant"),
+    /** where it was made: shop (the shop QR), web (website / shared link, its own limits) or code (a WhatsApp code); null = before 0033 (shop) */
+    source: text("source"),
+    /** the WhatsApp code used (source = code) */
+    code: text("code"),
   },
   (t) => [index("tryon_generations_device_idx").on(t.device, t.createdAt), index("tryon_generations_created_idx").on(t.createdAt)],
 );

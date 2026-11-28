@@ -45,7 +45,7 @@ export function styleSummary(s: TryonStyle, lang: "ml" | "en" = "ml") {
 }
 
 /** Sentences appended AFTER the existing instruction (never before the colour block). Exact wording as agreed. */
-export function styleSentences(s: TryonStyle, pattern: string | null | undefined) {
+export function styleSentences(s: TryonStyle, pattern: string | null | undefined, withPant = false) {
   const out: string[] = [];
   out.push(
     {
@@ -62,6 +62,8 @@ export function styleSentences(s: TryonStyle, pattern: string | null | undefined
         "The shirt is tucked into the trousers: a clean tuck with no bunching, the trouser waistband and the vertical line of the shirt placket visible, the shirt following the body at the waist. Keep the person's own trousers exactly as they are in the photo — same colour, same fit, do not replace or recolour them. If the person's waist and waistband are not visible in the photograph, render the shirt untucked instead; do not extend the photograph, do not invent a waist, trousers or belt that are not in the original frame.",
     }[s.tuck],
   );
+  // shirt + pant: the trousers ARE being replaced, so the "keep the person's own trousers" clause is left out (nothing else changes)
+  if (withPant && s.tuck === "tucked") out[out.length - 1] = out[out.length - 1].replace(" Keep the person's own trousers exactly as they are in the photo — same colour, same fit, do not replace or recolour them.", "");
   out.push(
     {
       // trimmed: same meaning, fewer words

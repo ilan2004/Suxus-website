@@ -218,6 +218,13 @@
       "when": 1795769237358,
       "tag": "0030_tryon_style",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1795847927708,
+      "tag": "0031_tryon_pant",
+      "breakpoints": true
     }
   ]
 }

@@ -105,7 +105,7 @@ export async function tvFeed() {
   const db = await getDb();
   const g = schema.tryonGenerations;
   const rows = await db
-    .select({ id: g.id, at: g.displayAt, variant: g.variant, sleeve: g.sleeve, tuck: g.tuck, pocket: g.pocket, code: schema.fabrics.code, brand: schema.fabrics.brand, shade: schema.fabrics.shade, rate: schema.fabrics.saleRate })
+    .select({ id: g.id, at: g.displayAt, variant: g.variant, sleeve: g.sleeve, tuck: g.tuck, pocket: g.pocket, pantVariant: g.pantVariant, pantCode: sql<string | null>`(select "code" from "fabrics" where "id" = ${g.pantFabricId})`, code: schema.fabrics.code, brand: schema.fabrics.brand, shade: schema.fabrics.shade, rate: schema.fabrics.saleRate })
     .from(g)
     .leftJoin(schema.fabrics, eq(schema.fabrics.id, g.fabricId))
     .where(
@@ -119,7 +119,9 @@ export async function tvFeed() {
     .limit(5);
   return rows.map((r) => {
     const st = { sleeve: r.sleeve, tuck: r.tuck, pocket: r.pocket };
-    return { id: r.id, at: r.at ? new Date(r.at).getTime() : 0, code: r.code ?? "", name: [r.brand, r.shade].filter(Boolean).join(" · "), variant: r.variant, rate: r.rate ?? 0, style: isStyle(st) ? styleSummary(st, "ml") : null };
+    const style = isStyle(st) ? styleSummary(st, "ml") : null;
+    const pant = r.pantCode ? `പാന്റ് ${r.pantCode}${r.pantVariant && /loose/i.test(r.pantVariant) ? " (ലൂസ്)" : ""}` : null;
+    return { id: r.id, at: r.at ? new Date(r.at).getTime() : 0, code: r.code ?? "", name: [r.brand, r.shade].filter(Boolean).join(" · "), variant: r.variant, rate: r.rate ?? 0, style: [style, pant].filter(Boolean).join(" · ") || null };
   });
 }
 

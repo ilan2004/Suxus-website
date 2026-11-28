@@ -36,13 +36,21 @@ export async function POST(req: NextRequest) {
   const wanted = { sleeve: form.get("sleeve"), tuck: form.get("tuck"), pocket: form.get("pocket") };
   const style = (c.styles || tester) && (await features()).tryonStyle && isStyle(wanted) ? wanted : null;
   if (style) variant = variantOfSleeve(style.sleeve);
+  // shirt + pant in the same ONE image (with the styling choices): a Suiting cloth and Regular / Loose model
+  const pantId = Number(form.get("pantFabricId"));
+  const pantVariant = String(form.get("pantVariant") ?? "");
+  const pantVariants = variantsFor("Pant", await getSetting("variants"));
+  const pant =
+    style && (await features()).tryonPant && Number.isInteger(pantId) && pantId > 0 && pantVariants.includes(pantVariant)
+      ? { fabricId: pantId, model: (/loose/i.test(pantVariant) ? "Loose" : "Regular") as "Regular" | "Loose", variant: pantVariant }
+      : null;
   const allowed = variantsFor("Shirt", await getSetting("variants"));
   const sleeve = sleeveOfVariant(variant);
   if (!(file instanceof Blob) || file.size === 0 || file.size > MAX_UPLOAD) return NextResponse.json({ ok: false, error: "bad_photo" }, { status: 400 });
   if (!Number.isInteger(fabricId) || !allowed.includes(variant) || !sleeve) return NextResponse.json({ ok: false, error: "bad_request" }, { status: 400 });
   try {
     const photo = await normalisePhoto(Buffer.from(await file.arrayBuffer()));
-    const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin, style });
+    const r = await generateTryon({ device, ip, fabricId, sleeve, variant, photo, origin: req.nextUrl.origin, style, pant });
     const after = await usage(device, ip, tester);
     return NextResponse.json({ ok: true, image: `/api/tryon/image/${r.resultId}`, ms: r.ms, ...after, blocked: null }, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {

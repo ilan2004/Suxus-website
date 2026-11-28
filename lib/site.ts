@@ -48,6 +48,7 @@ export const nav = [
   { href: "/school-uniforms/", label: "School Uniforms" },
   { href: "/institutional-uniforms/", label: "Institutional & Corporate" },
   { href: "/tailoring-fabrics/", label: "Tailoring & Fabrics" },
+  { href: "/order/", label: "Order Online" },
   { href: "/catalogues/", label: "Catalogues" },
   { href: "/about-contact/", label: "About & Contact" },
 ];

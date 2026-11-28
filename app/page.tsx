@@ -59,6 +59,9 @@ export default function Home() {
               <Link className="btn" href="/school-uniforms/#enquiry">
                 Uniform enquiry
               </Link>
+              <Link className="btn ghost" href="/order/">
+                Order online
+              </Link>
               <WhatsAppButton className="btn ghost" />
             </div>
           </div>

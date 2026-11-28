@@ -29,6 +29,10 @@ export const business = {
   areas: ["Pallikkal", "Malappuram", "Kondotty", "Chelari", "Ramanattukara"],
 };
 
+/** The shop's ERP: live fabric stock for the website and the AI try-on page. */
+export const ERP_URL = (process.env.NEXT_PUBLIC_ERP_URL || "https://suxus-erp.vercel.app").replace(/\/$/, "");
+export const TRYON_URL = `${ERP_URL}/tryon`;
+
 export const fullAddress = `${business.address.street}, ${business.address.locality}, ${business.address.region} ${business.address.postalCode}`;
 
 export const WA_GREETING = "Hello SUXUS | Heritage Tailor, I would like to know more.";

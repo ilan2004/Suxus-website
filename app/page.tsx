@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { FabricBolt, Scissors, Shirt } from "@/components/illustrations";
 import { StitchingShirt } from "@/components/illustrations/StitchingShirt";
+import { LiveFabrics } from "@/components/LiveFabrics";
 import { Photo } from "@/components/Photo";
 import { MapEmbed, SchoolSteps, SectionHead, WhatsAppButton } from "@/components/Site";
+import { TryOnBand } from "@/components/TryOnBand";
 import { business, fullAddress } from "@/lib/site";
 
 const services = [
@@ -88,10 +90,17 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="section" id="fabrics">
+        <div className="wrap">
+          <SectionHead num="02" label="In stock now" title="Fabrics in our showroom today." ml="ഇന്ന് ഷോറൂമിലുള്ള തുണികൾ." />
+          <LiveFabrics limit={8} filters={false} moreHref="/tailoring-fabrics/#stock" />
+        </div>
+      </section>
+
       <section className="section dark">
         <div className="wrap">
           <SectionHead
-            num="02"
+            num="03"
             label="For schools"
             title="School uniforms in four steps."
             ml="നാല് ഘട്ടങ്ങളിൽ സ്കൂൾ യൂണിഫോം."
@@ -119,7 +128,7 @@ export default function Home() {
             <Photo src="/images/fabric-cubes.jpg" alt="Fabric display cubes in the SUXUS showroom" caption="Fabric display" />
           </div>
           <div className="c-5 s-8">
-            <span className="label">03 / The showroom</span>
+            <span className="label">04 / The showroom</span>
             <h2>Come and feel the cloth.</h2>
             <p className="ml-line" lang="ml">
               ഷോറൂം സന്ദർശിക്കൂ.
@@ -136,9 +145,11 @@ export default function Home() {
         </div>
       </section>
 
+      <TryOnBand num="05" />
+
       <section className="section paper">
         <div className="wrap">
-          <SectionHead num="04" label="Find us" title="Kadoor Complex, Pallikkal Bazar." />
+          <SectionHead num="06" label="Find us" title="Kadoor Complex, Pallikkal Bazar." />
           <MapEmbed />
           <div className="grid mt-s">
             <p className="c-6 muted small">{fullAddress}</p>

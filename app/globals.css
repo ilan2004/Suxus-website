@@ -125,8 +125,8 @@ p:last-child { margin-bottom: 0; }
 .site-header .wrap { display: flex; align-items: center; justify-content: space-between; height: 72px; }
 
 .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
-.brand svg { width: 40px; height: 40px; flex: none; }
-.brand-name { font: 700 1.35rem/1 var(--f-display); letter-spacing: -.02em; }
+.brand svg { width: 48px; height: 38px; flex: none; }
+.brand-name { font: 600 1.3rem/1 Georgia, "Times New Roman", serif; letter-spacing: .3em; margin-right: -.3em; }
 .brand-tag { display: block; font: 500 .62rem/1 var(--f-body); letter-spacing: .22em; text-transform: uppercase; color: var(--gold-dark); margin-top: 5px; }
 
 .nav-toggle {
@@ -381,7 +381,7 @@ p:last-child { margin-bottom: 0; }
 .site-footer li { margin-bottom: 6px; }
 .site-footer a { text-decoration: none; }
 .site-footer a:hover { color: var(--cream); text-decoration: underline; text-decoration-color: var(--gold); }
-.site-footer .brand { color: var(--cream); margin-bottom: 16px; }
+.site-footer .brand { color: var(--cream); margin-bottom: 16px; --mark-base: #F7F2E8; }
 .site-footer .legal { margin-top: 48px; padding-top: 20px; border-top: 1px solid rgba(247,242,232,.18); font-size: .8rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; }
 
 /* Floating WhatsApp */

@@ -13,11 +13,10 @@ export const business = {
     region: "Malappuram, Kerala",
     postalCode: "673635",
   },
-  phones: [
-    { display: "98461 86713", tel: "+919846186713", who: "Krishnankutty", role: "Shop" },
-    { display: "95673 56072", tel: "+919567356072", who: "Sahim KT", role: "Orders & institutions" },
-  ],
-  whatsapp: "919567356072",
+  // The shop's own number only (calls and WhatsApp). Personal numbers are not shown on the site.
+  phones: [{ display: "95443 76072", tel: "+919544376072", role: "Shop" }],
+  whatsapp: "919544376072",
+  whatsappDisplay: "95443 76072",
   email: "Info@suxus.shop",
   instagram: "https://www.instagram.com/suxusofficial/",
   instagramHandle: "@suxusofficial",

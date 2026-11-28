@@ -7,7 +7,7 @@ import { business, fullAddress } from "@/lib/site";
 export const metadata: Metadata = {
   title: "About & Contact — Tailor at Pallikkal Bazar",
   description:
-    "SUXUS, Heritage Tailor at Kadoor Complex, Pallikkal Bazar, Malappuram 673635. Call 98461 86713 or 95673 56072, WhatsApp, or email Info@suxus.shop.",
+    "SUXUS, Heritage Tailor at Kadoor Complex, Pallikkal Bazar, Malappuram 673635. Call or WhatsApp 95443 76072, or email Info@suxus.shop.",
   alternates: { canonical: "/about-contact/" },
 };
 
@@ -48,18 +48,12 @@ export default function AboutContact() {
               <h3>Krishnankutty</h3>
               <p className="role">Cutting master</p>
               <p className="muted small">About 35 years of cutting experience. Looks after the stitching unit.</p>
-              <p className="small">
-                <a href={`tel:${business.phones[0].tel}`}>{business.phones[0].display}</a>
-              </p>
             </div>
             <div className="c-4 person">
               <Photo src="/images/sahim.jpg" alt="Sahim KT" />
               <h3>Sahim KT</h3>
               <p className="role">Orders & institutions</p>
               <p className="muted small">Marketing, institutional orders and accounts.</p>
-              <p className="small">
-                <a href={`tel:${business.phones[1].tel}`}>{business.phones[1].display}</a>
-              </p>
             </div>
           </div>
         </div>
@@ -84,7 +78,7 @@ export default function AboutContact() {
                   <div key={p.tel}>
                     <dt>{p.role}</dt>
                     <dd>
-                      <a href={`tel:${p.tel}`}>{p.display}</a> · {p.who}
+                      <a href={`tel:${p.tel}`}>{p.display}</a>
                     </dd>
                   </div>
                 ))}
@@ -92,7 +86,7 @@ export default function AboutContact() {
                   <dt>WhatsApp</dt>
                   <dd>
                     <a href={`https://wa.me/${business.whatsapp}`} target="_blank" rel="noopener">
-                      95673 56072
+                      {business.whatsappDisplay}
                     </a>
                   </dd>
                 </div>

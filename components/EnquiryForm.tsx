@@ -81,7 +81,7 @@ export function EnquiryForm({ subject = "Uniform enquiry", defaultType = "" }: P
           </button>
         </div>
         <p className="form-note">
-          Opens WhatsApp (95673 56072) or your email app with the details filled in. Price is confirmed on
+          Opens WhatsApp (95443 76072) or your email app with the details filled in. Price is confirmed on
           enquiry.
         </p>
       </div>

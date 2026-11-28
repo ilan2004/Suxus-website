@@ -77,7 +77,7 @@ export const DEFAULT_SHOP = {
   services: "Uniforms | Fabrics | Tailoring",
   address1: "Kadoor Complex, Pallikkal Bazar",
   address2: "Pallikkal, Malappuram, Kerala 673635",
-  phone: "98461 86713 | 95673 56072",
+  phone: "95443 76072",
   email: "Info@suxus.shop",
   gstin: "",
   footer: "Thank you, visit again",

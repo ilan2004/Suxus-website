@@ -24,7 +24,7 @@ export function WhatsAppButton({ label = "Chat on WhatsApp", className = "btn" }
   );
 }
 
-export function CallButton({ index = 1, className = "btn ghost" }) {
+export function CallButton({ index = 0, className = "btn ghost" }) {
   const p = business.phones[index];
   return (
     <a className={className} href={`tel:${p.tel}`}>
@@ -65,7 +65,7 @@ export function CtaBand() {
             {business.phones.map((p, i) => (
               <span key={p.tel}>
                 {i > 0 && <br />}
-                {p.who} ({p.role.toLowerCase()}): <a href={`tel:${p.tel}`}>{p.display}</a>
+                {p.role} &amp; WhatsApp: <a href={`tel:${p.tel}`}>{p.display}</a>
               </span>
             ))}
           </p>

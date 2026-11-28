@@ -865,3 +865,34 @@ export const tryonEnquiries = pgTable(
   },
   (t) => [index("tryon_enquiries_created_idx").on(t.createdAt)],
 );
+
+/**
+ * An order placed on the shop website (suxus.shop/order): shirt and / or pant in a fabric from our stock, with the
+ * customer's measurements taken on a well-fitting garment of their own (laid flat). Confirmed by phone / WhatsApp,
+ * sent by courier. items holds what the customer typed (in their unit) and the same figures as ERP measurement values.
+ */
+export const webOrders = pgTable(
+  "web_orders",
+  {
+    id: serial("id").primaryKey(),
+    createdAt: created(),
+    name: text("name").notNull(),
+    /** +91… */
+    phone: text("phone").notNull(),
+    /** courier address, one block of text as typed (house, street, place, district) */
+    address: text("address").notNull(),
+    pincode: text("pincode").notNull(),
+    note: text("note"),
+    /** "in" | "cm" — what the customer typed in (ERP values are always inches) */
+    unit: text("unit").notNull(),
+    items: jsonb("items").$type<unknown[]>().notNull(),
+    /** new | confirmed | cancelled */
+    status: text("status").notNull().default("new"),
+    customerId: integer("customer_id").references(() => customers.id, { onDelete: "set null" }),
+    handledBy: text("handled_by"),
+    handledAt: timestamp("handled_at", { withTimezone: true }),
+    /** HMAC of the IP address (a few orders per day per network) */
+    ip: text("ip"),
+  },
+  (t) => [index("web_orders_created_idx").on(t.createdAt)],
+);

@@ -20,8 +20,9 @@ import { getDb } from "./index";
  *   combo    0031  Shirt + trouser combinations       fabrics.suitable_for, fabrics.colour_bucket
  *   tryonPant 0032 Shirt + pant in one image          tryon_generations.pant_fabric_id
  *   tryonWeb  0033 Website try-on limits + WhatsApp codes  tryon_generations.source
+ *   webOrders 0034 Orders from the website (measurements)  web_orders
  */
-export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean; prices: boolean; pocket: boolean; tryon: boolean; tryonLeads: boolean; tryonTv: boolean; tryonStyle: boolean; combo: boolean; tryonPant: boolean; tryonWeb: boolean };
+export type Features = { stock: boolean; wearers: boolean; simple: boolean; jobSlip: boolean; itemFabric: boolean; variant: boolean; prices: boolean; pocket: boolean; tryon: boolean; tryonLeads: boolean; tryonTv: boolean; tryonStyle: boolean; combo: boolean; tryonPant: boolean; tryonWeb: boolean; webOrders: boolean };
 
 const NEEDS: Record<keyof Features, string[]> = {
   stock: ["fabrics.opening_mtr", "fabrics.opening_cost_per_mtr", "fabric_stock_moves.id"],
@@ -39,6 +40,7 @@ const NEEDS: Record<keyof Features, string[]> = {
   combo: ["fabrics.suitable_for", "fabrics.colour_bucket"],
   tryonPant: ["tryon_generations.pant_fabric_id", "tryon_generations.pant_variant"],
   tryonWeb: ["tryon_generations.source", "tryon_generations.code"],
+  webOrders: ["web_orders.items", "web_orders.status"],
 };
 
 const g = globalThis as unknown as { __suxusFeatures?: { at: number; f: Features } };
@@ -47,11 +49,11 @@ export async function features(): Promise<Features> {
   const c = g.__suxusFeatures;
   const all = c && Object.values(c.f).every(Boolean);
   if (c && (all || Date.now() - c.at < 60_000)) return c.f;
-  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false, prices: false, pocket: false, tryon: false, tryonLeads: false, tryonTv: false, tryonStyle: false, combo: false, tryonPant: false, tryonWeb: false };
+  let f: Features = { stock: false, wearers: false, simple: false, jobSlip: false, itemFabric: false, variant: false, prices: false, pocket: false, tryon: false, tryonLeads: false, tryonTv: false, tryonStyle: false, combo: false, tryonPant: false, tryonWeb: false, webOrders: false };
   try {
     const db = await getDb();
     const res = await db.execute(sql`select table_name || '.' || column_name as k from information_schema.columns where table_schema = current_schema()
-      and table_name in ('fabrics', 'fabric_stock_moves', 'wearers', 'measurements', 'order_items', 'staff', 'measurement_drafts', 'job_slip_links', 'job_slip_events', 'order_item_fabrics', 'stitching_prices', 'bulk_order_items', 'tryon_images', 'tryon_generations', 'tryon_enquiries')`);
+      and table_name in ('fabrics', 'fabric_stock_moves', 'wearers', 'measurements', 'order_items', 'staff', 'measurement_drafts', 'job_slip_links', 'job_slip_events', 'order_item_fabrics', 'stitching_prices', 'bulk_order_items', 'tryon_images', 'tryon_generations', 'tryon_enquiries', 'web_orders')`);
     const rows = (Array.isArray(res) ? res : (res as { rows: unknown[] }).rows) as { k: string }[];
     const have = new Set(rows.map((r) => r.k));
     f = Object.fromEntries(Object.entries(NEEDS).map(([k, cols]) => [k, cols.every((x) => have.has(x))])) as Features;

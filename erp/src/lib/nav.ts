@@ -19,6 +19,7 @@ import {
   Landmark,
   BarChart3,
   Settings,
+  Globe,
   Tags,
   Shirt,
   QrCode,
@@ -38,6 +39,7 @@ export const NAV: NavGroup[] = [
       { href: "/orders", en: "Stitching Orders", ml: "തയ്യൽ ഓർഡർ", icon: Scissors },
       { href: "/orders/board", en: "Order board", ml: "ഓർഡർ ബോർഡ്", icon: KanbanSquare },
       { href: "/bulk", en: "Bulk Orders", ml: "ബൾക്ക് ഓർഡർ", icon: Building2 },
+      { href: "/web-orders", en: "Website Orders", ml: "വെബ്സൈറ്റ് ഓർഡർ", icon: Globe },
       { href: "/cash-book", en: "Cash Book", ml: "ക്യാഷ് ബുക്ക്", icon: BookOpen },
       // the customers' public try-on page — only a shortcut, opens in a new tab
       { href: "/tryon", en: "Try-on", ml: "ട്രൈ-ഓൺ", icon: Shirt, newTab: true },

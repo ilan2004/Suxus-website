@@ -57,6 +57,7 @@ const schemas = {
     displayToken: z.string(),
     styles: z.boolean(),
   }),
+  combo: z.object({ enabled: z.boolean(), preferSlow: z.boolean() }),
 } satisfies Record<keyof AppSettings, z.ZodType>;
 
 export async function updateSetting<K extends keyof AppSettings>(key: K, value: AppSettings[K]): Promise<Result<null>> {

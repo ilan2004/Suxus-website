@@ -222,8 +222,15 @@
     {
       "idx": 31,
       "version": "7",
-      "when": 1795847927708,
-      "tag": "0031_tryon_pant",
+      "when": 1795792783507,
+      "tag": "0031_fabric_combo",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1795848495051,
+      "tag": "0032_tryon_pant",
       "breakpoints": true
     }
   ]

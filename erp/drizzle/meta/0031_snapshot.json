@@ -1,5 +1,5 @@
 {
-  "id": "832b1682-0f29-47e3-8865-aa527978d971",
+  "id": "bb18e72f-4b2d-4f50-b001-3bbbb3b487a7",
   "prevId": "ad047434-5b4f-4f61-8fcd-417a3b882fdf",
   "version": "7",
   "dialect": "postgresql",
@@ -292,6 +292,19 @@
         "opening_cost_per_mtr": {
           "name": "opening_cost_per_mtr",
           "type": "numeric(12, 2)",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "suitable_for": {
+          "name": "suitable_for",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "default": "'both'"
+        },
+        "colour_bucket": {
+          "name": "colour_bucket",
+          "type": "text",
           "primaryKey": false,
           "notNull": false
         }
@@ -4331,18 +4344,6 @@
           "type": "text",
           "primaryKey": false,
           "notNull": false
-        },
-        "pant_fabric_id": {
-          "name": "pant_fabric_id",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "pant_variant": {
-          "name": "pant_variant",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": false
         }
       },
       "indexes": {
@@ -4390,19 +4391,6 @@
           "tableTo": "fabrics",
           "columnsFrom": [
             "fabric_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "set null",
-          "onUpdate": "no action"
-        },
-        "tryon_generations_pant_fabric_id_fabrics_id_fk": {
-          "name": "tryon_generations_pant_fabric_id_fabrics_id_fk",
-          "tableFrom": "tryon_generations",
-          "tableTo": "fabrics",
-          "columnsFrom": [
-            "pant_fabric_id"
           ],
           "columnsTo": [
             "id"

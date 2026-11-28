@@ -6,6 +6,8 @@ import { and, desc, eq, gte, lt, sql } from "drizzle-orm";
 import { getDb, schema } from "./db";
 import { fabricsWithStock } from "./queries";
 import { LOCAL_DIR } from "./storage";
+import { col } from "./db/ext";
+import { features } from "./db/features";
 import { styleSentences, type TryonStyle } from "./tryon-style";
 
 /*
@@ -133,6 +135,17 @@ export type TryonFabric = {
 /** Fabrics a customer can try: active, in stock (balance > 0) and with a photo. Public fields only — no cost, no supplier. */
 export async function tryonFabrics(): Promise<TryonFabric[]> {
   const rows = await fabricsWithStock();
+  // Settings > Combinations "suitable for" (shirting / suiting / both), when the database has it
+  const suitable = new Map<number, string>();
+  if ((await features()).combo) {
+    const db = await getDb();
+    for (const r of await db.select({ id: schema.fabrics.id, s: col.fabricSuitableFor }).from(schema.fabrics)) suitable.set(r.id, r.s ?? "both");
+  }
+  /** pant cloth: marked "suiting", or Type Suiting / Uniform Suiting unless marked "shirting" */
+  const isPant = (f: { id: number; type: string | null }) => {
+    const sf = suitable.get(f.id) ?? "both";
+    return sf === "suiting" || (sf !== "shirting" && /suiting/i.test(f.type ?? ""));
+  };
   return rows
     .filter((f) => f.active && (f.balanceMtr ?? 0) > 0 && f.photoUrls.length > 0)
     .map((f) => ({
@@ -147,7 +160,7 @@ export async function tryonFabrics(): Promise<TryonFabric[]> {
       rate: f.saleRate,
       thumb: f.thumbUrls[0] || f.photoUrls[0],
       photo: f.photoUrls[0],
-      forPant: /suiting/i.test(f.type ?? ""),
+      forPant: isPant(f),
     }));
 }
 

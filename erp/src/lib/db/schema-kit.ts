@@ -23,6 +23,9 @@ export const fabrics = pgTable(
     /** First entry snapshot, taken before the first Add / Adjust stock — migration 0019 */
     openingMtr: money("opening_mtr"),
     openingCostPerMtr: money("opening_cost_per_mtr"),
+    /** Shirt + trouser combinations: shirting / suiting / both, and a colour-group override (null = automatic) — migration 0031 */
+    suitableFor: text("suitable_for").notNull().default("both"),
+    colourBucket: text("colour_bucket"),
   },
   fabricsIndexes,
 );

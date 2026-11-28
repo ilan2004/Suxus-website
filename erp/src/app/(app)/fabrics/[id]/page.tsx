@@ -8,6 +8,7 @@ import { getSettings } from "@/lib/settings";
 import { fabricsWithStock, withoutFabricCosts } from "@/lib/queries";
 import { FabricDetail } from "./fabric-detail";
 import { storageMode } from "@/lib/storage";
+import { combosFor } from "@/lib/combo-server";
 
 export default async function FabricPage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireUser();
@@ -18,8 +19,8 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
   const db = await getDb();
   const s = schema;
   // Add stock / Adjust stock and the stock history appear once the database has them
-  const { stock } = await features();
-  const [lines, settings, suppliers, moves] = await Promise.all([
+  const { stock, combo } = await features();
+  const [lines, settings, suppliers, moves, combos] = await Promise.all([
     db
       .select({
         saleId: s.sales.id,
@@ -62,6 +63,8 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       .leftJoin(s.suppliers, eq(s.suppliers.id, s.fabricStockMoves.supplierId))
       .where(eq(s.fabricStockMoves.fabricId, id))
       .orderBy(asc(s.fabricStockMoves.id)),
+    // trousers from our stock that go with this fabric (colour rules only — no AI, no cost); staff always see them
+    combo ? combosFor(id).catch(() => null) : Promise.resolve(null),
   ]);
   const seesCost = can(session.role, "costs");
   const supplier = suppliers.find((x) => x.id === fabric.supplierId) ?? null;
@@ -80,6 +83,7 @@ export default async function FabricPage({ params }: { params: Promise<{ id: str
       showCost={can(session.role, "costs")}
       photosEnabled={storageMode() !== "off"}
       shopName={`${settings.shop.name} ${settings.shop.tagline}`.trim()}
+      combos={combos}
     />
   );
 }

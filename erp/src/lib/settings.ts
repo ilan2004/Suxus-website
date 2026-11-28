@@ -31,7 +31,16 @@ export type AppSettings = {
   variants: VariantLists;
   /** Settings → Try-on: master switch, limits (read on every request — no deploy needed) and the TV link token */
   tryon: TryonControls;
+  /** Settings → Combinations: trouser suggestions for a shirt fabric (pure colour logic — no AI, no cost) */
+  combo: ComboControls;
 };
+export type ComboControls = {
+  /** shown to customers on the try-on page; owner / partner (and staff on the fabric page) always see them */
+  enabled: boolean;
+  /** among equally good trousers, the ones in stock longest first — never overrides the colour rules */
+  preferSlow: boolean;
+};
+export const DEFAULT_COMBO: ComboControls = { enabled: false, preferSlow: false };
 export type TryonControls = {
   enabled: boolean;
   perDevice: 1 | 2;
@@ -55,6 +64,7 @@ const DEFAULTS: AppSettings = {
   fabricRequirement: DEFAULT_FABRIC_REQUIREMENT,
   variants: DEFAULT_VARIANTS,
   tryon: DEFAULT_TRYON,
+  combo: DEFAULT_COMBO,
 };
 
 export async function getSettings(): Promise<AppSettings> {
@@ -66,7 +76,7 @@ export async function getSettings(): Promise<AppSettings> {
   const out = structuredClone(DEFAULTS) as AppSettings;
   for (const r of rows) {
     const k = r.key as keyof AppSettings;
-    if (k === "lists" || k === "shop" || k === "tryon") {
+    if (k === "lists" || k === "shop" || k === "tryon" || k === "combo") {
       // merge so that newly added default keys appear for old databases
       (out[k] as object) = { ...DEFAULTS[k], ...(r.value as object) };
     } else {
@@ -89,6 +99,7 @@ export async function getSetting<K extends keyof AppSettings>(key: K): Promise<A
   const [row] = await db.select().from(schema.settings).where(eq(schema.settings.key, key));
   if (!row) return DEFAULTS[key];
   if (key === "tryon") return { ...DEFAULT_TRYON, ...(row.value as object) } as AppSettings[K];
+  if (key === "combo") return { ...DEFAULT_COMBO, ...(row.value as object) } as AppSettings[K];
   if (key === "lists" || key === "shop") return { ...DEFAULTS[key], ...(row.value as object) } as AppSettings[K];
   return row.value as AppSettings[K];
 }

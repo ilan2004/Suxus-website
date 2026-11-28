@@ -93,6 +93,9 @@ export function LiveFabrics({ limit, filters = true, moreHref }: { limit?: numbe
               <span className="fab-code">{f.code}</span>
               <h3>{f.name}</h3>
               <p className="fab-rate">{f.rate > 0 ? <>₹{f.rate.toLocaleString("en-IN")} <span>/ metre</span></> : <span>Ask for the rate</span>}</p>
+              <a className="fab-order" href={`/order/?fabric=${encodeURIComponent(f.code)}`}>
+                Order →
+              </a>
             </div>
           </li>
         ))}
@@ -125,6 +128,9 @@ export function LiveFabrics({ limit, filters = true, moreHref }: { limit?: numbe
               <h3>{open.name}</h3>
               <p className="fab-rate">{open.rate > 0 ? <>₹{open.rate.toLocaleString("en-IN")} <span>/ metre</span></> : <span>Ask for the rate</span>}</p>
               <div className="actions">
+                <a className="btn gold" href={`/order/?fabric=${encodeURIComponent(open.code)}`} data-testid="order-fabric">
+                  Order this fabric
+                </a>
                 <a className="btn" href={waLink(`SUXUS | Heritage Tailor — I'm interested in fabric ${open.code} (${open.name}).`)} target="_blank" rel="noopener">
                   Ask on WhatsApp
                 </a>

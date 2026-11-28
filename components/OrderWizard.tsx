@@ -73,7 +73,17 @@ export function OrderWizard() {
   useEffect(() => {
     fetch(`${ERP_URL}/api/public/fabrics`)
       .then((r) => r.json())
-      .then((j) => (j.ok ? setFabrics(j.fabrics) : setFabErr(true)))
+      .then((j) => {
+        if (!j.ok) return setFabErr(true);
+        setFabrics(j.fabrics);
+        // "Order this fabric" from the fabrics page: that cloth is already chosen for its garment
+        const want = new URLSearchParams(window.location.search).get("fabric");
+        const f = (j.fabrics as Fabric[]).find((x) => x.code === want);
+        if (f) {
+          setD((x) => (f.kind === "Suiting" ? { ...x, shirt: false, pant: true, pantFabric: f.code } : { ...x, shirt: true, pant: false, shirtFabric: f.code }));
+          setStep("fabric");
+        }
+      })
       .catch(() => setFabErr(true));
   }, []);
   useEffect(() => {
